@@ -1,38 +1,34 @@
 package cli
 
 import (
-	"context"
 	"net/url"
 
 	"github.com/spf13/cobra"
 
-	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateInvoicePayment(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateInvoicePayment(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "invoice-payment <invoice-id>",
 		Short: "Explain how an invoice was paid, including card last4 when available",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.invoicePayment(args[0])
 			})
 		},
 	}
 }
 
-func newInvestigateInvoiceMetadata(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateInvoiceMetadata(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	var number string
 	cmd := &cobra.Command{
 		Use:   "invoice-metadata [invoice-id]",
 		Short: "Find PaymentIntent metadata from an invoice ID or invoice number",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				invoiceID := ""
 				if len(args) == 1 {
 					invoiceID = args[0]

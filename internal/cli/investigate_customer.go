@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	var customer string
 	var last4 string
 	var limit int
@@ -25,8 +24,7 @@ func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc) *cobra.Comman
 			if !shared.RequireFlag("last4", last4, "Use the final four digits the customer supplied") {
 				return nil
 			}
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				params := url.Values{"customer": []string{customer}}
 				api.AddLimit(params, limit)
 				charges, err := inv.list("/v1/charges", params)

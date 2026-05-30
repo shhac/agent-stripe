@@ -34,8 +34,10 @@ type truncatedNote struct {
 	ExpandHint    string `json:"expand_hint"`
 }
 
-func writeEvidence(records []evidenceRecord, format string) {
-	records = normalizeEvidence(records)
+const defaultMaxString = 800
+
+func writeEvidence(records []evidenceRecord, format string, opts evidenceOptions) {
+	records = normalizeEvidence(records, opts)
 	f := output.ResolveFormat(format, output.FormatNDJSON)
 	if f == output.FormatNDJSON {
 		w := output.NewNDJSONWriter(os.Stdout)
@@ -60,14 +62,9 @@ func entityRecord(object string, data map[string]any) evidenceRecord {
 	}
 }
 
-func normalizeEvidence(records []evidenceRecord) []evidenceRecord {
-	opts := evidenceOptions{
-		full:         flagInvestigationFull,
-		expandFields: flagInvestigationExpandFields,
-		maxString:    flagInvestigationMaxString,
-	}
+func normalizeEvidence(records []evidenceRecord, opts evidenceOptions) []evidenceRecord {
 	if opts.maxString <= 0 {
-		opts.maxString = 800
+		opts.maxString = defaultMaxString
 	}
 	seen := map[string]bool{}
 	out := make([]evidenceRecord, 0, len(records))
@@ -85,85 +82,101 @@ type evidenceOptions struct {
 	maxString    int
 }
 
+func defaultEvidenceOptions() evidenceOptions {
+	return evidenceOptions{maxString: defaultMaxString}
+}
+
 func normalizeRecord(record evidenceRecord, opts evidenceOptions, seen map[string]bool) (evidenceRecord, []evidenceRecord) {
 	if record.Type != "entity" || record.Data == nil {
 		return record, nil
 	}
-	data, extracted, notes, truncated := normalizeValue(record.Data, record.Object, "", opts, seen)
-	if normalized, ok := data.(map[string]any); ok {
+	result := normalizeValue(record.Data, record.Object, "", opts, seen)
+	if normalized, ok := result.value.(map[string]any); ok {
 		record.Data = normalized
 	}
-	record.ExtractedEntities = append(record.ExtractedEntities, notes...)
-	record.TruncatedFields = append(record.TruncatedFields, truncated...)
-	return record, extracted
+	record.ExtractedEntities = append(record.ExtractedEntities, result.notes...)
+	record.TruncatedFields = append(record.TruncatedFields, result.truncated...)
+	return record, result.records
 }
 
-func normalizeValue(value any, parentObject, path string, opts evidenceOptions, seen map[string]bool) (any, []evidenceRecord, []fieldNote, []truncatedNote) {
+type normalizeResult struct {
+	value     any
+	records   []evidenceRecord
+	notes     []fieldNote
+	truncated []truncatedNote
+}
+
+func normalizeValue(value any, parentObject, path string, opts evidenceOptions, seen map[string]bool) normalizeResult {
 	switch v := value.(type) {
 	case map[string]any:
-		if isStripeEntity(v) && path != "" {
-			object := mapString(v, "object")
-			id := mapString(v, "id")
-			key := object + ":" + id
-			note := fieldNote{Path: path, Object: object, ID: id}
-			if !seen[key] {
-				seen[key] = true
-				child, children := normalizeRecord(entityRecord(object, v), opts, seen)
-				extracted := append([]evidenceRecord{child}, children...)
-				return id, extracted, []fieldNote{note}, nil
-			}
-			return id, nil, []fieldNote{note}, nil
-		}
 		if isStripeList(v) {
 			return normalizeList(v, parentObject, path, opts, seen)
 		}
-		out := make(map[string]any, len(v))
-		var extracted []evidenceRecord
-		var notes []fieldNote
-		var truncated []truncatedNote
-		for key, item := range v {
-			nextPath := joinPath(path, key)
-			normalized, childRecords, childNotes, childTruncated := normalizeValue(item, parentObject, nextPath, opts, seen)
-			out[key] = normalized
-			extracted = append(extracted, childRecords...)
-			notes = append(notes, childNotes...)
-			truncated = append(truncated, childTruncated...)
+		if isStripeEntity(v) && path != "" {
+			return normalizeNestedEntity(v, path, opts, seen)
 		}
-		return out, extracted, notes, truncated
+		return normalizeMap(v, parentObject, path, opts, seen)
 	case []any:
-		out := make([]any, len(v))
-		var extracted []evidenceRecord
-		var notes []fieldNote
-		var truncated []truncatedNote
-		for idx, item := range v {
-			nextPath := fmt.Sprintf("%s[%d]", path, idx)
-			normalized, childRecords, childNotes, childTruncated := normalizeValue(item, parentObject, nextPath, opts, seen)
-			out[idx] = normalized
-			extracted = append(extracted, childRecords...)
-			notes = append(notes, childNotes...)
-			truncated = append(truncated, childTruncated...)
-		}
-		return out, extracted, notes, truncated
+		return normalizeSlice(v, parentObject, path, opts, seen)
 	case string:
 		if shouldTruncate(path, v, opts) {
 			shown := opts.maxString
 			if shown > len(v) {
 				shown = len(v)
 			}
-			return v[:shown] + "...", nil, nil, []truncatedNote{{
+			return normalizeResult{value: v[:shown] + "...", truncated: []truncatedNote{{
 				Path:          path,
 				OriginalBytes: len(v),
 				ShownBytes:    shown,
 				ExpandHint:    "--expand-field " + path + " or --full",
-			}}
+			}}}
 		}
-		return v, nil, nil, nil
+		return normalizeResult{value: v}
 	default:
-		return value, nil, nil, nil
+		return normalizeResult{value: value}
 	}
 }
 
-func normalizeList(list map[string]any, parentObject, path string, opts evidenceOptions, seen map[string]bool) (any, []evidenceRecord, []fieldNote, []truncatedNote) {
+func normalizeNestedEntity(item map[string]any, path string, opts evidenceOptions, seen map[string]bool) normalizeResult {
+	object := mapString(item, "object")
+	id := mapString(item, "id")
+	result := normalizeResult{
+		value: id,
+		notes: []fieldNote{{Path: path, Object: object, ID: id}},
+	}
+	key := object + ":" + id
+	if seen[key] {
+		return result
+	}
+	seen[key] = true
+	child, children := normalizeRecord(entityRecord(object, item), opts, seen)
+	result.records = append([]evidenceRecord{child}, children...)
+	return result
+}
+
+func normalizeMap(item map[string]any, parentObject, path string, opts evidenceOptions, seen map[string]bool) normalizeResult {
+	result := normalizeResult{value: make(map[string]any, len(item))}
+	out := result.value.(map[string]any)
+	for key, value := range item {
+		child := normalizeValue(value, parentObject, joinPath(path, key), opts, seen)
+		out[key] = child.value
+		result.merge(child)
+	}
+	return result
+}
+
+func normalizeSlice(items []any, parentObject, path string, opts evidenceOptions, seen map[string]bool) normalizeResult {
+	result := normalizeResult{value: make([]any, len(items))}
+	out := result.value.([]any)
+	for idx, item := range items {
+		child := normalizeValue(item, parentObject, fmt.Sprintf("%s[%d]", path, idx), opts, seen)
+		out[idx] = child.value
+		result.merge(child)
+	}
+	return result
+}
+
+func normalizeList(list map[string]any, parentObject, path string, opts evidenceOptions, seen map[string]bool) normalizeResult {
 	out := make(map[string]any, len(list))
 	for key, value := range list {
 		if key != "data" {
@@ -172,19 +185,21 @@ func normalizeList(list map[string]any, parentObject, path string, opts evidence
 	}
 	items, _ := list["data"].([]any)
 	normalizedItems := make([]any, 0, len(items))
-	var extracted []evidenceRecord
-	var notes []fieldNote
-	var truncated []truncatedNote
+	result := normalizeResult{value: out}
 	for idx, item := range items {
 		itemPath := fmt.Sprintf("%s.data[%d]", path, idx)
-		normalized, childRecords, childNotes, childTruncated := normalizeValue(item, parentObject, itemPath, opts, seen)
-		normalizedItems = append(normalizedItems, normalized)
-		extracted = append(extracted, childRecords...)
-		notes = append(notes, childNotes...)
-		truncated = append(truncated, childTruncated...)
+		child := normalizeValue(item, parentObject, itemPath, opts, seen)
+		normalizedItems = append(normalizedItems, child.value)
+		result.merge(child)
 	}
 	out["data"] = normalizedItems
-	return out, extracted, notes, truncated
+	return result
+}
+
+func (r *normalizeResult) merge(child normalizeResult) {
+	r.records = append(r.records, child.records...)
+	r.notes = append(r.notes, child.notes...)
+	r.truncated = append(r.truncated, child.truncated...)
 }
 
 func isStripeEntity(item map[string]any) bool {
@@ -202,7 +217,7 @@ func shouldTruncate(path, value string, opts evidenceOptions) bool {
 	if opts.full || len(value) <= opts.maxString {
 		return false
 	}
-	if path == "id" || strings.HasSuffix(path, ".id") {
+	if path == "id" || path == "object" || strings.HasSuffix(path, ".id") || strings.HasSuffix(path, ".object") {
 		return false
 	}
 	for _, expanded := range opts.expandFields {

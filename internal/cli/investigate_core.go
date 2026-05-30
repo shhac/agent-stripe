@@ -15,15 +15,42 @@ type investigator struct {
 	client *api.Client
 }
 
-func runInvestigation(flags *shared.GlobalFlags, fn func(context.Context, *api.Client) ([]evidenceRecord, error)) error {
+type investigationOutputOptions struct {
+	full         bool
+	expandFields []string
+	maxString    int
+}
+
+func runInvestigation(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(context.Context, *api.Client) ([]evidenceRecord, error)) error {
 	return shared.WithClient(flags, func(ctx context.Context, client *api.Client) error {
 		records, err := fn(ctx, client)
 		if err != nil {
 			return err
 		}
-		writeEvidence(records, flags.Format)
+		writeEvidence(records, flags.Format, outputOpts.evidenceOptions())
 		return nil
 	})
+}
+
+func runWithInvestigator(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(investigator) ([]evidenceRecord, error)) error {
+	return runInvestigation(flags, outputOpts, func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
+		return fn(investigator{ctx: ctx, client: client})
+	})
+}
+
+func (opts *investigationOutputOptions) evidenceOptions() evidenceOptions {
+	if opts == nil {
+		return defaultEvidenceOptions()
+	}
+	evidenceOpts := evidenceOptions{
+		full:         opts.full,
+		expandFields: opts.expandFields,
+		maxString:    opts.maxString,
+	}
+	if evidenceOpts.maxString <= 0 {
+		evidenceOpts.maxString = defaultMaxString
+	}
+	return evidenceOpts
 }
 
 func (i investigator) get(path string, params url.Values) (map[string]any, error) {

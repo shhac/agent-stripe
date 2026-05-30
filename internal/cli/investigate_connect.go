@@ -1,41 +1,37 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 )
 
-func newInvestigateOutgoingPayment(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateOutgoingPayment(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "outgoing-payment <transfer-id|payout-id|account-id>",
 		Short: "Explain what happened to money moving from you to a connected business",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.outgoingPayment(args[0])
 			})
 		},
 	}
 }
 
-func newInvestigateRefundRecovery(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateRefundRecovery(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	var transfer string
 	cmd := &cobra.Command{
 		Use:   "refund-recovery <refund-id|charge-id|payment-intent-id|transfer-reversal-id>",
 		Short: "Explain failed refund funding or Connect transfer reversal recovery",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.refundRecovery(args[0], transfer)
 			})
 		},
@@ -44,28 +40,26 @@ func newInvestigateRefundRecovery(globals shared.GlobalsFunc) *cobra.Command {
 	return cmd
 }
 
-func newInvestigateRefundStatus(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateRefundStatus(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "refund-status <refund-id>",
 		Short: "Explain refund state, related payment, and Connect reversal details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.refundStatus(args[0])
 			})
 		},
 	}
 }
 
-func newInvestigatePayoutFailure(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigatePayoutFailure(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "payout-failure <payout-id>",
 		Short: "Explain payout failure details and related ledger movement",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.payoutFailure(args[0])
 			})
 		},

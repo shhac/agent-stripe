@@ -1,24 +1,21 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 
 	"github.com/spf13/cobra"
 
-	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateDisputeResponse(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateDisputeResponse(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "dispute-response <dispute-id>",
 		Short: "Summarize dispute response status, evidence due date, and related payment objects",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.disputeResponse(args[0])
 			})
 		},

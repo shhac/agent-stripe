@@ -10,31 +10,11 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-var (
-	flagProfile    string
-	flagContext    string
-	flagAPIKey     string
-	flagBaseURL    string
-	flagFormat     string
-	flagTimeout    int
-	flagDebug      bool
-	flagAPIVersion string
-)
-
-func allGlobals() *shared.GlobalFlags {
-	return &shared.GlobalFlags{
-		Profile:    flagProfile,
-		Context:    flagContext,
-		APIKey:     flagAPIKey,
-		BaseURL:    flagBaseURL,
-		Format:     flagFormat,
-		Timeout:    flagTimeout,
-		Debug:      flagDebug,
-		APIVersion: flagAPIVersion,
-	}
-}
-
 func newRootCmd(version string) *cobra.Command {
+	globals := &shared.GlobalFlags{}
+	globalsFunc := func() *shared.GlobalFlags {
+		return globals
+	}
 	root := &cobra.Command{
 		Use:           "agent-stripe",
 		Short:         "Stripe incident triage CLI for AI agents",
@@ -43,41 +23,41 @@ func newRootCmd(version string) *cobra.Command {
 		SilenceErrors: true,
 	}
 
-	root.PersistentFlags().StringVarP(&flagProfile, "profile", "p", "", "Stripe profile alias (or AGENT_STRIPE_PROFILE)")
-	root.PersistentFlags().StringVar(&flagContext, "context", "", "Stripe-Context value for organization or related-account requests")
-	root.PersistentFlags().StringVar(&flagAPIKey, "api-key", "", "API key override; never printed or persisted")
-	root.PersistentFlags().StringVar(&flagBaseURL, "base-url", "", "Stripe API base URL override for tests")
-	root.PersistentFlags().StringVarP(&flagFormat, "format", "f", "", "Output format: json, yaml, jsonl")
-	root.PersistentFlags().IntVarP(&flagTimeout, "timeout", "t", 0, "Request timeout in milliseconds")
-	root.PersistentFlags().StringVar(&flagAPIVersion, "api-version", "", "Stripe API version header override")
-	root.PersistentFlags().BoolVarP(&flagDebug, "debug", "d", false, "Log HTTP requests and responses to stderr")
+	root.PersistentFlags().StringVarP(&globals.Profile, "profile", "p", "", "Stripe profile alias (or AGENT_STRIPE_PROFILE)")
+	root.PersistentFlags().StringVar(&globals.Context, "context", "", "Stripe-Context value for organization or related-account requests")
+	root.PersistentFlags().StringVar(&globals.APIKey, "api-key", "", "API key override; never printed or persisted")
+	root.PersistentFlags().StringVar(&globals.BaseURL, "base-url", "", "Stripe API base URL override for tests")
+	root.PersistentFlags().StringVarP(&globals.Format, "format", "f", "", "Output format: json, yaml, jsonl")
+	root.PersistentFlags().IntVarP(&globals.Timeout, "timeout", "t", 0, "Request timeout in milliseconds")
+	root.PersistentFlags().StringVar(&globals.APIVersion, "api-version", "", "Stripe API version header override")
+	root.PersistentFlags().BoolVarP(&globals.Debug, "debug", "d", false, "Log HTTP requests and responses to stderr")
 	_ = root.PersistentFlags().MarkHidden("base-url")
 
 	registerUsageCommand(root)
-	auth.Register(root, allGlobals)
-	registerBalance(root, allGlobals)
-	registerCheckoutSessions(root, allGlobals)
-	registerCustomers(root, allGlobals)
-	registerEvents(root, allGlobals)
-	registerProducts(root, allGlobals)
-	registerPrices(root, allGlobals)
-	registerInvoices(root, allGlobals)
-	registerPaymentIntents(root, allGlobals)
-	registerSetupIntents(root, allGlobals)
-	registerCharges(root, allGlobals)
-	registerDisputes(root, allGlobals)
-	registerPaymentMethods(root, allGlobals)
-	registerRefunds(root, allGlobals)
-	registerSubscriptions(root, allGlobals)
-	registerTransfers(root, allGlobals)
-	registerPayouts(root, allGlobals)
-	registerBalanceTransactions(root, allGlobals)
-	registerApplicationFees(root, allGlobals)
-	registerPaymentLinks(root, allGlobals)
-	registerEarlyFraudWarnings(root, allGlobals)
-	registerAccounts(root, allGlobals)
-	registerInvestigate(root, allGlobals)
-	registerRawAPI(root, allGlobals)
+	auth.Register(root, globalsFunc)
+	registerBalance(root, globalsFunc)
+	registerCheckoutSessions(root, globalsFunc)
+	registerCustomers(root, globalsFunc)
+	registerEvents(root, globalsFunc)
+	registerProducts(root, globalsFunc)
+	registerPrices(root, globalsFunc)
+	registerInvoices(root, globalsFunc)
+	registerPaymentIntents(root, globalsFunc)
+	registerSetupIntents(root, globalsFunc)
+	registerCharges(root, globalsFunc)
+	registerDisputes(root, globalsFunc)
+	registerPaymentMethods(root, globalsFunc)
+	registerRefunds(root, globalsFunc)
+	registerSubscriptions(root, globalsFunc)
+	registerTransfers(root, globalsFunc)
+	registerPayouts(root, globalsFunc)
+	registerBalanceTransactions(root, globalsFunc)
+	registerApplicationFees(root, globalsFunc)
+	registerPaymentLinks(root, globalsFunc)
+	registerEarlyFraudWarnings(root, globalsFunc)
+	registerAccounts(root, globalsFunc)
+	registerInvestigate(root, globalsFunc)
+	registerRawAPI(root, globalsFunc)
 
 	return root
 }

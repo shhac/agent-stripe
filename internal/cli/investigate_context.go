@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"net/url"
 
 	"github.com/spf13/cobra"
@@ -10,7 +9,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateCustomerContext(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateCustomerContext(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	var customer string
 	var limit int
 	cmd := &cobra.Command{
@@ -20,8 +19,7 @@ func newInvestigateCustomerContext(globals shared.GlobalsFunc) *cobra.Command {
 			if !shared.RequireFlag("customer", customer, "Provide a Customer ID such as cus_...") {
 				return nil
 			}
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.customerContext(customer, limit)
 			})
 		},
@@ -39,15 +37,14 @@ func (i investigator) customerContext(customer string, limit int) ([]evidenceRec
 	}
 	records = append(records, entityRecord("customer", customerObj))
 
-	records = appendListRecords(records, "payment_method", i.mustList("/v1/payment_methods", valuesWithLimit(limit, "customer", customer, "type", "card")))
-	records = appendListRecords(records, "subscription", i.mustList("/v1/subscriptions", valuesWithLimit(limit, "customer", customer, "status", "all")))
-	records = appendListRecords(records, "invoice", i.mustList("/v1/invoices", valuesWithLimit(limit, "customer", customer)))
-	records = appendListRecords(records, "payment_intent", i.mustList("/v1/payment_intents", valuesWithLimit(limit, "customer", customer)))
-	charges := i.mustList("/v1/charges", valuesWithLimit(limit, "customer", customer))
-	records = appendListRecords(records, "charge", charges)
+	records, _ = i.appendRelatedList(records, "payment_method", "/v1/payment_methods", valuesWithLimit(limit, "customer", customer, "type", "card"))
+	records, _ = i.appendRelatedList(records, "subscription", "/v1/subscriptions", valuesWithLimit(limit, "customer", customer, "status", "all"))
+	records, _ = i.appendRelatedList(records, "invoice", "/v1/invoices", valuesWithLimit(limit, "customer", customer))
+	records, _ = i.appendRelatedList(records, "payment_intent", "/v1/payment_intents", valuesWithLimit(limit, "customer", customer))
+	records, charges := i.appendRelatedList(records, "charge", "/v1/charges", valuesWithLimit(limit, "customer", customer))
 	for _, charge := range charges {
-		records = appendListRecords(records, "dispute", i.mustList("/v1/disputes", valuesWithLimit(limit, "charge", mapString(charge, "id"))))
-		records = appendListRecords(records, "refund", i.mustList("/v1/refunds", valuesWithLimit(limit, "charge", mapString(charge, "id"))))
+		records, _ = i.appendRelatedList(records, "dispute", "/v1/disputes", valuesWithLimit(limit, "charge", mapString(charge, "id")))
+		records, _ = i.appendRelatedList(records, "refund", "/v1/refunds", valuesWithLimit(limit, "charge", mapString(charge, "id")))
 	}
 	records = append(records, evidenceRecord{
 		Type:     "finding",
@@ -60,12 +57,21 @@ func (i investigator) customerContext(customer string, limit int) ([]evidenceRec
 	return records, nil
 }
 
-func (i investigator) mustList(path string, params url.Values) []map[string]any {
+func (i investigator) appendRelatedList(records []evidenceRecord, object, path string, params url.Values) ([]evidenceRecord, []map[string]any) {
 	items, err := i.list(path, params)
 	if err != nil {
-		return nil
+		return append(records, evidenceRecord{
+			Type:     "finding",
+			Severity: "warning",
+			Summary:  "Could not gather " + object + " context from " + path + "; continuing with available evidence.",
+			Data: map[string]any{
+				"object": object,
+				"path":   path,
+				"error":  err.Error(),
+			},
+		}), nil
 	}
-	return items
+	return appendListRecords(records, object, items), items
 }
 
 func appendListRecords(records []evidenceRecord, object string, items []map[string]any) []evidenceRecord {

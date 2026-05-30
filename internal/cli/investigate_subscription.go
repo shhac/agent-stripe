@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -15,7 +14,7 @@ import (
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 )
 
-func newInvestigateSubscriptionRenewal(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateSubscriptionRenewal(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	var subscription string
 	var metadata string
 	var customer string
@@ -24,8 +23,7 @@ func newInvestigateSubscriptionRenewal(globals shared.GlobalsFunc) *cobra.Comman
 		Use:   "subscription-renewal",
 		Short: "Summarize last and next payment for subscriptions found by ID, customer, or metadata",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				subs, err := inv.findSubscriptions(subscription, customer, metadata, limit)
 				if err != nil {
 					return nil, err
@@ -49,15 +47,14 @@ func newInvestigateSubscriptionRenewal(globals shared.GlobalsFunc) *cobra.Comman
 	return cmd
 }
 
-func newInvestigateCollectionRisk(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateCollectionRisk(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	var days int
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "collection-risk",
 		Short: "Find customers likely to need payment-method outreach before upcoming collection",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				params := url.Values{"status": []string{"all"}}
 				api.AddLimit(params, limit)
 				if days > 0 {
@@ -96,15 +93,14 @@ func newInvestigateCollectionRisk(globals shared.GlobalsFunc) *cobra.Command {
 	return cmd
 }
 
-func newInvestigateSubscriptionCancelRisk(globals shared.GlobalsFunc) *cobra.Command {
+func newInvestigateSubscriptionCancelRisk(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	var days int
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "subscription-cancel-risk",
 		Short: "Find subscriptions likely to cancel, end trial, or stop billing soon",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-				inv := investigator{ctx: ctx, client: client}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				params := url.Values{"status": []string{"all"}}
 				api.AddLimit(params, limit)
 				if days > 0 {

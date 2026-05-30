@@ -9,13 +9,14 @@ import (
 )
 
 func registerInvestigate(root *cobra.Command, globals shared.GlobalsFunc) {
+	outputOpts := &investigationOutputOptions{maxString: 800}
 	investigate := &cobra.Command{
 		Use:     "investigate",
 		Aliases: []string{"invest"},
 		Short:   "Opinionated Stripe incident investigations",
 	}
 	for _, newCommand := range investigationCommands {
-		investigate.AddCommand(newCommand(globals))
+		investigate.AddCommand(newCommand(globals, outputOpts))
 	}
 	investigate.AddCommand(&cobra.Command{
 		Use:   "usage",
@@ -24,13 +25,13 @@ func registerInvestigate(root *cobra.Command, globals shared.GlobalsFunc) {
 			fmt.Print(investigationUsageText)
 		},
 	})
-	investigate.PersistentFlags().BoolVar(&flagInvestigationFull, "full", false, "Do not truncate investigation entity fields")
-	investigate.PersistentFlags().StringArrayVar(&flagInvestigationExpandFields, "expand-field", nil, "Do not truncate a field path in investigation output; repeatable")
-	investigate.PersistentFlags().IntVar(&flagInvestigationMaxString, "max-string", 800, "Maximum string length in investigation entity fields before truncation")
+	investigate.PersistentFlags().BoolVar(&outputOpts.full, "full", false, "Do not truncate investigation entity fields")
+	investigate.PersistentFlags().StringArrayVar(&outputOpts.expandFields, "expand-field", nil, "Do not truncate a field path in investigation output; repeatable")
+	investigate.PersistentFlags().IntVar(&outputOpts.maxString, "max-string", 800, "Maximum string length in investigation entity fields before truncation")
 	root.AddCommand(investigate)
 }
 
-type investigationCommandFactory func(shared.GlobalsFunc) *cobra.Command
+type investigationCommandFactory func(shared.GlobalsFunc, *investigationOutputOptions) *cobra.Command
 
 var investigationCommands = []investigationCommandFactory{
 	newInvestigateResolve,
@@ -49,12 +50,6 @@ var investigationCommands = []investigationCommandFactory{
 	newInvestigatePayoutFailure,
 	newInvestigateRefundRecovery,
 }
-
-var (
-	flagInvestigationFull         bool
-	flagInvestigationExpandFields []string
-	flagInvestigationMaxString    int
-)
 
 const investigationUsageText = `agent-stripe investigate — scenario workflows for Stripe incident triage
 
