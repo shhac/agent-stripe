@@ -9,23 +9,28 @@ Stripe incident triage CLI for AI agents. It is designed for read-heavy investig
 - **Stripe context aware**: supports `Stripe-Context` for organization keys and related-account requests.
 - **LLM-shaped output**: lists default to NDJSON, single resources default to JSON, and errors include `fixable_by` plus hints.
 - **Read-first triage**: balance, events, PaymentIntents, charges, disputes, accounts, and a GET-only raw API escape hatch.
+- **Subscription investigation**: inspect subscriptions, subscription items, invoices, and payment failures from one command group.
 
 ## Quick Start
 
 ```bash
 make build
-./agent-stripe auth add sandbox --api-key rk_test_... --context acct_...
+./agent-stripe auth add sandbox --form --context acct_...
 ./agent-stripe auth check sandbox
 ./agent-stripe events list --type charge.failed --limit 20
 ./agent-stripe payment-intents get pi_... --expand latest_charge
+./agent-stripe subscriptions get sub_... --expand latest_invoice --expand latest_invoice.payment_intent
+./agent-stripe subscriptions invoices sub_... --status open
 ```
 
 For organization API keys, store the organization key under a profile and provide a `Stripe-Context` value:
 
 ```bash
-agent-stripe auth add org-prod --api-key sk_org_... --context acct_platform/acct_connected
+agent-stripe auth add org-prod --form --context acct_platform/acct_connected
 agent-stripe -p org-prod balance get
 ```
+
+When an LLM is guiding setup, prefer `--form` over `--api-key`. A native OS dialog asks the user for the key, and the CLI returns only a redacted setup receipt.
 
 ## Output
 

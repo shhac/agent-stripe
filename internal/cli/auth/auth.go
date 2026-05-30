@@ -34,6 +34,7 @@ func registerAdd(parent *cobra.Command) {
 	var apiKey string
 	var contextValue string
 	var apiVersion string
+	var form bool
 
 	cmd := &cobra.Command{
 		Use:   "add <profile>",
@@ -41,6 +42,14 @@ func registerAdd(parent *cobra.Command) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			alias := args[0]
+			if form {
+				filledKey, err := promptAPIKeyViaDialog(cmd.Context(), alias, apiKey)
+				if err != nil {
+					output.WriteError(os.Stderr, err)
+					return nil
+				}
+				apiKey = filledKey
+			}
 			if !shared.RequireFlag("api-key", apiKey, "Provide --api-key <rk_live...|rk_test...|sk_live...|sk_test...|sk_org...>") {
 				return nil
 			}
@@ -72,6 +81,7 @@ func registerAdd(parent *cobra.Command) {
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "Stripe restricted, secret, or organization API key (required)")
 	cmd.Flags().StringVar(&contextValue, "context", "", "Default Stripe-Context for this profile")
 	cmd.Flags().StringVar(&apiVersion, "api-version", config.DefaultAPIVersion, "Default Stripe API version")
+	cmd.Flags().BoolVar(&form, "form", false, "Prompt for the API key via a native OS dialog (LLM never sees the input)")
 	parent.AddCommand(cmd)
 }
 

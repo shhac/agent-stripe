@@ -61,3 +61,28 @@ func TestCLIDebugAgainstMockStripe(t *testing.T) {
 		t.Fatalf("debug output leaked API key:\n%s", text)
 	}
 }
+
+func TestCLISubscriptionsAgainstMockStripe(t *testing.T) {
+	server := httptest.NewServer(mockstripe.NewServer())
+	defer server.Close()
+
+	cmd := exec.Command("go", "run", "./cmd/agent-stripe",
+		"--api-key", "sk_test_mock",
+		"--base-url", server.URL,
+		"subscriptions", "invoices", "sub_mock_past_due",
+		"--status", "open",
+	)
+	cmd.Dir = "../.."
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("agent-stripe failed: %v\n%s", err, out)
+	}
+	text := string(out)
+	if !strings.Contains(text, `"in_mock_open_failed"`) {
+		t.Fatalf("output did not contain mock invoice: %s", text)
+	}
+	if !strings.Contains(text, `"payment_intent":"pi_mock_failed"`) {
+		t.Fatalf("output did not contain failed PaymentIntent: %s", text)
+	}
+}

@@ -10,6 +10,7 @@ Use `agent-stripe` when investigating Stripe payment incidents, webhook/event qu
 ## Safety
 
 - Never ask the tool to reveal an API key.
+- Never accept pasted Stripe API keys in chat. Ask the user to run `agent-stripe auth add <profile> --form` locally so the key goes directly into an OS dialog.
 - Prefer read-only commands.
 - Use `--context` when the incident is scoped to a connected account or organization account path.
 - Treat live-mode actions as high stakes; this initial CLI is read-first by design.
@@ -18,6 +19,7 @@ Use `agent-stripe` when investigating Stripe payment incidents, webhook/event qu
 
 ```bash
 agent-stripe auth list
+agent-stripe auth add prod --form --context acct_...
 agent-stripe auth check
 agent-stripe balance get
 agent-stripe events list --type charge.failed --limit 20
@@ -25,6 +27,8 @@ agent-stripe events get evt_...
 agent-stripe payment-intents get pi_... --expand latest_charge
 agent-stripe payment-intents search --query "metadata['order_id']:'123'"
 agent-stripe charges get ch_... --expand payment_intent --expand balance_transaction
+agent-stripe subscriptions get sub_... --expand latest_invoice --expand latest_invoice.payment_intent
+agent-stripe subscriptions invoices sub_... --status open
 agent-stripe disputes list --payment-intent pi_...
 agent-stripe accounts self
 agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge

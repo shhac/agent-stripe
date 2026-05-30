@@ -32,6 +32,8 @@ Profiles store non-secret metadata in `~/.config/agent-stripe/config.json`:
 
 The API key itself is stored in macOS Keychain under the profile alias. The credential package deliberately has no method for listing or printing secret values. The `--api-key` flag is accepted as a non-persisted override for automation and tests, but output must never echo it.
 
+When an LLM is guiding a human through setup, use `agent-stripe auth add <profile> --form`. The native OS dialog asks for the API key outside the agent's terminal/chat context, then the CLI stores it in Keychain and prints only a redacted receipt.
+
 ## Stripe context
 
 Stripe's current account-scoping direction is `Stripe-Context`. The CLI exposes this as `--context` and stores an optional default on the profile.
@@ -59,6 +61,7 @@ Stripe errors often include request IDs, request-log URLs, error codes, and decl
 
 ```text
 agent-stripe auth add <profile> --api-key <key> [--context <context>] [--api-version <version>]
+agent-stripe auth add <profile> --form [--context <context>] [--api-version <version>]
 agent-stripe auth check [profile]
 agent-stripe auth list
 agent-stripe auth default <profile>
@@ -69,6 +72,7 @@ agent-stripe events list|get
 agent-stripe payment-intents list|get|search
 agent-stripe charges list|get|search
 agent-stripe disputes list|get
+agent-stripe subscriptions list|get|search|items|invoices
 agent-stripe accounts self|list|get
 agent-stripe api get <path>
 ```

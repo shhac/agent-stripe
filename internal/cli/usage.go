@@ -19,6 +19,7 @@ func registerUsageCommand(root *cobra.Command) {
 const usageText = `agent-stripe — Stripe triage CLI for AI agents
 
 PROFILE SETUP
+  agent-stripe auth add <profile> --form [--context <acct_or_path>] [--api-version <version>]
   agent-stripe auth add <profile> --api-key <rk_or_sk> [--context <acct_or_path>] [--api-version <version>]
   agent-stripe auth check [profile]
   agent-stripe auth list
@@ -30,6 +31,7 @@ CONTEXT
   For a platform connected account, use the connected account ID.
   For organization key access to a platform-connected account, use <platform_acct>/<connected_acct>.
   The API key is stored in macOS Keychain; this CLI never prints it back.
+  Prefer --form when an LLM is guiding setup so the user types the key into an OS popup.
 
 TRIAGE STARTERS
   agent-stripe balance get
@@ -39,6 +41,9 @@ TRIAGE STARTERS
   agent-stripe payment-intents search --query "metadata['order_id']:'123'"
   agent-stripe charges get <ch_id> [--expand payment_intent] [--expand balance_transaction]
   agent-stripe charges search --query "payment_method_details.card.last4:'4242'"
+  agent-stripe subscriptions get <sub_id> --expand latest_invoice --expand latest_invoice.payment_intent
+  agent-stripe subscriptions list [--customer <cus_id>] [--status active|past_due|unpaid|all]
+  agent-stripe subscriptions invoices <sub_id> [--status open]
   agent-stripe disputes list [--charge <ch_id>] [--payment-intent <pi_id>]
   agent-stripe accounts list
   agent-stripe accounts get <acct_id>

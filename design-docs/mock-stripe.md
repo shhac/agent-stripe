@@ -20,6 +20,11 @@ The mock should cover the read-first command surface:
 - `GET /v1/charges/search`
 - `GET /v1/disputes`
 - `GET /v1/disputes/:id`
+- `GET /v1/subscriptions`
+- `GET /v1/subscriptions/:id`
+- `GET /v1/subscriptions/search`
+- `GET /v1/subscription_items`
+- `GET /v1/invoices`
 - `GET /v1/accounts`
 - `GET /v1/accounts/:id`
 

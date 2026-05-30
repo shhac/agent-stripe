@@ -41,6 +41,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/charges/", s.handleChargeGet)
 	s.mux.HandleFunc("/v1/disputes", s.handleDisputesList)
 	s.mux.HandleFunc("/v1/disputes/", s.handleDisputeGet)
+	s.mux.HandleFunc("/v1/subscriptions/search", s.handleSubscriptionSearch)
+	s.mux.HandleFunc("/v1/subscriptions", s.handleSubscriptionsList)
+	s.mux.HandleFunc("/v1/subscriptions/", s.handleSubscriptionGet)
+	s.mux.HandleFunc("/v1/subscription_items", s.handleSubscriptionItemsList)
+	s.mux.HandleFunc("/v1/invoices", s.handleInvoicesList)
 	s.mux.HandleFunc("/v1/accounts", s.handleAccountsList)
 	s.mux.HandleFunc("/v1/accounts/", s.handleAccountGet)
 }
@@ -171,6 +176,64 @@ func (s *Server) handleDisputeGet(w http.ResponseWriter, r *http.Request) {
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/v1/disputes/")
 	writeOneByID(w, disputes(), id, "dispute")
+}
+
+func (s *Server) handleSubscriptionsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := subscriptions()
+	if customer := r.URL.Query().Get("customer"); customer != "" {
+		items = filterByString(items, "customer", customer)
+	}
+	if status := r.URL.Query().Get("status"); status != "" && status != "all" {
+		items = filterByString(items, "status", status)
+	}
+	writeList(w, "/v1/subscriptions", limit(items, r))
+}
+
+func (s *Server) handleSubscriptionSearch(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	if r.URL.Query().Get("query") == "" {
+		writeStripeError(w, http.StatusBadRequest, "invalid_request_error", "parameter_missing", "Missing required param: query")
+		return
+	}
+	writeSearchList(w, "/v1/subscriptions/search", limit(subscriptions(), r))
+}
+
+func (s *Server) handleSubscriptionGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/subscriptions/")
+	writeOneByID(w, subscriptions(), id, "subscription")
+}
+
+func (s *Server) handleSubscriptionItemsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := subscriptionItems()
+	if subscription := r.URL.Query().Get("subscription"); subscription != "" {
+		items = filterByString(items, "subscription", subscription)
+	}
+	writeList(w, "/v1/subscription_items", limit(items, r))
+}
+
+func (s *Server) handleInvoicesList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := invoices()
+	if subscription := r.URL.Query().Get("subscription"); subscription != "" {
+		items = filterByString(items, "subscription", subscription)
+	}
+	if status := r.URL.Query().Get("status"); status != "" {
+		items = filterByString(items, "status", status)
+	}
+	writeList(w, "/v1/invoices", limit(items, r))
 }
 
 func (s *Server) handleAccountsList(w http.ResponseWriter, r *http.Request) {

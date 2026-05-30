@@ -330,6 +330,150 @@ func registerDisputes(root *cobra.Command, globals shared.GlobalsFunc) {
 	root.AddCommand(disputes)
 }
 
+func registerSubscriptions(root *cobra.Command, globals shared.GlobalsFunc) {
+	var limit int
+	var query string
+	var page string
+	var expand []string
+	var customer string
+	var status string
+	var price string
+	var createdGTE string
+	var createdLTE string
+	var currentPeriodEndGTE string
+	var currentPeriodEndLTE string
+	var startingAfter string
+	var invoiceStatus string
+
+	subscriptions := &cobra.Command{
+		Use:     "subscriptions",
+		Aliases: []string{"subs"},
+		Short:   "Subscription lifecycle, invoice, and item investigation",
+	}
+	get := &cobra.Command{
+		Use:   "get <subscription-id>",
+		Short: "Retrieve a subscription by ID",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := url.Values{}
+			api.AddExpand(params, expand)
+			return shared.WithClient(globals(), func(ctx context.Context, client *api.Client) error {
+				raw, err := client.Get(ctx, "/v1/subscriptions/"+url.PathEscape(args[0]), params)
+				if err != nil {
+					return err
+				}
+				shared.WriteRawItem(raw, globals().Format)
+				return nil
+			})
+		},
+	}
+	get.Flags().StringArrayVar(&expand, "expand", nil, "Expand response property; repeatable")
+	subscriptions.AddCommand(get)
+
+	list := &cobra.Command{
+		Use:   "list",
+		Short: "List subscriptions; defaults to NDJSON",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := url.Values{}
+			api.AddLimit(params, limit)
+			api.AddCreatedRange(params, createdGTE, createdLTE)
+			shared.AddString(params, "customer", customer)
+			shared.AddString(params, "status", status)
+			shared.AddString(params, "price", price)
+			shared.AddString(params, "current_period_end[gte]", currentPeriodEndGTE)
+			shared.AddString(params, "current_period_end[lte]", currentPeriodEndLTE)
+			shared.AddString(params, "starting_after", startingAfter)
+			return shared.WithClient(globals(), func(ctx context.Context, client *api.Client) error {
+				raw, err := client.Get(ctx, "/v1/subscriptions", params)
+				if err != nil {
+					return err
+				}
+				return shared.WriteRawList(raw, globals().Format)
+			})
+		},
+	}
+	list.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
+	list.Flags().StringVar(&customer, "customer", "", "Customer ID")
+	list.Flags().StringVar(&status, "status", "", "Subscription status: incomplete, trialing, active, past_due, canceled, unpaid, paused, all, ended")
+	list.Flags().StringVar(&price, "price", "", "Only subscriptions containing this Price ID")
+	list.Flags().StringVar(&createdGTE, "created-gte", "", "Created at or after Unix timestamp")
+	list.Flags().StringVar(&createdLTE, "created-lte", "", "Created at or before Unix timestamp")
+	list.Flags().StringVar(&currentPeriodEndGTE, "current-period-end-gte", "", "Minimum item current period end at or after Unix timestamp")
+	list.Flags().StringVar(&currentPeriodEndLTE, "current-period-end-lte", "", "Minimum item current period end at or before Unix timestamp")
+	list.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
+	subscriptions.AddCommand(list)
+
+	search := &cobra.Command{
+		Use:   "search",
+		Short: "Search subscriptions with Stripe Search Query Language",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !shared.RequireFlag("query", query, "Use a Stripe search query, for example metadata['tenant_id']:'acme'") {
+				return nil
+			}
+			params := url.Values{"query": []string{query}}
+			api.AddLimit(params, limit)
+			shared.AddString(params, "page", page)
+			return shared.WithClient(globals(), func(ctx context.Context, client *api.Client) error {
+				raw, err := client.Get(ctx, "/v1/subscriptions/search", params)
+				if err != nil {
+					return err
+				}
+				return shared.WriteRawList(raw, globals().Format)
+			})
+		},
+	}
+	search.Flags().StringVar(&query, "query", "", "Stripe search query")
+	search.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
+	search.Flags().StringVar(&page, "page", "", "Search pagination cursor")
+	subscriptions.AddCommand(search)
+
+	items := &cobra.Command{
+		Use:   "items <subscription-id>",
+		Short: "List subscription items for a subscription",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := url.Values{"subscription": []string{args[0]}}
+			api.AddLimit(params, limit)
+			api.AddExpand(params, expand)
+			return shared.WithClient(globals(), func(ctx context.Context, client *api.Client) error {
+				raw, err := client.Get(ctx, "/v1/subscription_items", params)
+				if err != nil {
+					return err
+				}
+				return shared.WriteRawList(raw, globals().Format)
+			})
+		},
+	}
+	items.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
+	items.Flags().StringArrayVar(&expand, "expand", nil, "Expand response property; repeatable")
+	subscriptions.AddCommand(items)
+
+	invoices := &cobra.Command{
+		Use:   "invoices <subscription-id>",
+		Short: "List invoices for a subscription",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := url.Values{"subscription": []string{args[0]}}
+			api.AddLimit(params, limit)
+			shared.AddString(params, "status", invoiceStatus)
+			shared.AddString(params, "starting_after", startingAfter)
+			return shared.WithClient(globals(), func(ctx context.Context, client *api.Client) error {
+				raw, err := client.Get(ctx, "/v1/invoices", params)
+				if err != nil {
+					return err
+				}
+				return shared.WriteRawList(raw, globals().Format)
+			})
+		},
+	}
+	invoices.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
+	invoices.Flags().StringVar(&invoiceStatus, "status", "", "Invoice status: draft, open, paid, uncollectible, void")
+	invoices.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
+	subscriptions.AddCommand(invoices)
+
+	root.AddCommand(subscriptions)
+}
+
 func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 	var limit int
 	var startingAfter string

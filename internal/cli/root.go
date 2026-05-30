@@ -60,6 +60,7 @@ func newRootCmd(version string) *cobra.Command {
 	registerPaymentIntents(root, allGlobals)
 	registerCharges(root, allGlobals)
 	registerDisputes(root, allGlobals)
+	registerSubscriptions(root, allGlobals)
 	registerAccounts(root, allGlobals)
 	registerRawAPI(root, allGlobals)
 
