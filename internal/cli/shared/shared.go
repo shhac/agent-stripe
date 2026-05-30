@@ -15,6 +15,7 @@ type GlobalFlags struct {
 	Profile    string
 	Context    string
 	APIKey     string
+	BaseURL    string
 	Format     string
 	Timeout    int
 	Debug      bool

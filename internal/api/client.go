@@ -31,11 +31,16 @@ type Options struct {
 	APIKey     string
 	Context    string
 	APIVersion string
+	BaseURL    string
 }
 
 func NewClient(opts Options) *Client {
+	baseURL := opts.BaseURL
+	if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
 	return &Client{
-		baseURL:    defaultBaseURL,
+		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiKey:     opts.APIKey,
 		context:    opts.Context,
 		apiVersion: opts.APIVersion,

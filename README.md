@@ -46,7 +46,18 @@ Errors are written to stderr as JSON:
 ```bash
 make test
 make build
+make build-mock
 make dev ARGS="usage"
+```
+
+## Mock Stripe
+
+Run a local mock server for safe e2e development:
+
+```bash
+make build-mock
+./mockstripe --addr 127.0.0.1:12111
+AGENT_STRIPE_BASE_URL=http://127.0.0.1:12111 agent-stripe --api-key sk_test_mock events list
 ```
 
 ## License

@@ -74,6 +74,7 @@ func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error)
 		APIKey:     apiKey,
 		Context:    profile.Context,
 		APIVersion: profile.APIVersion,
+		BaseURL:    firstNonEmpty(flags.BaseURL, os.Getenv("AGENT_STRIPE_BASE_URL")),
 	})
 	client.SetDebug(flags.Debug)
 	if err := fn(ctx, client); err != nil {

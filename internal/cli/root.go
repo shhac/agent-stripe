@@ -14,6 +14,7 @@ var (
 	flagProfile    string
 	flagContext    string
 	flagAPIKey     string
+	flagBaseURL    string
 	flagFormat     string
 	flagTimeout    int
 	flagDebug      bool
@@ -25,6 +26,7 @@ func allGlobals() *shared.GlobalFlags {
 		Profile:    flagProfile,
 		Context:    flagContext,
 		APIKey:     flagAPIKey,
+		BaseURL:    flagBaseURL,
 		Format:     flagFormat,
 		Timeout:    flagTimeout,
 		Debug:      flagDebug,
@@ -44,10 +46,12 @@ func newRootCmd(version string) *cobra.Command {
 	root.PersistentFlags().StringVarP(&flagProfile, "profile", "p", "", "Stripe profile alias (or AGENT_STRIPE_PROFILE)")
 	root.PersistentFlags().StringVar(&flagContext, "context", "", "Stripe-Context value for organization or related-account requests")
 	root.PersistentFlags().StringVar(&flagAPIKey, "api-key", "", "API key override; never printed or persisted")
+	root.PersistentFlags().StringVar(&flagBaseURL, "base-url", "", "Stripe API base URL override for tests")
 	root.PersistentFlags().StringVarP(&flagFormat, "format", "f", "", "Output format: json, yaml, jsonl")
 	root.PersistentFlags().IntVarP(&flagTimeout, "timeout", "t", 0, "Request timeout in milliseconds")
 	root.PersistentFlags().StringVar(&flagAPIVersion, "api-version", "", "Stripe API version header override")
 	root.PersistentFlags().BoolVarP(&flagDebug, "debug", "d", false, "Log HTTP requests and responses to stderr")
+	_ = root.PersistentFlags().MarkHidden("base-url")
 
 	registerUsageCommand(root)
 	auth.Register(root)

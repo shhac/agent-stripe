@@ -5,6 +5,9 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/agent-stripe
 
+build-mock:
+	go build -o mockstripe ./cmd/mockstripe
+
 test:
 	go test ./... -count=1
 
@@ -20,6 +23,7 @@ fmt:
 
 clean:
 	rm -f $(BINARY)
+	rm -f mockstripe
 	rm -rf dist/
 
 dev:
@@ -28,4 +32,4 @@ dev:
 vet:
 	go vet ./...
 
-.PHONY: build test test-short lint fmt clean dev vet
+.PHONY: build build-mock test test-short lint fmt clean dev vet

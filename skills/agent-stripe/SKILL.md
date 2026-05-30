@@ -30,6 +30,8 @@ agent-stripe accounts self
 agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
 ```
 
+For local testing, run `mockstripe` and set `AGENT_STRIPE_BASE_URL` to its base URL.
+
 ## Output
 
 Lists default to NDJSON. Single resources default to JSON. Errors include `fixable_by` and usually a `hint`.
