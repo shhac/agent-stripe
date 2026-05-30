@@ -200,6 +200,22 @@ func (i investigator) findSubscriptions(subscription, customer, metadata string,
 }
 
 func (i investigator) subscriptionItemsEvidence(subscriptionID string) ([]evidenceRecord, error) {
+	bundle, err := i.subscriptionItemsBundle(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	records := append([]evidenceRecord{}, bundle.records...)
+	records = append(records, subscriptionItemsFinding(subscriptionID, len(bundle.items)))
+	return records, nil
+}
+
+type subscriptionItemsBundle struct {
+	sub     map[string]any
+	items   []map[string]any
+	records []evidenceRecord
+}
+
+func (i investigator) subscriptionItemsBundle(subscriptionID string) (*subscriptionItemsBundle, error) {
 	records := []evidenceRecord{}
 	sub, err := i.get("/v1/subscriptions/"+url.PathEscape(subscriptionID), url.Values{})
 	if err != nil {
@@ -220,30 +236,31 @@ func (i investigator) subscriptionItemsEvidence(subscriptionID string) ([]eviden
 			}
 		}
 	}
-	records = append(records, evidenceRecord{
+	return &subscriptionItemsBundle{sub: sub, items: items, records: records}, nil
+}
+
+func subscriptionItemsFinding(subscriptionID string, itemCount int) evidenceRecord {
+	return evidenceRecord{
 		Type:     "finding",
 		Severity: "info",
-		Summary:  fmt.Sprintf("Subscription %s has %d visible item(s). Use price/product metadata for internal product mapping.", subscriptionID, len(items)),
+		Summary:  fmt.Sprintf("Subscription %s has %d visible item(s). Use price/product metadata for internal product mapping.", subscriptionID, itemCount),
 		Data: map[string]any{
 			"subscription": subscriptionID,
-			"item_count":   len(items),
+			"item_count":   itemCount,
 		},
-	})
-	return records, nil
+	}
 }
 
 func (i investigator) subscriptionAmountChange(subscriptionID string) ([]evidenceRecord, error) {
-	records, err := i.subscriptionItemsEvidence(subscriptionID)
+	bundle, err := i.subscriptionItemsBundle(subscriptionID)
 	if err != nil {
 		return nil, err
 	}
-	sub := firstEntityData(records, "subscription")
-	if sub == nil {
-		return records, nil
-	}
+	records := append([]evidenceRecord{}, bundle.records...)
+	records = append(records, subscriptionItemsFinding(subscriptionID, len(bundle.items)))
 
 	var latestInvoice map[string]any
-	if latestInvoiceID := idFromValue(sub["latest_invoice"]); latestInvoiceID != "" {
+	if latestInvoiceID := idFromValue(bundle.sub["latest_invoice"]); latestInvoiceID != "" {
 		invoice, invoiceErr := i.get("/v1/invoices/"+url.PathEscape(latestInvoiceID), url.Values{})
 		if invoiceErr != nil {
 			records = append(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not retrieve latest invoice " + latestInvoiceID + ": " + invoiceErr.Error()})
@@ -263,8 +280,7 @@ func (i investigator) subscriptionAmountChange(subscriptionID string) ([]evidenc
 		records = append(records, entityRecord("invoice_preview", next))
 	}
 
-	items := entityDataByObject(records, "subscription_item")
-	records = append(records, subscriptionAmountFinding(subscriptionID, latestInvoice, preview, items))
+	records = append(records, subscriptionAmountFinding(subscriptionID, latestInvoice, preview, bundle.items))
 	return records, nil
 }
 
@@ -321,25 +337,6 @@ func subscriptionItemsSubtotal(items []map[string]any) (int64, string, bool) {
 	return total, currency, currency != "" || total > 0
 }
 
-func firstEntityData(records []evidenceRecord, object string) map[string]any {
-	for _, record := range records {
-		if record.Type == "entity" && record.Object == object {
-			return record.Data
-		}
-	}
-	return nil
-}
-
-func entityDataByObject(records []evidenceRecord, object string) []map[string]any {
-	items := []map[string]any{}
-	for _, record := range records {
-		if record.Type == "entity" && record.Object == object {
-			items = append(items, record.Data)
-		}
-	}
-	return items
-}
-
 func (i investigator) subscriptionPaymentSummary(sub map[string]any) []evidenceRecord {
 	records := []evidenceRecord{}
 	if latestInvoiceID := idFromValue(sub["latest_invoice"]); latestInvoiceID != "" {
@@ -365,38 +362,78 @@ func (i investigator) subscriptionPaymentSummary(sub map[string]any) []evidenceR
 }
 
 func (i investigator) collectionRisk(sub map[string]any) string {
-	status := mapString(sub, "status")
-	if status == "past_due" || status == "unpaid" || status == "incomplete" {
-		return fmt.Sprintf("Customer %s has subscription %s in %s status; outreach about payment details is recommended.", mapString(sub, "customer"), mapString(sub, "id"), status)
+	return i.collectionRiskAt(sub, time.Now())
+}
+
+func (i investigator) collectionRiskAt(sub map[string]any, now time.Time) string {
+	ctx := newCollectionRiskContext(sub)
+	if risk := statusCollectionRisk(sub, ctx); risk != "" {
+		return risk
 	}
 	pmID := idFromValue(sub["default_payment_method"])
 	if pmID == "" {
-		if customer, err := i.get("/v1/customers/"+url.PathEscape(mapString(sub, "customer")), url.Values{}); err == nil {
+		if customer, err := i.get("/v1/customers/"+url.PathEscape(ctx.customerID), url.Values{}); err == nil {
 			settings := mapAnyMap(customer, "invoice_settings")
 			pmID = idFromValue(settings["default_payment_method"])
 		}
 		if pmID == "" {
-			return fmt.Sprintf("Customer %s has subscription %s with no default payment method visible.", mapString(sub, "customer"), mapString(sub, "id"))
+			return missingPaymentMethodRisk(ctx)
 		}
 	}
 	if pmID != "" {
-		if pm, err := i.get("/v1/payment_methods/"+url.PathEscape(pmID), url.Values{}); err == nil && cardExpiresSoon(pm, time.Now()) {
-			return fmt.Sprintf("Customer %s has subscription %s with card payment method %s expiring soon.", mapString(sub, "customer"), mapString(sub, "id"), pmID)
+		if pm, err := i.get("/v1/payment_methods/"+url.PathEscape(pmID), url.Values{}); err == nil && cardExpiresSoon(pm, now) {
+			return expiringPaymentMethodRisk(ctx, pmID)
 		}
 	}
 	if invoiceID := idFromValue(sub["latest_invoice"]); invoiceID != "" {
 		invoice, err := i.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{})
 		if err == nil && !mapBool(invoice, "paid") && mapString(invoice, "status") == "open" {
-			return fmt.Sprintf("Customer %s has an open unpaid invoice %s for subscription %s.", mapString(sub, "customer"), invoiceID, mapString(sub, "id"))
+			return openInvoiceRisk(ctx, invoiceID)
 		}
 		if err == nil && idFromValue(invoice["payment_intent"]) != "" {
 			pi, piErr := i.paymentIntentForInvoice(invoice)
 			if piErr == nil && mapString(pi, "status") == "requires_action" {
-				return fmt.Sprintf("Customer %s has subscription %s with latest invoice PaymentIntent requiring action.", mapString(sub, "customer"), mapString(sub, "id"))
+				return latestInvoiceActionRisk(ctx)
 			}
 		}
 	}
 	return ""
+}
+
+type collectionRiskContext struct {
+	customerID     string
+	subscriptionID string
+}
+
+func newCollectionRiskContext(sub map[string]any) collectionRiskContext {
+	return collectionRiskContext{
+		customerID:     mapString(sub, "customer"),
+		subscriptionID: mapString(sub, "id"),
+	}
+}
+
+func statusCollectionRisk(sub map[string]any, ctx collectionRiskContext) string {
+	status := mapString(sub, "status")
+	if status == "past_due" || status == "unpaid" || status == "incomplete" {
+		return fmt.Sprintf("Customer %s has subscription %s in %s status; outreach about payment details is recommended.", ctx.customerID, ctx.subscriptionID, status)
+	}
+	return ""
+}
+
+func missingPaymentMethodRisk(ctx collectionRiskContext) string {
+	return fmt.Sprintf("Customer %s has subscription %s with no default payment method visible.", ctx.customerID, ctx.subscriptionID)
+}
+
+func expiringPaymentMethodRisk(ctx collectionRiskContext, pmID string) string {
+	return fmt.Sprintf("Customer %s has subscription %s with card payment method %s expiring soon.", ctx.customerID, ctx.subscriptionID, pmID)
+}
+
+func openInvoiceRisk(ctx collectionRiskContext, invoiceID string) string {
+	return fmt.Sprintf("Customer %s has an open unpaid invoice %s for subscription %s.", ctx.customerID, invoiceID, ctx.subscriptionID)
+}
+
+func latestInvoiceActionRisk(ctx collectionRiskContext) string {
+	return fmt.Sprintf("Customer %s has subscription %s with latest invoice PaymentIntent requiring action.", ctx.customerID, ctx.subscriptionID)
 }
 
 func subscriptionCancelRisk(sub map[string]any) string {

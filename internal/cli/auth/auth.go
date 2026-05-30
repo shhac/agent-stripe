@@ -15,6 +15,11 @@ import (
 	"github.com/shhac/agent-stripe/internal/output"
 )
 
+var (
+	credentialStore  = credential.Store
+	credentialRemove = credential.Remove
+)
+
 func Register(root *cobra.Command, globals shared.GlobalsFunc) {
 	auth := &cobra.Command{
 		Use:   "auth",
@@ -118,7 +123,7 @@ func registerAdd(parent *cobra.Command) {
 				return nil
 			}
 
-			storage, err := credential.Store(alias, apiKey)
+			storage, err := credentialStore(alias, apiKey)
 			if err != nil {
 				output.WriteError(output.Stderr(), err)
 				return nil
@@ -231,7 +236,7 @@ func registerRemove(parent *cobra.Command) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			alias := args[0]
-			if err := credential.Remove(alias); err != nil {
+			if err := credentialRemove(alias); err != nil {
 				output.WriteError(output.Stderr(), err)
 				return nil
 			}

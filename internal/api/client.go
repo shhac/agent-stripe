@@ -69,30 +69,15 @@ func (c *Client) PostForm(ctx context.Context, path string, params url.Values) (
 
 func (c *Client) do(ctx context.Context, method, path string, form url.Values) (json.RawMessage, error) {
 	for attempt := 0; ; attempt++ {
-		req, err := c.buildRequest(ctx, method, path, form)
+		resp, err := c.sendOnce(ctx, method, path, form)
 		if err != nil {
 			return nil, err
 		}
 
-		resp, err := c.http.Do(req)
-		if err != nil {
-			return nil, agenterrors.Wrap(err, agenterrors.FixableByRetry).WithHint("Network error: check connectivity and retry")
-		}
-
-		respBody, readErr := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if readErr != nil {
-			return nil, agenterrors.Wrap(readErr, agenterrors.FixableByRetry)
-		}
-
-		if c.debug {
-			c.logDebug(method, req.URL.String(), resp.StatusCode, resp.Header.Get("Request-Id"), respBody)
-		}
-
-		if shouldRetry(resp.StatusCode, attempt, c.maxRetries) {
-			delay := retryDelay(resp.Header.Get("Retry-After"), attempt)
+		if shouldRetry(resp.status, attempt, c.maxRetries) {
+			delay := retryDelay(resp.retryAfter, attempt)
 			if c.debug {
-				c.logRetry(method, req.URL.String(), resp.StatusCode, resp.Header.Get("Request-Id"), resp.Header.Get("Stripe-Rate-Limited-Reason"), attempt+1, c.maxRetries, delay)
+				c.logRetry(method, resp.url, resp.status, resp.requestID, resp.rateLimitedReason, attempt+1, c.maxRetries, delay)
 			}
 			if err := sleepWithContext(ctx, delay); err != nil {
 				return nil, agenterrors.Wrap(err, agenterrors.FixableByRetry).WithHint("Retry wait interrupted; re-run the command")
@@ -100,12 +85,52 @@ func (c *Client) do(ctx context.Context, method, path string, form url.Values) (
 			continue
 		}
 
-		if resp.StatusCode >= 400 {
-			return nil, classifyHTTPError(resp.StatusCode, resp.Header.Get("Request-Id"), resp.Header.Get("Stripe-Rate-Limited-Reason"), c.maxRetries, respBody)
+		if resp.status >= 400 {
+			return nil, classifyHTTPError(resp.status, resp.requestID, resp.rateLimitedReason, c.maxRetries, resp.body)
 		}
 
-		return json.RawMessage(respBody), nil
+		return json.RawMessage(resp.body), nil
 	}
+}
+
+type responseEnvelope struct {
+	status            int
+	body              []byte
+	url               string
+	requestID         string
+	rateLimitedReason string
+	retryAfter        string
+}
+
+func (c *Client) sendOnce(ctx context.Context, method, path string, form url.Values) (*responseEnvelope, error) {
+	req, err := c.buildRequest(ctx, method, path, form)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, agenterrors.Wrap(err, agenterrors.FixableByRetry).WithHint("Network error: check connectivity and retry")
+	}
+
+	body, readErr := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if readErr != nil {
+		return nil, agenterrors.Wrap(readErr, agenterrors.FixableByRetry)
+	}
+
+	if c.debug {
+		c.logDebug(method, req.URL.String(), resp.StatusCode, resp.Header.Get("Request-Id"), body)
+	}
+
+	return &responseEnvelope{
+		status:            resp.StatusCode,
+		body:              body,
+		url:               req.URL.String(),
+		requestID:         resp.Header.Get("Request-Id"),
+		rateLimitedReason: resp.Header.Get("Stripe-Rate-Limited-Reason"),
+		retryAfter:        resp.Header.Get("Retry-After"),
+	}, nil
 }
 
 func (c *Client) buildRequest(ctx context.Context, method, path string, form url.Values) (*http.Request, error) {

@@ -29,9 +29,6 @@ type resourceOptions struct {
 	listFlags     []listFlag
 	expandGet     bool
 	expandList    bool
-	lineItems     bool
-	previewPath   string
-	previewFlags  []listFlag
 	extraCommands []func(shared.GlobalsFunc) *cobra.Command
 }
 
@@ -48,12 +45,6 @@ func registerResource(root *cobra.Command, globals shared.GlobalsFunc, opts reso
 	}
 	if opts.usageText != "" {
 		resource.AddCommand(newUsageCommand(opts.usageText))
-	}
-	if opts.lineItems {
-		resource.AddCommand(newInvoiceLineItemsCommand(globals))
-	}
-	if opts.previewPath != "" {
-		resource.AddCommand(newInvoicePreviewCommand(globals, opts))
 	}
 	for _, newCommand := range opts.extraCommands {
 		resource.AddCommand(newCommand(globals))

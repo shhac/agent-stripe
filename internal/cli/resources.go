@@ -31,20 +31,20 @@ func newInvoiceLineItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 	return cmd
 }
 
-func newInvoicePreviewCommand(globals shared.GlobalsFunc, opts resourceOptions) *cobra.Command {
-	values := make(map[string]*string, len(opts.previewFlags))
+func newInvoicePreviewCommand(globals shared.GlobalsFunc, path string, flags []listFlag) *cobra.Command {
+	values := make(map[string]*string, len(flags))
 	cmd := &cobra.Command{
 		Use:   "preview",
 		Short: "Create a preview invoice for a customer or subscription",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := url.Values{}
-			for _, flag := range opts.previewFlags {
+			for _, flag := range flags {
 				shared.AddString(params, flag.param, *values[flag.name])
 			}
-			return shared.PostFormRawItem(globals(), opts.previewPath, params)
+			return shared.PostFormRawItem(globals(), path, params)
 		},
 	}
-	for _, flag := range opts.previewFlags {
+	for _, flag := range flags {
 		var value string
 		values[flag.name] = &value
 		cmd.Flags().StringVar(&value, flag.name, "", flag.help)
@@ -77,17 +77,20 @@ func registerInvoices(root *cobra.Command, globals shared.GlobalsFunc) {
 		usageText:  invoicesUsageText,
 		expandGet:  true,
 		expandList: true,
-		lineItems:  true,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
 			{name: "subscription", param: "subscription", help: "Subscription ID"},
 			{name: "status", param: "status", help: "Invoice status: draft, open, paid, uncollectible, void"},
 		},
-		previewPath: "/v1/invoices/create_preview",
-		previewFlags: []listFlag{
-			{name: "customer", param: "customer", help: "Customer ID"},
-			{name: "subscription", param: "subscription", help: "Subscription ID"},
-			{name: "preview-mode", param: "preview_mode", help: "Preview mode: next or recurring"},
+		extraCommands: []func(shared.GlobalsFunc) *cobra.Command{
+			newInvoiceLineItemsCommand,
+			func(globals shared.GlobalsFunc) *cobra.Command {
+				return newInvoicePreviewCommand(globals, "/v1/invoices/create_preview", []listFlag{
+					{name: "customer", param: "customer", help: "Customer ID"},
+					{name: "subscription", param: "subscription", help: "Subscription ID"},
+					{name: "preview-mode", param: "preview_mode", help: "Preview mode: next or recurring"},
+				})
+			},
 		},
 	})
 }
@@ -251,63 +254,29 @@ func registerEarlyFraudWarnings(root *cobra.Command, globals shared.GlobalsFunc)
 }
 
 func registerCheckoutSessions(root *cobra.Command, globals shared.GlobalsFunc) {
+	registerResource(root, globals, resourceOptions{
+		use:       "checkout-sessions",
+		aliases:   []string{"checkout_sessions"},
+		short:     "Checkout Session lookup and line items",
+		path:      "/v1/checkout/sessions",
+		idName:    "checkout-session-id",
+		getShort:  "Retrieve a Checkout Session",
+		listShort: "List Checkout Sessions",
+		expandGet: true,
+		listFlags: []listFlag{
+			{name: "customer", param: "customer", help: "Customer ID"},
+			{name: "payment-intent", param: "payment_intent", help: "PaymentIntent ID"},
+			{name: "subscription", param: "subscription", help: "Subscription ID"},
+			{name: "payment-link", param: "payment_link", help: "Payment Link ID"},
+		},
+		extraCommands: []func(shared.GlobalsFunc) *cobra.Command{
+			newCheckoutSessionLineItemsCommand,
+		},
+	})
+}
+
+func newCheckoutSessionLineItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 	var limit int
-	var customer string
-	var paymentIntent string
-	var subscription string
-	var paymentLink string
-	var createdGTE string
-	var createdLTE string
-	var startingAfter string
-	var endingBefore string
-	var expand []string
-
-	sessions := &cobra.Command{
-		Use:     "checkout-sessions",
-		Aliases: []string{"checkout_sessions"},
-		Short:   "Checkout Session lookup and line items",
-	}
-	get := &cobra.Command{
-		Use:   "get <checkout-session-id>",
-		Short: "Retrieve a Checkout Session",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			params := url.Values{}
-			shared.AddExpand(params, expand)
-			return shared.GetRawItem(globals(), "/v1/checkout/sessions/"+url.PathEscape(args[0]), params)
-		},
-	}
-	get.Flags().StringArrayVar(&expand, "expand", nil, "Expand response property; repeatable")
-	sessions.AddCommand(get)
-
-	list := &cobra.Command{
-		Use:   "list",
-		Short: "List Checkout Sessions",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			params := url.Values{}
-			shared.AddLimit(params, limit)
-			shared.AddCreatedRange(params, createdGTE, createdLTE)
-			shared.AddString(params, "customer", customer)
-			shared.AddString(params, "payment_intent", paymentIntent)
-			shared.AddString(params, "subscription", subscription)
-			shared.AddString(params, "payment_link", paymentLink)
-			shared.AddString(params, "starting_after", startingAfter)
-			shared.AddString(params, "ending_before", endingBefore)
-			return shared.GetRawList(globals(), "/v1/checkout/sessions", params)
-		},
-	}
-	list.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
-	list.Flags().StringVar(&customer, "customer", "", "Customer ID")
-	list.Flags().StringVar(&paymentIntent, "payment-intent", "", "PaymentIntent ID")
-	list.Flags().StringVar(&subscription, "subscription", "", "Subscription ID")
-	list.Flags().StringVar(&paymentLink, "payment-link", "", "Payment Link ID")
-	list.Flags().StringVar(&createdGTE, "created-gte", "", "Created at or after Unix timestamp")
-	list.Flags().StringVar(&createdLTE, "created-lte", "", "Created at or before Unix timestamp")
-	list.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
-	list.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
-	markCursorFlagsMutuallyExclusive(list)
-	sessions.AddCommand(list)
-
 	var lineItemsStartingAfter string
 	var lineItemsEndingBefore string
 	lineItems := &cobra.Command{
@@ -326,6 +295,5 @@ func registerCheckoutSessions(root *cobra.Command, globals shared.GlobalsFunc) {
 	lineItems.Flags().StringVar(&lineItemsStartingAfter, "starting-after", "", "Stripe cursor")
 	lineItems.Flags().StringVar(&lineItemsEndingBefore, "ending-before", "", "Stripe cursor")
 	markCursorFlagsMutuallyExclusive(lineItems)
-	sessions.AddCommand(lineItems)
-	root.AddCommand(sessions)
+	return lineItems
 }
