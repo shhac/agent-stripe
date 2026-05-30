@@ -41,6 +41,8 @@ Errors are written to stderr as JSON:
 {"error":"Permission denied: ...","fixable_by":"human","hint":"The key may need read permissions for this Stripe resource..."}
 ```
 
+Use `--debug` to emit extra JSON records to stderr while commands run. Debug output includes client setup details, credential source labels, request URLs, status codes, request IDs, and response bodies, but not raw API keys.
+
 ## Development
 
 ```bash

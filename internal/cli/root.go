@@ -54,7 +54,7 @@ func newRootCmd(version string) *cobra.Command {
 	_ = root.PersistentFlags().MarkHidden("base-url")
 
 	registerUsageCommand(root)
-	auth.Register(root)
+	auth.Register(root, allGlobals)
 	registerBalance(root, allGlobals)
 	registerEvents(root, allGlobals)
 	registerPaymentIntents(root, allGlobals)

@@ -2,6 +2,7 @@ package shared
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 
 	"github.com/shhac/agent-stripe/internal/api"
@@ -11,7 +12,15 @@ import (
 	"github.com/shhac/agent-stripe/internal/output"
 )
 
-func ResolveProfile(flags *GlobalFlags) (string, config.Profile, string, error) {
+type ResolvedProfile struct {
+	Alias            string
+	Profile          config.Profile
+	APIKey           string
+	CredentialSource string
+	BaseURL          string
+}
+
+func ResolveProfile(flags *GlobalFlags) (*ResolvedProfile, error) {
 	cfg := config.Read()
 	alias := flags.Profile
 	if alias == "" {
@@ -22,30 +31,38 @@ func ResolveProfile(flags *GlobalFlags) (string, config.Profile, string, error) 
 	}
 
 	apiKey := flags.APIKey
+	credentialSource := "flag"
 	if apiKey == "" {
 		apiKey = os.Getenv("STRIPE_API_KEY")
+		credentialSource = "env"
 	}
 	if apiKey != "" {
-		return alias, config.Profile{
-			Context: firstNonEmpty(flags.Context, os.Getenv("STRIPE_CONTEXT")),
-			APIVersion: firstNonEmpty(flags.APIVersion, os.Getenv("STRIPE_API_VERSION"),
-				config.DefaultAPIVersion),
-		}, apiKey, nil
+		return &ResolvedProfile{
+			Alias: alias,
+			Profile: config.Profile{
+				Context: firstNonEmpty(flags.Context, os.Getenv("STRIPE_CONTEXT")),
+				APIVersion: firstNonEmpty(flags.APIVersion, os.Getenv("STRIPE_API_VERSION"),
+					config.DefaultAPIVersion),
+			},
+			APIKey:           apiKey,
+			CredentialSource: credentialSource,
+			BaseURL:          firstNonEmpty(flags.BaseURL, os.Getenv("AGENT_STRIPE_BASE_URL")),
+		}, nil
 	}
 
 	if alias == "" {
-		return "", config.Profile{}, "", agenterrors.New("No Stripe profile configured", agenterrors.FixableByHuman).
+		return nil, agenterrors.New("No Stripe profile configured", agenterrors.FixableByHuman).
 			WithHint("Run 'agent-stripe auth add <profile> --api-key <rk_or_sk>' or set STRIPE_API_KEY")
 	}
 
 	profile, ok := cfg.Profiles[alias]
 	if !ok {
-		return "", config.Profile{}, "", agenterrors.Newf(agenterrors.FixableByHuman, "Profile %q is not configured", alias).
+		return nil, agenterrors.Newf(agenterrors.FixableByHuman, "Profile %q is not configured", alias).
 			WithHint("Run 'agent-stripe auth list' to see configured profiles")
 	}
 	apiKey, err := credential.Get(alias)
 	if err != nil {
-		return "", config.Profile{}, "", agenterrors.Wrap(err, agenterrors.FixableByHuman).
+		return nil, agenterrors.Wrap(err, agenterrors.FixableByHuman).
 			WithHint("Re-add the profile with 'agent-stripe auth add " + alias + " --api-key <key>'")
 	}
 
@@ -58,23 +75,40 @@ func ResolveProfile(flags *GlobalFlags) (string, config.Profile, string, error) 
 	if profile.APIVersion == "" {
 		profile.APIVersion = config.DefaultAPIVersion
 	}
-	return alias, profile, apiKey, nil
+	return &ResolvedProfile{
+		Alias:            alias,
+		Profile:          profile,
+		APIKey:           apiKey,
+		CredentialSource: "keychain",
+		BaseURL:          firstNonEmpty(flags.BaseURL, os.Getenv("AGENT_STRIPE_BASE_URL")),
+	}, nil
 }
 
 func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error) error {
-	_, profile, apiKey, err := ResolveProfile(flags)
+	resolved, err := ResolveProfile(flags)
 	if err != nil {
 		output.WriteError(os.Stderr, err)
 		return nil
+	}
+	if flags.Debug {
+		WriteDebug(map[string]any{
+			"@debug":            "client",
+			"profile":           resolved.Alias,
+			"credential_source": resolved.CredentialSource,
+			"context":           resolved.Profile.Context,
+			"api_version":       resolved.Profile.APIVersion,
+			"base_url":          resolvedBaseURL(resolved.BaseURL),
+			"timeout_ms":        flags.Timeout,
+		})
 	}
 	ctx, cancel := ContextWithTimeout(context.Background(), flags.Timeout)
 	defer cancel()
 
 	client := api.NewClient(api.Options{
-		APIKey:     apiKey,
-		Context:    profile.Context,
-		APIVersion: profile.APIVersion,
-		BaseURL:    firstNonEmpty(flags.BaseURL, os.Getenv("AGENT_STRIPE_BASE_URL")),
+		APIKey:     resolved.APIKey,
+		Context:    resolved.Profile.Context,
+		APIVersion: resolved.Profile.APIVersion,
+		BaseURL:    resolved.BaseURL,
 	})
 	client.SetDebug(flags.Debug)
 	if err := fn(ctx, client); err != nil {
@@ -82,6 +116,19 @@ func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error)
 		return nil
 	}
 	return nil
+}
+
+func WriteDebug(fields map[string]any) {
+	enc := json.NewEncoder(os.Stderr)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(fields)
+}
+
+func resolvedBaseURL(baseURL string) string {
+	if baseURL == "" {
+		return "https://api.stripe.com"
+	}
+	return baseURL
 }
 
 func firstNonEmpty(values ...string) string {

@@ -58,4 +58,5 @@ GLOBAL FLAGS
   --api-version <version>
   --format json|yaml|jsonl
   --timeout <ms>
+  --debug   Emit structured debug records to stderr (client setup + HTTP)
 `

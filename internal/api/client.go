@@ -268,7 +268,6 @@ func (c *Client) logDebug(method, requestURL string, status int, requestID strin
 		entry["body_raw"] = string(body)
 	}
 	enc := json.NewEncoder(os.Stderr)
-	enc.SetIndent("", "  ")
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(entry)
 }

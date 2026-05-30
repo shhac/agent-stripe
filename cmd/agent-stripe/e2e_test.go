@@ -34,3 +34,30 @@ func TestCLIAgainstMockStripe(t *testing.T) {
 		t.Fatalf("output did not contain event type: %s", text)
 	}
 }
+
+func TestCLIDebugAgainstMockStripe(t *testing.T) {
+	server := httptest.NewServer(mockstripe.NewServer())
+	defer server.Close()
+
+	cmd := exec.Command("go", "run", "./cmd/agent-stripe",
+		"--debug",
+		"--api-key", "sk_test_mock",
+		"--base-url", server.URL,
+		"balance", "get",
+	)
+	cmd.Dir = "../.."
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("agent-stripe failed: %v\n%s", err, out)
+	}
+	text := string(out)
+	for _, want := range []string{`"@debug":"client"`, `"credential_source":"flag"`, `"@debug":"http"`, `"request_id":"req_mock_123"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("debug output missing %s:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "sk_test_mock") {
+		t.Fatalf("debug output leaked API key:\n%s", text)
+	}
+}

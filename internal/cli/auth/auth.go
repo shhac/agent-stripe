@@ -15,14 +15,14 @@ import (
 	"github.com/shhac/agent-stripe/internal/output"
 )
 
-func Register(root *cobra.Command) {
+func Register(root *cobra.Command, globals shared.GlobalsFunc) {
 	auth := &cobra.Command{
 		Use:   "auth",
 		Short: "Manage Stripe API credentials and profiles",
 	}
 
 	registerAdd(auth)
-	registerCheck(auth)
+	registerCheck(auth, globals)
 	registerDefault(auth)
 	registerList(auth)
 	registerRemove(auth)
@@ -75,13 +75,13 @@ func registerAdd(parent *cobra.Command) {
 	parent.AddCommand(cmd)
 }
 
-func registerCheck(parent *cobra.Command) {
+func registerCheck(parent *cobra.Command, globals shared.GlobalsFunc) {
 	cmd := &cobra.Command{
 		Use:   "check [profile]",
 		Short: "Verify stored credentials by retrieving account details",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			flags := &shared.GlobalFlags{}
+			flags := globals()
 			if len(args) > 0 {
 				flags.Profile = args[0]
 			}

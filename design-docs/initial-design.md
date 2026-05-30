@@ -53,6 +53,8 @@ Lists default to NDJSON so an LLM can stream, truncate, and resume investigation
 
 Stripe errors often include request IDs, request-log URLs, error codes, and decline codes. The API client should surface those in messages or hints when present.
 
+`--debug` is the global diagnostic switch. It prints structured JSON records to stderr for client setup and HTTP responses. Debug output may include Stripe response bodies and request URLs, but must not include raw API keys.
+
 ## Initial command surface
 
 ```text
