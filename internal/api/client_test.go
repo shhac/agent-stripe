@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
@@ -52,5 +54,34 @@ func TestAddHelpers(t *testing.T) {
 	}
 	if got := values["expand[]"]; len(got) != 2 {
 		t.Fatalf("expand[] = %v", got)
+	}
+}
+
+func TestPostFormSendsFormBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/x-www-form-urlencoded" {
+			t.Fatalf("Content-Type = %q", got)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("ParseForm() error = %v", err)
+		}
+		if got := r.Form.Get("subscription"); got != "sub_123" {
+			t.Fatalf("subscription = %q", got)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"upcoming_in_123","object":"invoice"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(Options{APIKey: "sk_test_123", BaseURL: server.URL})
+	raw, err := client.PostForm(t.Context(), "/v1/invoices/create_preview", url.Values{"subscription": []string{"sub_123"}})
+	if err != nil {
+		t.Fatalf("PostForm() error = %v", err)
+	}
+	if string(raw) == "" {
+		t.Fatalf("PostForm() returned empty body")
 	}
 }

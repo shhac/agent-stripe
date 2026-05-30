@@ -156,6 +156,17 @@ func GetRawList(flags *GlobalFlags, path string, params url.Values) error {
 	})
 }
 
+func PostFormRawItem(flags *GlobalFlags, path string, params url.Values) error {
+	return WithClient(flags, func(ctx context.Context, client *api.Client) error {
+		raw, err := client.PostForm(ctx, path, params)
+		if err != nil {
+			return err
+		}
+		WriteRawItem(raw, flags.Format)
+		return nil
+	})
+}
+
 func WriteDebug(fields map[string]any) {
 	enc := json.NewEncoder(os.Stderr)
 	enc.SetEscapeHTML(false)

@@ -31,21 +31,39 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/account", s.handleSelfAccount)
 	s.mux.HandleFunc("/v1/balance", s.handleBalance)
+	s.mux.HandleFunc("/v1/customers/search", s.handleCustomerSearch)
+	s.mux.HandleFunc("/v1/customers", s.handleCustomersList)
+	s.mux.HandleFunc("/v1/customers/", s.handleCustomerGet)
 	s.mux.HandleFunc("/v1/events", s.handleEventsList)
 	s.mux.HandleFunc("/v1/events/", s.handleEventGet)
+	s.mux.HandleFunc("/v1/invoices/search", s.handleInvoiceSearch)
+	s.mux.HandleFunc("/v1/invoices/create_preview", s.handleInvoicePreview)
+	s.mux.HandleFunc("/v1/invoices/", s.handleInvoiceGetOrLines)
+	s.mux.HandleFunc("/v1/invoices", s.handleInvoicesList)
 	s.mux.HandleFunc("/v1/payment_intents/search", s.handlePaymentIntentSearch)
 	s.mux.HandleFunc("/v1/payment_intents", s.handlePaymentIntentsList)
 	s.mux.HandleFunc("/v1/payment_intents/", s.handlePaymentIntentGet)
+	s.mux.HandleFunc("/v1/payment_methods", s.handlePaymentMethodsList)
+	s.mux.HandleFunc("/v1/payment_methods/", s.handlePaymentMethodGet)
 	s.mux.HandleFunc("/v1/charges/search", s.handleChargeSearch)
 	s.mux.HandleFunc("/v1/charges", s.handleChargesList)
 	s.mux.HandleFunc("/v1/charges/", s.handleChargeGet)
 	s.mux.HandleFunc("/v1/disputes", s.handleDisputesList)
 	s.mux.HandleFunc("/v1/disputes/", s.handleDisputeGet)
+	s.mux.HandleFunc("/v1/refunds", s.handleRefundsList)
+	s.mux.HandleFunc("/v1/refunds/", s.handleRefundGet)
 	s.mux.HandleFunc("/v1/subscriptions/search", s.handleSubscriptionSearch)
 	s.mux.HandleFunc("/v1/subscriptions", s.handleSubscriptionsList)
 	s.mux.HandleFunc("/v1/subscriptions/", s.handleSubscriptionGet)
 	s.mux.HandleFunc("/v1/subscription_items", s.handleSubscriptionItemsList)
-	s.mux.HandleFunc("/v1/invoices", s.handleInvoicesList)
+	s.mux.HandleFunc("/v1/transfers", s.handleTransfersList)
+	s.mux.HandleFunc("/v1/transfers/", s.handleTransferGetOrReversal)
+	s.mux.HandleFunc("/v1/payouts", s.handlePayoutsList)
+	s.mux.HandleFunc("/v1/payouts/", s.handlePayoutGet)
+	s.mux.HandleFunc("/v1/balance_transactions", s.handleBalanceTransactionsList)
+	s.mux.HandleFunc("/v1/balance_transactions/", s.handleBalanceTransactionGet)
+	s.mux.HandleFunc("/v1/application_fees", s.handleApplicationFeesList)
+	s.mux.HandleFunc("/v1/application_fees/", s.handleApplicationFeeGet)
 	s.mux.HandleFunc("/v1/accounts", s.handleAccountsList)
 	s.mux.HandleFunc("/v1/accounts/", s.handleAccountGet)
 }
@@ -92,6 +110,36 @@ func (s *Server) handleEventsList(w http.ResponseWriter, r *http.Request) {
 	writeList(w, "/v1/events", limit(items, r))
 }
 
+func (s *Server) handleCustomersList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := customers()
+	if email := r.URL.Query().Get("email"); email != "" {
+		items = filterByString(items, "email", email)
+	}
+	writeList(w, "/v1/customers", limit(items, r))
+}
+
+func (s *Server) handleCustomerSearch(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	if r.URL.Query().Get("query") == "" {
+		writeStripeError(w, http.StatusBadRequest, "invalid_request_error", "parameter_missing", "Missing required param: query")
+		return
+	}
+	writeSearchList(w, "/v1/customers/search", limit(customers(), r))
+}
+
+func (s *Server) handleCustomerGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/customers/")
+	writeOneByID(w, customers(), id, "customer")
+}
+
 func (s *Server) handleEventGet(w http.ResponseWriter, r *http.Request) {
 	if !requireGet(w, r) {
 		return
@@ -124,6 +172,28 @@ func (s *Server) handlePaymentIntentGet(w http.ResponseWriter, r *http.Request) 
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/v1/payment_intents/")
 	writeOneByID(w, paymentIntents(), id, "payment_intent")
+}
+
+func (s *Server) handlePaymentMethodsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := paymentMethods()
+	if customer := r.URL.Query().Get("customer"); customer != "" {
+		items = filterByString(items, "customer", customer)
+	}
+	if typ := r.URL.Query().Get("type"); typ != "" {
+		items = filterByString(items, "type", typ)
+	}
+	writeList(w, "/v1/payment_methods", limit(items, r))
+}
+
+func (s *Server) handlePaymentMethodGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/payment_methods/")
+	writeOneByID(w, paymentMethods(), id, "payment_method")
 }
 
 func (s *Server) handleChargesList(w http.ResponseWriter, r *http.Request) {
@@ -178,6 +248,28 @@ func (s *Server) handleDisputeGet(w http.ResponseWriter, r *http.Request) {
 	writeOneByID(w, disputes(), id, "dispute")
 }
 
+func (s *Server) handleRefundsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := refunds()
+	if charge := r.URL.Query().Get("charge"); charge != "" {
+		items = filterByString(items, "charge", charge)
+	}
+	if pi := r.URL.Query().Get("payment_intent"); pi != "" {
+		items = filterByString(items, "payment_intent", pi)
+	}
+	writeList(w, "/v1/refunds", limit(items, r))
+}
+
+func (s *Server) handleRefundGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/refunds/")
+	writeOneByID(w, refunds(), id, "refund")
+}
+
 func (s *Server) handleSubscriptionsList(w http.ResponseWriter, r *http.Request) {
 	if !requireGet(w, r) {
 		return
@@ -222,6 +314,46 @@ func (s *Server) handleSubscriptionItemsList(w http.ResponseWriter, r *http.Requ
 	writeList(w, "/v1/subscription_items", limit(items, r))
 }
 
+func (s *Server) handleInvoiceSearch(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	if r.URL.Query().Get("query") == "" {
+		writeStripeError(w, http.StatusBadRequest, "invalid_request_error", "parameter_missing", "Missing required param: query")
+		return
+	}
+	writeSearchList(w, "/v1/invoices/search", limit(invoices(), r))
+}
+
+func (s *Server) handleInvoicePreview(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodPost) {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeStripeError(w, http.StatusBadRequest, "invalid_request_error", "invalid_form", "Invalid form body")
+		return
+	}
+	subscription := r.Form.Get("subscription")
+	amount := 4200
+	customer := r.Form.Get("customer")
+	if subscription == "sub_mock_past_due" {
+		amount = 29700
+		customer = "cus_mock_456"
+	}
+	if customer == "" {
+		customer = "cus_mock_123"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":           "upcoming_in_mock",
+		"object":       "invoice",
+		"customer":     customer,
+		"subscription": subscription,
+		"amount_due":   amount,
+		"currency":     "usd",
+		"status":       "draft",
+	})
+}
+
 func (s *Server) handleInvoicesList(w http.ResponseWriter, r *http.Request) {
 	if !requireGet(w, r) {
 		return
@@ -234,6 +366,106 @@ func (s *Server) handleInvoicesList(w http.ResponseWriter, r *http.Request) {
 		items = filterByString(items, "status", status)
 	}
 	writeList(w, "/v1/invoices", limit(items, r))
+}
+
+func (s *Server) handleInvoiceGetOrLines(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	rest := strings.TrimPrefix(r.URL.Path, "/v1/invoices/")
+	if strings.HasSuffix(rest, "/lines") {
+		id := strings.TrimSuffix(rest, "/lines")
+		writeList(w, "/v1/invoices/"+id+"/lines", limit(invoiceLines(id), r))
+		return
+	}
+	writeOneByID(w, invoices(), rest, "invoice")
+}
+
+func (s *Server) handleTransfersList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := transfers()
+	if destination := r.URL.Query().Get("destination"); destination != "" {
+		items = filterByString(items, "destination", destination)
+	}
+	if group := r.URL.Query().Get("transfer_group"); group != "" {
+		items = filterByString(items, "transfer_group", group)
+	}
+	writeList(w, "/v1/transfers", limit(items, r))
+}
+
+func (s *Server) handleTransferGetOrReversal(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	rest := strings.TrimPrefix(r.URL.Path, "/v1/transfers/")
+	if strings.Contains(rest, "/reversals/") {
+		parts := strings.Split(rest, "/reversals/")
+		writeOneByID(w, transferReversals(parts[0]), parts[1], "transfer_reversal")
+		return
+	}
+	writeOneByID(w, transfers(), rest, "transfer")
+}
+
+func (s *Server) handlePayoutsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := payouts()
+	if status := r.URL.Query().Get("status"); status != "" {
+		items = filterByString(items, "status", status)
+	}
+	writeList(w, "/v1/payouts", limit(items, r))
+}
+
+func (s *Server) handlePayoutGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/payouts/")
+	writeOneByID(w, payouts(), id, "payout")
+}
+
+func (s *Server) handleBalanceTransactionsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := balanceTransactions()
+	if typ := r.URL.Query().Get("type"); typ != "" {
+		items = filterByString(items, "type", typ)
+	}
+	if payout := r.URL.Query().Get("payout"); payout != "" {
+		items = filterByString(items, "payout", payout)
+	}
+	writeList(w, "/v1/balance_transactions", limit(items, r))
+}
+
+func (s *Server) handleBalanceTransactionGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/balance_transactions/")
+	writeOneByID(w, balanceTransactions(), id, "balance_transaction")
+}
+
+func (s *Server) handleApplicationFeesList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := applicationFees()
+	if charge := r.URL.Query().Get("charge"); charge != "" {
+		items = filterByString(items, "charge", charge)
+	}
+	writeList(w, "/v1/application_fees", limit(items, r))
+}
+
+func (s *Server) handleApplicationFeeGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/application_fees/")
+	writeOneByID(w, applicationFees(), id, "application_fee")
 }
 
 func (s *Server) handleAccountsList(w http.ResponseWriter, r *http.Request) {
@@ -265,10 +497,16 @@ func hasBasicKey(r *http.Request) bool {
 }
 
 func requireGet(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method == http.MethodGet {
-		return true
+	return requireMethod(w, r, http.MethodGet)
+}
+
+func requireMethod(w http.ResponseWriter, r *http.Request, methods ...string) bool {
+	for _, method := range methods {
+		if r.Method == method {
+			return true
+		}
 	}
-	writeStripeError(w, http.StatusMethodNotAllowed, "invalid_request_error", "method_not_allowed", "Only GET is supported by mockstripe")
+	writeStripeError(w, http.StatusMethodNotAllowed, "invalid_request_error", "method_not_allowed", "Method not supported by mockstripe")
 	return false
 }
 

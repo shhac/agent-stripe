@@ -10,6 +10,7 @@ Stripe incident triage CLI for AI agents. It is designed for read-heavy investig
 - **LLM-shaped output**: lists default to NDJSON, single resources default to JSON, and errors include `fixable_by` plus hints.
 - **Read-first triage**: balance, events, PaymentIntents, charges, disputes, accounts, and a GET-only raw API escape hatch.
 - **Subscription investigation**: inspect subscriptions, subscription items, invoices, and payment failures from one command group.
+- **Scenario investigations**: invoice payment evidence, customer card-last4 lookup, subscription renewal summaries, collection-risk outreach, failed incoming payments, and Connect money-movement failures.
 
 ## Quick Start
 
@@ -21,6 +22,10 @@ make build
 ./agent-stripe payment-intents get pi_... --expand latest_charge
 ./agent-stripe subscriptions get sub_... --expand latest_invoice --expand latest_invoice.payment_intent
 ./agent-stripe subscriptions invoices sub_... --status open
+./agent-stripe investigate invoice-payment in_...
+./agent-stripe investigate customer-card-payment --customer cus_... --last4 4242
+./agent-stripe investigate subscription-renewal --metadata tenant_id=acme
+./agent-stripe investigate collection-risk --days 30
 ```
 
 For organization API keys, store the organization key under a profile and provide a `Stripe-Context` value:
@@ -47,6 +52,33 @@ Errors are written to stderr as JSON:
 ```
 
 Use `--debug` to emit extra JSON records to stderr while commands run. Debug output includes client setup details, credential source labels, request URLs, status codes, request IDs, and response bodies, but not raw API keys.
+
+## Commands
+
+Resource commands expose Stripe objects directly for agent-controlled exploration:
+
+```bash
+agent-stripe customers list --email buyer@example.com
+agent-stripe invoices get in_... --expand payment_intent
+agent-stripe invoices line-items in_...
+agent-stripe payment-methods list --customer cus_... --type card
+agent-stripe refunds list --payment-intent pi_...
+agent-stripe transfers list --destination acct_...
+agent-stripe payouts get po_...
+agent-stripe balance-transactions get txn_...
+agent-stripe application-fees list --charge ch_...
+```
+
+Investigation commands walk common Stripe object graphs and emit evidence records plus findings:
+
+```bash
+agent-stripe investigate invoice-payment in_...
+agent-stripe investigate invoice-metadata in_...
+agent-stripe investigate invoice-metadata --number ABC-0001
+agent-stripe investigate incoming-payment pi_...
+agent-stripe investigate outgoing-payment tr_...
+agent-stripe investigate refund-recovery trr_... --transfer tr_...
+```
 
 ## Development
 

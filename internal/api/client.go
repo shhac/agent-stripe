@@ -56,6 +56,10 @@ func (c *Client) Get(ctx context.Context, path string, params url.Values) (json.
 	return c.do(ctx, http.MethodGet, buildPath(path, params), nil)
 }
 
+func (c *Client) PostForm(ctx context.Context, path string, params url.Values) (json.RawMessage, error) {
+	return c.do(ctx, http.MethodPost, path, params)
+}
+
 func (c *Client) do(ctx context.Context, method, path string, body any) (json.RawMessage, error) {
 	req, err := c.buildRequest(ctx, method, path, body)
 	if err != nil {
@@ -87,11 +91,15 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (json.Ra
 func (c *Client) buildRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
 	var bodyReader io.Reader
 	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return nil, agenterrors.Wrap(err, agenterrors.FixableByAgent)
+		if values, ok := body.(url.Values); ok {
+			bodyReader = strings.NewReader(values.Encode())
+		} else {
+			b, err := json.Marshal(body)
+			if err != nil {
+				return nil, agenterrors.Wrap(err, agenterrors.FixableByAgent)
+			}
+			bodyReader = bytes.NewReader(b)
 		}
-		bodyReader = bytes.NewReader(b)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bodyReader)
