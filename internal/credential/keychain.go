@@ -9,7 +9,9 @@ import (
 
 const keychainService = "app.paulie.agent-stripe"
 
-func keychainStore(name, apiKey string) error {
+type securityKeychain struct{}
+
+func (securityKeychain) Store(name, apiKey string) error {
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("keychain not available on %s", runtime.GOOS)
 	}
@@ -22,7 +24,7 @@ func keychainStore(name, apiKey string) error {
 	).Run()
 }
 
-func keychainGet(name string) (string, error) {
+func (securityKeychain) Get(name string) (string, error) {
 	if runtime.GOOS != "darwin" {
 		return "", fmt.Errorf("keychain not available on %s", runtime.GOOS)
 	}
@@ -37,7 +39,7 @@ func keychainGet(name string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func keychainDelete(name string) {
+func (securityKeychain) Delete(name string) {
 	if runtime.GOOS != "darwin" {
 		return
 	}

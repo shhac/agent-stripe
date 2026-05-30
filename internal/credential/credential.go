@@ -9,10 +9,6 @@ import (
 	"github.com/shhac/agent-stripe/internal/config"
 )
 
-type Credential struct {
-	KeychainManaged bool `json:"keychain_managed"`
-}
-
 type credentialEntry struct {
 	KeychainManaged bool `json:"keychain_managed"`
 }
@@ -60,7 +56,7 @@ func writeIndex(index map[string]credentialEntry) error {
 }
 
 func Store(name, apiKey string) (string, error) {
-	if err := keychainStore(name, apiKey); err != nil {
+	if err := keychain.Store(name, apiKey); err != nil {
 		return "", err
 	}
 
@@ -87,7 +83,7 @@ func Get(name string) (string, error) {
 	if !entry.KeychainManaged {
 		return "", fmt.Errorf("profile %q is not keychain managed", name)
 	}
-	return keychainGet(name)
+	return keychain.Get(name)
 }
 
 func Remove(name string) error {
@@ -101,7 +97,7 @@ func Remove(name string) error {
 	}
 
 	if entry.KeychainManaged {
-		keychainDelete(name)
+		keychain.Delete(name)
 	}
 
 	delete(index, name)

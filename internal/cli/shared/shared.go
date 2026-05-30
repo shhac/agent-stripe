@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/shhac/agent-stripe/internal/api"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 	"github.com/shhac/agent-stripe/internal/output"
 )
@@ -62,16 +63,12 @@ func WriteRawItem(raw json.RawMessage, format string) {
 }
 
 func WriteRawList(raw json.RawMessage, format string) error {
-	var wrapper struct {
-		HasMore  bool              `json:"has_more"`
-		Data     []json.RawMessage `json:"data"`
-		NextPage string            `json:"next_page"`
+	list, err := api.DecodeList(raw)
+	if err != nil {
+		return err
 	}
-	if err := json.Unmarshal(raw, &wrapper); err != nil {
-		return agenterrors.Wrap(err, agenterrors.FixableByAgent)
-	}
-	items := make([]any, 0, len(wrapper.Data))
-	for _, item := range wrapper.Data {
+	items := make([]any, 0, len(list.Data))
+	for _, item := range list.Data {
 		var decoded any
 		if err := json.Unmarshal(item, &decoded); err != nil {
 			return agenterrors.Wrap(err, agenterrors.FixableByAgent)
@@ -79,10 +76,10 @@ func WriteRawList(raw json.RawMessage, format string) error {
 		items = append(items, decoded)
 	}
 	var pagination *output.Pagination
-	if wrapper.HasMore || wrapper.NextPage != "" {
+	if list.HasMore || list.NextPage != "" {
 		pagination = &output.Pagination{
-			HasMore:  wrapper.HasMore,
-			NextPage: wrapper.NextPage,
+			HasMore:  list.HasMore,
+			NextPage: list.NextPage,
 		}
 	}
 	WritePaginatedList(items, pagination, format)

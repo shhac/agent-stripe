@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"os"
 
 	"github.com/shhac/agent-stripe/internal/api"
@@ -20,34 +21,14 @@ type ResolvedProfile struct {
 	BaseURL          string
 }
 
+var credentialGet = credential.Get
+
 func ResolveProfile(flags *GlobalFlags) (*ResolvedProfile, error) {
 	cfg := config.Read()
-	alias := flags.Profile
-	if alias == "" {
-		alias = os.Getenv("AGENT_STRIPE_PROFILE")
-	}
-	if alias == "" {
-		alias = cfg.DefaultProfile
-	}
+	alias := resolveAlias(flags, cfg)
 
-	apiKey := flags.APIKey
-	credentialSource := "flag"
-	if apiKey == "" {
-		apiKey = os.Getenv("STRIPE_API_KEY")
-		credentialSource = "env"
-	}
-	if apiKey != "" {
-		return &ResolvedProfile{
-			Alias: alias,
-			Profile: config.Profile{
-				Context: firstNonEmpty(flags.Context, os.Getenv("STRIPE_CONTEXT")),
-				APIVersion: firstNonEmpty(flags.APIVersion, os.Getenv("STRIPE_API_VERSION"),
-					config.DefaultAPIVersion),
-			},
-			APIKey:           apiKey,
-			CredentialSource: credentialSource,
-			BaseURL:          firstNonEmpty(flags.BaseURL, os.Getenv("AGENT_STRIPE_BASE_URL")),
-		}, nil
+	if apiKey, source := resolveDirectAPIKey(flags); apiKey != "" {
+		return resolvedDirectProfile(alias, flags, apiKey, source), nil
 	}
 
 	if alias == "" {
@@ -60,12 +41,50 @@ func ResolveProfile(flags *GlobalFlags) (*ResolvedProfile, error) {
 		return nil, agenterrors.Newf(agenterrors.FixableByHuman, "Profile %q is not configured", alias).
 			WithHint("Run 'agent-stripe auth list' to see configured profiles")
 	}
-	apiKey, err := credential.Get(alias)
+	apiKey, err := credentialGet(alias)
 	if err != nil {
 		return nil, agenterrors.Wrap(err, agenterrors.FixableByHuman).
 			WithHint("Re-add the profile with 'agent-stripe auth add " + alias + " --api-key <key>'")
 	}
 
+	profile = applyProfileOverrides(profile, flags)
+	return &ResolvedProfile{
+		Alias:            alias,
+		Profile:          profile,
+		APIKey:           apiKey,
+		CredentialSource: "keychain",
+		BaseURL:          resolveBaseURL(flags),
+	}, nil
+}
+
+func resolveAlias(flags *GlobalFlags, cfg *config.Config) string {
+	return firstNonEmpty(flags.Profile, os.Getenv("AGENT_STRIPE_PROFILE"), cfg.DefaultProfile)
+}
+
+func resolveDirectAPIKey(flags *GlobalFlags) (string, string) {
+	if flags.APIKey != "" {
+		return flags.APIKey, "flag"
+	}
+	if apiKey := os.Getenv("STRIPE_API_KEY"); apiKey != "" {
+		return apiKey, "env"
+	}
+	return "", ""
+}
+
+func resolvedDirectProfile(alias string, flags *GlobalFlags, apiKey, source string) *ResolvedProfile {
+	return &ResolvedProfile{
+		Alias: alias,
+		Profile: config.Profile{
+			Context:    firstNonEmpty(flags.Context, os.Getenv("STRIPE_CONTEXT")),
+			APIVersion: firstNonEmpty(flags.APIVersion, os.Getenv("STRIPE_API_VERSION"), config.DefaultAPIVersion),
+		},
+		APIKey:           apiKey,
+		CredentialSource: source,
+		BaseURL:          resolveBaseURL(flags),
+	}
+}
+
+func applyProfileOverrides(profile config.Profile, flags *GlobalFlags) config.Profile {
 	if flags.Context != "" {
 		profile.Context = flags.Context
 	}
@@ -75,13 +94,11 @@ func ResolveProfile(flags *GlobalFlags) (*ResolvedProfile, error) {
 	if profile.APIVersion == "" {
 		profile.APIVersion = config.DefaultAPIVersion
 	}
-	return &ResolvedProfile{
-		Alias:            alias,
-		Profile:          profile,
-		APIKey:           apiKey,
-		CredentialSource: "keychain",
-		BaseURL:          firstNonEmpty(flags.BaseURL, os.Getenv("AGENT_STRIPE_BASE_URL")),
-	}, nil
+	return profile
+}
+
+func resolveBaseURL(flags *GlobalFlags) string {
+	return firstNonEmpty(flags.BaseURL, os.Getenv("AGENT_STRIPE_BASE_URL"))
 }
 
 func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error) error {
@@ -116,6 +133,27 @@ func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error)
 		return nil
 	}
 	return nil
+}
+
+func GetRawItem(flags *GlobalFlags, path string, params url.Values) error {
+	return WithClient(flags, func(ctx context.Context, client *api.Client) error {
+		raw, err := client.Get(ctx, path, params)
+		if err != nil {
+			return err
+		}
+		WriteRawItem(raw, flags.Format)
+		return nil
+	})
+}
+
+func GetRawList(flags *GlobalFlags, path string, params url.Values) error {
+	return WithClient(flags, func(ctx context.Context, client *api.Client) error {
+		raw, err := client.Get(ctx, path, params)
+		if err != nil {
+			return err
+		}
+		return WriteRawList(raw, flags.Format)
+	})
 }
 
 func WriteDebug(fields map[string]any) {
