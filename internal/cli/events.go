@@ -53,6 +53,7 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 	list.Flags().StringVar(&createdLTE, "created-lte", "", "Created at or before Unix timestamp")
 	list.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
 	list.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
+	markCursorFlagsMutuallyExclusive(list)
 	list.Flags().StringVar(&deliverySuccess, "delivery-success", "", "Filter true/false for webhook delivery success")
 	events.AddCommand(list)
 	root.AddCommand(events)

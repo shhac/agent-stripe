@@ -37,7 +37,7 @@ func newInvestigateInvoiceMetadata(globals shared.GlobalsFunc, outputOpts *inves
 					if !shared.RequireFlag("number", number, "Use --number when the customer sent an invoice number instead of an invoice ID") {
 						return nil, nil
 					}
-					found, err := inv.list("/v1/invoices/search", url.Values{"query": []string{"number:'" + number + "'"}, "limit": []string{"1"}})
+					found, err := inv.list("/v1/invoices/search", url.Values{"query": []string{stripeSearchEquals("number", number)}, "limit": []string{"1"}})
 					if err != nil {
 						return nil, err
 					}

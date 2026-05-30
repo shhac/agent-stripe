@@ -38,6 +38,8 @@ func registerSubscriptions(root *cobra.Command, globals shared.GlobalsFunc) {
 
 func newSubscriptionItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 	var limit int
+	var startingAfter string
+	var endingBefore string
 	var expand []string
 	cmd := &cobra.Command{
 		Use:   "items <subscription-id>",
@@ -46,11 +48,16 @@ func newSubscriptionItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := url.Values{"subscription": []string{args[0]}}
 			shared.AddLimit(params, limit)
+			shared.AddString(params, "starting_after", startingAfter)
+			shared.AddString(params, "ending_before", endingBefore)
 			shared.AddExpand(params, expand)
 			return shared.GetRawList(globals(), "/v1/subscription_items", params)
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
+	cmd.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
+	cmd.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
+	markCursorFlagsMutuallyExclusive(cmd)
 	cmd.Flags().StringArrayVar(&expand, "expand", nil, "Expand response property; repeatable")
 	return cmd
 }
@@ -59,6 +66,7 @@ func newSubscriptionInvoicesCommand(globals shared.GlobalsFunc) *cobra.Command {
 	var limit int
 	var invoiceStatus string
 	var startingAfter string
+	var endingBefore string
 	cmd := &cobra.Command{
 		Use:   "invoices <subscription-id>",
 		Short: "List invoices for a subscription",
@@ -68,11 +76,14 @@ func newSubscriptionInvoicesCommand(globals shared.GlobalsFunc) *cobra.Command {
 			shared.AddLimit(params, limit)
 			shared.AddString(params, "status", invoiceStatus)
 			shared.AddString(params, "starting_after", startingAfter)
+			shared.AddString(params, "ending_before", endingBefore)
 			return shared.GetRawList(globals(), "/v1/invoices", params)
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
 	cmd.Flags().StringVar(&invoiceStatus, "status", "", "Invoice status: draft, open, paid, uncollectible, void")
 	cmd.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
+	cmd.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
+	markCursorFlagsMutuallyExclusive(cmd)
 	return cmd
 }

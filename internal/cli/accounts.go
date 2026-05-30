@@ -11,6 +11,7 @@ import (
 func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 	var limit int
 	var startingAfter string
+	var endingBefore string
 
 	accounts := &cobra.Command{
 		Use:   "accounts",
@@ -38,11 +39,14 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 			params := url.Values{}
 			shared.AddLimit(params, limit)
 			shared.AddString(params, "starting_after", startingAfter)
+			shared.AddString(params, "ending_before", endingBefore)
 			return shared.GetRawList(globals(), "/v1/accounts", params)
 		},
 	}
 	list.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
 	list.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
+	list.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
+	markCursorFlagsMutuallyExclusive(list)
 	accounts.AddCommand(list)
 	root.AddCommand(accounts)
 }

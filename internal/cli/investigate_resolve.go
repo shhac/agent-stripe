@@ -25,7 +25,7 @@ func newInvestigateResolve(globals shared.GlobalsFunc, outputOpts *investigation
 func (i investigator) resolve(value string) ([]evidenceRecord, error) {
 	object, path, next := resolvePath(value)
 	if path == "" {
-		found, err := i.list("/v1/invoices/search", url.Values{"query": []string{"number:'" + value + "'"}, "limit": []string{"1"}})
+		found, err := i.list("/v1/invoices/search", url.Values{"query": []string{stripeSearchEquals("number", value)}, "limit": []string{"1"}})
 		if err != nil {
 			return nil, err
 		}

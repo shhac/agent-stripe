@@ -84,6 +84,7 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 	var createdGTE string
 	var createdLTE string
 	var startingAfter string
+	var endingBefore string
 	var expand []string
 	values := make(map[string]*string, len(opts.listFlags))
 	cmd := &cobra.Command{
@@ -94,6 +95,7 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 			shared.AddLimit(params, limit)
 			shared.AddCreatedRange(params, createdGTE, createdLTE)
 			shared.AddString(params, "starting_after", startingAfter)
+			shared.AddString(params, "ending_before", endingBefore)
 			shared.AddExpand(params, expand)
 			for _, flag := range opts.listFlags {
 				shared.AddString(params, flag.param, *values[flag.name])
@@ -105,6 +107,8 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 	cmd.Flags().StringVar(&createdGTE, "created-gte", "", "Created at or after Unix timestamp")
 	cmd.Flags().StringVar(&createdLTE, "created-lte", "", "Created at or before Unix timestamp")
 	cmd.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
+	cmd.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
+	markCursorFlagsMutuallyExclusive(cmd)
 	if opts.expandList {
 		cmd.Flags().StringArrayVar(&expand, "expand", nil, "Expand response property; repeatable")
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -152,9 +153,10 @@ func TestCLINewResourcePrimitivesAgainstMockStripe(t *testing.T) {
 		{[]string{"checkout-sessions", "list", "--customer", "cus_mock_123"}, `"cs_mock_paid"`},
 		{[]string{"checkout-sessions", "line-items", "cs_mock_paid"}, `"price_mock_basic"`},
 		{[]string{"customers", "list", "--email", "buyer@example.com"}, `"cus_mock_123"`},
+		{[]string{"customers", "list", "--ending-before", "cus_mock_123"}, `"cus_mock_123"`},
 		{[]string{"products", "list", "--active", "true"}, `"prod_mock_basic"`},
 		{[]string{"prices", "list", "--product", "prod_mock_basic"}, `"price_mock_basic"`},
-		{[]string{"invoices", "line-items", "in_mock_paid"}, `"internal_product_id":"prod_internal_basic"`},
+		{[]string{"invoices", "line-items", "in_mock_paid", "--ending-before", "li_mock_basic"}, `"internal_product_id":"prod_internal_basic"`},
 		{[]string{"setup-intents", "list", "--customer", "cus_mock_123"}, `"seti_mock_succeeded"`},
 		{[]string{"payment-methods", "list", "--customer", "cus_mock_123", "--type", "card"}, `"last4":"4242"`},
 		{[]string{"refunds", "list", "--payment-intent", "pi_mock_succeeded"}, `"re_mock_pending"`},
@@ -162,9 +164,22 @@ func TestCLINewResourcePrimitivesAgainstMockStripe(t *testing.T) {
 		{[]string{"balance-transactions", "get", "txn_mock_succeeded"}, `"txn_mock_succeeded"`},
 		{[]string{"payment-links", "list", "--active", "true"}, `"plink_mock_basic"`},
 		{[]string{"early-fraud-warnings", "list", "--charge", "ch_mock_succeeded"}, `"issfr_mock_123"`},
+		{[]string{"checkout-sessions", "line-items", "cs_mock_paid", "--starting-after", "li_mock_basic"}, `"price_mock_basic"`},
 	}
 	for _, check := range checks {
 		out := runMockCLI(t, check.args...)
 		assertContains(t, out, check.want)
 	}
+}
+
+func TestCLICursorFlagsAreMutuallyExclusiveAgainstMockStripe(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	allArgs := []string{"run", "./cmd/agent-stripe", "--api-key", "sk_test_mock", "--base-url", runner.server.URL, "customers", "list", "--starting-after", "cus_mock_123", "--ending-before", "cus_mock_456"}
+	cmd := exec.Command("go", allArgs...)
+	cmd.Dir = "../.."
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected mutually exclusive cursor flags to fail:\n%s", out)
+	}
+	assertContains(t, string(out), `if any flags in the group [starting-after ending-before] are set none of the others can be`)
 }

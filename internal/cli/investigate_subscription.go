@@ -188,7 +188,7 @@ func (i investigator) findSubscriptions(subscription, customer, metadata string,
 			return nil, agenterrors.New("--metadata must be key=value", agenterrors.FixableByAgent).
 				WithHint("Example: --metadata tenant_id=acme")
 		}
-		params := url.Values{"query": []string{"metadata['" + key + "']:'" + value + "'"}}
+		params := url.Values{"query": []string{stripeSearchMetadataEquals(key, value)}}
 		shared.AddLimit(params, limit)
 		return i.list("/v1/subscriptions/search", params)
 	default:
