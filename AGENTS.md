@@ -14,6 +14,7 @@ This repository contains a Go CLI for LLM-driven Stripe incident triage.
 - Prefer read-only Stripe commands unless a future design document explicitly approves mutation workflows.
 - Do not print, log, or persist raw API keys outside the credential backend.
 - Keep list outputs compact and NDJSON-friendly.
+- When adding/changing commands, update `agent-stripe usage`, any relevant domain usage (`subscriptions usage`, `invoices usage`, `payments usage`, `connect usage`), `skills/agent-stripe/SKILL.md`, README examples when user-facing, and the investigation workflow design doc.
 
 ## Design Intent
 

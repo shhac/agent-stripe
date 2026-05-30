@@ -44,6 +44,8 @@ var investigationCommands = []investigationCommandFactory{
 	newInvestigateSubscriptionCancelRisk,
 	newInvestigateInvoiceMetadata,
 	newInvestigateCollectionRisk,
+	newInvestigateSubscriptionItems,
+	newInvestigateSubscriptionAmountChange,
 	newInvestigateIncomingPayment,
 	newInvestigateOutgoingPayment,
 	newInvestigateRefundStatus,
@@ -86,9 +88,11 @@ SUBSCRIPTION QUESTIONS
   agent-stripe investigate subscription-renewal --subscription sub_...
   agent-stripe investigate subscription-renewal --customer cus_...
   agent-stripe investigate subscription-renewal --metadata tenant_id=acme
+  agent-stripe investigate subscription-items --subscription sub_...
+  agent-stripe investigate subscription-amount-change --subscription sub_...
   agent-stripe investigate collection-risk --days 30 [--limit 25]
   agent-stripe investigate subscription-cancel-risk --days 30 [--limit 25]
-  Uses latest invoice and invoice preview to answer last/next payment questions and find outreach candidates.
+  Uses latest invoice, invoice preview, items, prices, products, and payment methods to explain renewals and outreach candidates.
 
 FAILED CUSTOMER PAYMENTS
   agent-stripe investigate incoming-payment pi_...

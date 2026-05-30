@@ -24,6 +24,7 @@ type resourceOptions struct {
 	listShort     string
 	searchShort   string
 	searchHint    string
+	usageText     string
 	searchable    bool
 	listFlags     []listFlag
 	expandGet     bool
@@ -44,6 +45,9 @@ func registerResource(root *cobra.Command, globals shared.GlobalsFunc, opts reso
 	resource.AddCommand(newResourceListCommand(globals, opts))
 	if opts.searchable {
 		resource.AddCommand(newResourceSearchCommand(globals, opts))
+	}
+	if opts.usageText != "" {
+		resource.AddCommand(newUsageCommand(opts.usageText))
 	}
 	if opts.lineItems {
 		resource.AddCommand(newInvoiceLineItemsCommand(globals))

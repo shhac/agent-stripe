@@ -1,19 +1,9 @@
 package cli
 
-import (
-	"fmt"
-
-	"github.com/spf13/cobra"
-)
+import "github.com/spf13/cobra"
 
 func registerUsageCommand(root *cobra.Command) {
-	root.AddCommand(&cobra.Command{
-		Use:   "usage",
-		Short: "LLM-optimized reference card",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(usageText)
-		},
-	})
+	root.AddCommand(newUsageCommand(usageText))
 }
 
 const usageText = `agent-stripe — Stripe triage CLI for AI agents
@@ -25,6 +15,8 @@ PROFILE SETUP
   agent-stripe auth list
   agent-stripe auth default <profile>
   agent-stripe auth remove <profile>
+  agent-stripe payments usage
+  agent-stripe connect usage
 
 CONTEXT
   --context <acct_...> applies Stripe-Context for organization keys and related-account requests.
@@ -44,6 +36,7 @@ TRIAGE STARTERS
   agent-stripe prices list [--product <prod_id>] [--active true]
   agent-stripe invoices get <in_id> [--expand payment_intent]
   agent-stripe invoices line-items <in_id>
+  agent-stripe invoices usage
   agent-stripe payment-intents get <pi_id> [--expand latest_charge] [--expand customer]
   agent-stripe payment-intents search --query "metadata['order_id']:'123'"
   agent-stripe setup-intents list [--customer <cus_id>] [--payment-method <pm_id>]
@@ -52,6 +45,7 @@ TRIAGE STARTERS
   agent-stripe subscriptions get <sub_id> --expand latest_invoice --expand latest_invoice.payment_intent
   agent-stripe subscriptions list [--customer <cus_id>] [--status active|past_due|unpaid|all]
   agent-stripe subscriptions invoices <sub_id> [--status open]
+  agent-stripe subscriptions usage
   agent-stripe payment-methods list --customer <cus_id> --type card
   agent-stripe disputes list [--charge <ch_id>] [--payment-intent <pi_id>]
   agent-stripe refunds list [--payment-intent <pi_id>]
@@ -74,6 +68,8 @@ INVESTIGATIONS
   agent-stripe investigate invoice-metadata <in_id>
   agent-stripe investigate subscription-renewal --subscription <sub_id>
   agent-stripe investigate subscription-renewal --metadata tenant_id=acme
+  agent-stripe investigate subscription-items --subscription <sub_id>
+  agent-stripe investigate subscription-amount-change --subscription <sub_id>
   agent-stripe investigate collection-risk --days 30
   agent-stripe investigate subscription-cancel-risk --days 30
   agent-stripe investigate incoming-payment <pi_id|ch_id|in_id>

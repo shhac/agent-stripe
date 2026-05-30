@@ -1,155 +1,66 @@
 package main
 
 import (
-	"net/http/httptest"
-	"os/exec"
 	"strings"
 	"testing"
-
-	"github.com/shhac/agent-stripe/internal/mockstripe"
 )
 
 func TestCLIAgainstMockStripe(t *testing.T) {
-	server := httptest.NewServer(mockstripe.NewServer())
-	defer server.Close()
-
-	cmd := exec.Command("go", "run", "./cmd/agent-stripe",
-		"--api-key", "sk_test_mock",
-		"--base-url", server.URL,
-		"events", "list",
-		"--type", "charge.failed",
-		"--limit", "1",
-	)
-	cmd.Dir = "../.."
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("agent-stripe failed: %v\n%s", err, out)
-	}
-	text := string(out)
-	if !strings.Contains(text, `"evt_mock_charge_failed"`) {
-		t.Fatalf("output did not contain mock event: %s", text)
-	}
-	if !strings.Contains(text, `"charge.failed"`) {
-		t.Fatalf("output did not contain event type: %s", text)
-	}
+	runner := newMockCLIRunner(t)
+	out := runner.Run("events", "list", "--type", "charge.failed", "--limit", "1")
+	runner.AssertContains(out, `"evt_mock_charge_failed"`, `"charge.failed"`)
 }
 
 func TestCLIDebugAgainstMockStripe(t *testing.T) {
-	server := httptest.NewServer(mockstripe.NewServer())
-	defer server.Close()
-
-	cmd := exec.Command("go", "run", "./cmd/agent-stripe",
-		"--debug",
-		"--api-key", "sk_test_mock",
-		"--base-url", server.URL,
-		"balance", "get",
-	)
-	cmd.Dir = "../.."
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("agent-stripe failed: %v\n%s", err, out)
-	}
-	text := string(out)
-	for _, want := range []string{`"@debug":"client"`, `"credential_source":"flag"`, `"@debug":"http"`, `"request_id":"req_mock_123"`} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("debug output missing %s:\n%s", want, text)
-		}
-	}
-	if strings.Contains(text, "sk_test_mock") {
-		t.Fatalf("debug output leaked API key:\n%s", text)
+	runner := newMockCLIRunner(t)
+	out := runner.Run("--debug", "balance", "get")
+	runner.AssertContains(out, `"@debug":"client"`, `"credential_source":"flag"`, `"@debug":"http"`, `"request_id":"req_mock_123"`)
+	if strings.Contains(out, "sk_test_mock") {
+		t.Fatalf("debug output leaked API key:\n%s", out)
 	}
 }
 
 func TestCLISubscriptionsAgainstMockStripe(t *testing.T) {
-	server := httptest.NewServer(mockstripe.NewServer())
-	defer server.Close()
-
-	cmd := exec.Command("go", "run", "./cmd/agent-stripe",
-		"--api-key", "sk_test_mock",
-		"--base-url", server.URL,
-		"subscriptions", "invoices", "sub_mock_past_due",
-		"--status", "open",
-	)
-	cmd.Dir = "../.."
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("agent-stripe failed: %v\n%s", err, out)
-	}
-	text := string(out)
-	if !strings.Contains(text, `"in_mock_open_failed"`) {
-		t.Fatalf("output did not contain mock invoice: %s", text)
-	}
-	if !strings.Contains(text, `"payment_intent":"pi_mock_failed"`) {
-		t.Fatalf("output did not contain failed PaymentIntent: %s", text)
-	}
+	runner := newMockCLIRunner(t)
+	out := runner.Run("subscriptions", "invoices", "sub_mock_past_due", "--status", "open")
+	runner.AssertContains(out, `"in_mock_open_failed"`, `"payment_intent":"pi_mock_failed"`)
 }
 
 func TestCLIInvestigateInvoicePaymentAgainstMockStripe(t *testing.T) {
 	out := runMockCLI(t, "investigate", "invoice-payment", "in_mock_paid")
-	for _, want := range []string{
+	assertContains(t, out,
 		`"object":"invoice"`,
 		`"id":"in_mock_paid"`,
 		`"object":"charge"`,
 		`"id":"ch_mock_succeeded"`,
 		`card ending 4242`,
-	} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("investigation output missing %s:\n%s", want, out)
-		}
-	}
+	)
 }
 
 func TestCLIInvestigateCustomerCardPaymentAgainstMockStripe(t *testing.T) {
 	out := runMockCLI(t, "investigate", "customer-card-payment", "--customer", "cus_mock_123", "--last4", "4242")
-	for _, want := range []string{`"id":"ch_mock_succeeded"`, `Most recent payment`, `card ending 4242`} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("investigation output missing %s:\n%s", want, out)
-		}
-	}
+	assertContains(t, out, `"id":"ch_mock_succeeded"`, `Most recent payment`, `card ending 4242`)
 }
 
 func TestCLIInvestigateCollectionRiskAgainstMockStripe(t *testing.T) {
 	out := runMockCLI(t, "investigate", "collection-risk", "--limit", "10")
-	for _, want := range []string{`"id":"sub_mock_past_due"`, `outreach about payment details`, `"id":"sub_mock_expiring_card"`, `expiring soon`, `"id":"sub_mock_missing_pm"`, `no default payment method`} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("collection-risk output missing %s:\n%s", want, out)
-		}
-	}
+	assertContains(t, out, `"id":"sub_mock_past_due"`, `outreach about payment details`, `"id":"sub_mock_expiring_card"`, `expiring soon`, `"id":"sub_mock_missing_pm"`, `no default payment method`)
 }
 
 func TestCLIInvestigateSubscriptionAndInvoiceMetadataAgainstMockStripe(t *testing.T) {
 	out := runMockCLI(t, "investigate", "subscription-renewal", "--metadata", "tenant_id=acme")
-	for _, want := range []string{`"id":"sub_mock_active"`, `"object":"invoice_preview"`, `preview amount is 4200 USD minor units`} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("subscription-renewal output missing %s:\n%s", want, out)
-		}
-	}
+	assertContains(t, out, `"id":"sub_mock_active"`, `"object":"invoice_preview"`, `preview amount is 4200 USD minor units`)
 
 	out = runMockCLI(t, "investigate", "invoice-metadata", "--number", "MOCK-0001")
-	for _, want := range []string{`"id":"pi_mock_succeeded"`, `"order_id":"order_123"`} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("invoice-metadata output missing %s:\n%s", want, out)
-		}
-	}
+	assertContains(t, out, `"id":"pi_mock_succeeded"`, `"order_id":"order_123"`)
 }
 
 func TestCLIInvestigateConnectMovementAgainstMockStripe(t *testing.T) {
 	out := runMockCLI(t, "investigate", "outgoing-payment", "po_mock_failed")
-	for _, want := range []string{`"id":"po_mock_failed"`, `bank account has been closed`} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("outgoing-payment output missing %s:\n%s", want, out)
-		}
-	}
+	assertContains(t, out, `"id":"po_mock_failed"`, `bank account has been closed`)
 
 	out = runMockCLI(t, "investigate", "refund-recovery", "trr_mock_failed", "--transfer", "tr_mock_failed")
-	for _, want := range []string{`"id":"trr_mock_failed"`, `failure_balance_transaction`} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("refund-recovery output missing %s:\n%s", want, out)
-		}
-	}
+	assertContains(t, out, `"id":"trr_mock_failed"`, `failure_balance_transaction`)
 }
 
 func TestCLIInvestigateNewWorkflowScenariosAgainstMockStripe(t *testing.T) {
@@ -194,6 +105,16 @@ func TestCLIInvestigateNewWorkflowScenariosAgainstMockStripe(t *testing.T) {
 			wants: []string{`"id":"sub_mock_canceling"`, `set to cancel at period end`},
 		},
 		{
+			name:  "subscription item metadata",
+			args:  []string{"investigate", "subscription-items", "--subscription", "sub_mock_active"},
+			wants: []string{`"object":"subscription_item"`, `"id":"si_mock_basic"`, `"object":"product"`, `"internal_product_id":"prod_internal_basic"`},
+		},
+		{
+			name:  "subscription amount change",
+			args:  []string{"investigate", "subscription-amount-change", "--subscription", "sub_mock_past_due"},
+			wants: []string{`"id":"sub_mock_past_due"`, `"id":"in_mock_open_failed"`, `"object":"invoice_preview"`, `current item subtotal is 29700 USD minor units`},
+		},
+		{
 			name:  "truncation controls",
 			args:  []string{"investigate", "--max-string", "40", "resolve", "prod_mock_basic"},
 			wants: []string{`"id":"prod_mock_basic"`, `"truncated_fields"`, `"path":"description"`, `--expand-field description or --full`},
@@ -202,12 +123,24 @@ func TestCLIInvestigateNewWorkflowScenariosAgainstMockStripe(t *testing.T) {
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) {
 			out := runMockCLI(t, check.args...)
-			for _, want := range check.wants {
-				if !strings.Contains(out, want) {
-					t.Fatalf("%s output missing %s:\n%s", check.name, want, out)
-				}
-			}
+			assertContains(t, out, check.wants...)
 		})
+	}
+}
+
+func TestCLIDomainUsageAgainstMockStripe(t *testing.T) {
+	checks := []struct {
+		args  []string
+		wants []string
+	}{
+		{[]string{"subscriptions", "usage"}, []string{`subscriptions — renewal`, `subscription-amount-change`}},
+		{[]string{"invoices", "usage"}, []string{`invoices — invoice payment`, `invoice-metadata`}},
+		{[]string{"payments", "usage"}, []string{`payments — PaymentIntent`, `customer-card-payment`}},
+		{[]string{"connect", "usage"}, []string{`connect — connected-account`, `refund-recovery`}},
+	}
+	for _, check := range checks {
+		out := runMockCLI(t, check.args...)
+		assertContains(t, out, check.wants...)
 	}
 }
 
@@ -232,25 +165,6 @@ func TestCLINewResourcePrimitivesAgainstMockStripe(t *testing.T) {
 	}
 	for _, check := range checks {
 		out := runMockCLI(t, check.args...)
-		if !strings.Contains(out, check.want) {
-			t.Fatalf("%v output missing %s:\n%s", check.args, check.want, out)
-		}
+		assertContains(t, out, check.want)
 	}
-}
-
-func runMockCLI(t *testing.T, args ...string) string {
-	t.Helper()
-	server := httptest.NewServer(mockstripe.NewServer())
-	defer server.Close()
-
-	allArgs := []string{"run", "./cmd/agent-stripe", "--api-key", "sk_test_mock", "--base-url", server.URL}
-	allArgs = append(allArgs, args...)
-	cmd := exec.Command("go", allArgs...)
-	cmd.Dir = "../.."
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("agent-stripe %v failed: %v\n%s", args, err, out)
-	}
-	return string(out)
 }

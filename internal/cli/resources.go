@@ -70,6 +70,7 @@ func registerInvoices(root *cobra.Command, globals shared.GlobalsFunc) {
 		idName:     "invoice-id",
 		searchable: true,
 		searchHint: "Use a Stripe search query, for example number:'ABC-0001' or metadata['order_id']:'123'",
+		usageText:  invoicesUsageText,
 		expandGet:  true,
 		expandList: true,
 		lineItems:  true,

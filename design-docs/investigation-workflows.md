@@ -34,6 +34,8 @@ Current workflow families:
 - `invoice-payment`: invoice to PaymentIntent to latest Charge.
 - `invoice-metadata`: invoice to PaymentIntent metadata.
 - `subscription-renewal`: latest and next invoice/payment.
+- `subscription-items`: subscription items, prices, products, and product metadata.
+- `subscription-amount-change`: latest invoice, invoice lines, preview, and current item subtotal.
 - `collection-risk`: payment-method outreach candidates.
 - `subscription-cancel-risk`: cancellations and trial/period end risk.
 - `incoming-payment`: failed/successful customer payment explanation.
@@ -75,6 +77,8 @@ Command:
 agent-stripe investigate subscription-renewal --subscription sub_...
 agent-stripe investigate subscription-renewal --customer cus_...
 agent-stripe investigate subscription-renewal --metadata tenant_id=acme
+agent-stripe investigate subscription-items --subscription sub_...
+agent-stripe investigate subscription-amount-change --subscription sub_...
 ```
 
 Path:
@@ -82,9 +86,13 @@ Path:
 ```text
 Subscription -> latest Invoice -> PaymentIntent -> latest Charge
 Subscription -> invoice preview
+Subscription -> subscription items -> Price -> Product metadata
+Subscription -> latest Invoice lines and preview amount
 ```
 
 This is aimed at support questions such as "when did they last pay, how much, when will they next pay, and how much?"
+Use `subscription-items` when the important question is "which internal product IDs or prices are attached?"
+Use `subscription-amount-change` when the important question is "why is this invoice amount different?"
 
 ## Invoice Metadata
 
@@ -111,7 +119,7 @@ Command:
 agent-stripe investigate collection-risk --days 30
 ```
 
-This scans upcoming subscription renewals and flags subscriptions that are already `past_due`, `unpaid`, `incomplete`, or have an open unpaid latest invoice. Future versions should add deeper checks for expiring default payment methods and invoice retry policy.
+This scans upcoming subscription renewals and flags subscriptions that are already `past_due`, `unpaid`, `incomplete`, have no visible default payment method, have a default card expiring soon, require customer action, or have an open unpaid latest invoice. Future versions should add deeper checks for invoice retry policy.
 
 ## Failed Customer Payment
 

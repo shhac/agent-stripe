@@ -138,6 +138,42 @@ func newInvestigateSubscriptionCancelRisk(globals shared.GlobalsFunc, outputOpts
 	return cmd
 }
 
+func newInvestigateSubscriptionItems(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+	var subscription string
+	cmd := &cobra.Command{
+		Use:   "subscription-items",
+		Short: "Show subscription items, prices, products, and product metadata",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !shared.RequireFlag("subscription", subscription, "Provide a Subscription ID such as sub_...") {
+				return nil
+			}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+				return inv.subscriptionItemsEvidence(subscription)
+			})
+		},
+	}
+	cmd.Flags().StringVar(&subscription, "subscription", "", "Subscription ID")
+	return cmd
+}
+
+func newInvestigateSubscriptionAmountChange(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+	var subscription string
+	cmd := &cobra.Command{
+		Use:   "subscription-amount-change",
+		Short: "Explain subscription invoice amount using latest invoice, preview, items, prices, and products",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !shared.RequireFlag("subscription", subscription, "Provide a Subscription ID such as sub_...") {
+				return nil
+			}
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+				return inv.subscriptionAmountChange(subscription)
+			})
+		},
+	}
+	cmd.Flags().StringVar(&subscription, "subscription", "", "Subscription ID")
+	return cmd
+}
+
 func (i investigator) findSubscriptions(subscription, customer, metadata string, limit int) ([]map[string]any, error) {
 	switch {
 	case subscription != "":
@@ -161,6 +197,147 @@ func (i investigator) findSubscriptions(subscription, customer, metadata string,
 		shared.AddString(params, "customer", customer)
 		return i.list("/v1/subscriptions", params)
 	}
+}
+
+func (i investigator) subscriptionItemsEvidence(subscriptionID string) ([]evidenceRecord, error) {
+	records := []evidenceRecord{}
+	sub, err := i.get("/v1/subscriptions/"+url.PathEscape(subscriptionID), url.Values{})
+	if err != nil {
+		return nil, err
+	}
+	records = append(records, entityRecord("subscription", sub))
+
+	items, err := i.list("/v1/subscription_items", url.Values{"subscription": []string{subscriptionID}, "limit": []string{"100"}})
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		records = append(records, entityRecord("subscription_item", item))
+		price := mapAnyMap(item, "price")
+		if productID := idFromValue(price["product"]); productID != "" {
+			if product, productErr := i.get("/v1/products/"+url.PathEscape(productID), url.Values{}); productErr == nil {
+				records = append(records, entityRecord("product", product))
+			}
+		}
+	}
+	records = append(records, evidenceRecord{
+		Type:     "finding",
+		Severity: "info",
+		Summary:  fmt.Sprintf("Subscription %s has %d visible item(s). Use price/product metadata for internal product mapping.", subscriptionID, len(items)),
+		Data: map[string]any{
+			"subscription": subscriptionID,
+			"item_count":   len(items),
+		},
+	})
+	return records, nil
+}
+
+func (i investigator) subscriptionAmountChange(subscriptionID string) ([]evidenceRecord, error) {
+	records, err := i.subscriptionItemsEvidence(subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	sub := firstEntityData(records, "subscription")
+	if sub == nil {
+		return records, nil
+	}
+
+	var latestInvoice map[string]any
+	if latestInvoiceID := idFromValue(sub["latest_invoice"]); latestInvoiceID != "" {
+		invoice, invoiceErr := i.get("/v1/invoices/"+url.PathEscape(latestInvoiceID), url.Values{})
+		if invoiceErr != nil {
+			records = append(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not retrieve latest invoice " + latestInvoiceID + ": " + invoiceErr.Error()})
+		} else {
+			latestInvoice = invoice
+			records = append(records, entityRecord("invoice", invoice))
+			lines, lineErr := i.list("/v1/invoices/"+url.PathEscape(latestInvoiceID)+"/lines", url.Values{"limit": []string{"100"}})
+			if lineErr == nil {
+				records = appendListRecords(records, "line_item", lines)
+			}
+		}
+	}
+
+	var preview map[string]any
+	if next, previewErr := i.postForm("/v1/invoices/create_preview", url.Values{"subscription": []string{subscriptionID}}); previewErr == nil {
+		preview = next
+		records = append(records, entityRecord("invoice_preview", next))
+	}
+
+	items := entityDataByObject(records, "subscription_item")
+	records = append(records, subscriptionAmountFinding(subscriptionID, latestInvoice, preview, items))
+	return records, nil
+}
+
+func subscriptionAmountFinding(subscriptionID string, latestInvoice, preview map[string]any, items []map[string]any) evidenceRecord {
+	itemSubtotal, itemCurrency, subtotalOK := subscriptionItemsSubtotal(items)
+	data := map[string]any{
+		"subscription": subscriptionID,
+		"item_count":   len(items),
+	}
+	if subtotalOK {
+		data["item_subtotal"] = itemSubtotal
+		data["item_currency"] = itemCurrency
+	}
+	if latestInvoice != nil {
+		if amount, ok := mapInt64(latestInvoice, "amount_due"); ok {
+			data["latest_invoice_amount_due"] = amount
+		}
+		data["latest_invoice"] = mapString(latestInvoice, "id")
+	}
+	if preview != nil {
+		if amount, ok := mapInt64(preview, "amount_due"); ok {
+			data["preview_amount_due"] = amount
+		}
+	}
+
+	summary := fmt.Sprintf("Subscription %s amount evidence gathered.", subscriptionID)
+	if subtotalOK {
+		summary = fmt.Sprintf("Subscription %s current item subtotal is %d %s minor units.", subscriptionID, itemSubtotal, strings.ToUpper(itemCurrency))
+	}
+	if latestInvoice != nil && preview != nil {
+		summary += fmt.Sprintf(" Latest invoice amount is %s; next preview amount is %s.", formatAmount(latestInvoice), formatAmount(preview))
+	}
+	return evidenceRecord{Type: "finding", Severity: "info", Summary: summary, Data: data}
+}
+
+func subscriptionItemsSubtotal(items []map[string]any) (int64, string, bool) {
+	var total int64
+	currency := ""
+	for _, item := range items {
+		price := mapAnyMap(item, "price")
+		unitAmount, ok := mapInt64(price, "unit_amount")
+		if !ok {
+			continue
+		}
+		quantity, ok := mapInt64(item, "quantity")
+		if !ok || quantity == 0 {
+			quantity = 1
+		}
+		total += unitAmount * quantity
+		if currency == "" {
+			currency = mapString(price, "currency")
+		}
+	}
+	return total, currency, currency != "" || total > 0
+}
+
+func firstEntityData(records []evidenceRecord, object string) map[string]any {
+	for _, record := range records {
+		if record.Type == "entity" && record.Object == object {
+			return record.Data
+		}
+	}
+	return nil
+}
+
+func entityDataByObject(records []evidenceRecord, object string) []map[string]any {
+	items := []map[string]any{}
+	for _, record := range records {
+		if record.Type == "entity" && record.Object == object {
+			items = append(items, record.Data)
+		}
+	}
+	return items
 }
 
 func (i investigator) subscriptionPaymentSummary(sub map[string]any) []evidenceRecord {

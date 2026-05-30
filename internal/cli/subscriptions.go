@@ -20,6 +20,7 @@ func registerSubscriptions(root *cobra.Command, globals shared.GlobalsFunc) {
 		searchShort: "Search subscriptions with Stripe Search Query Language",
 		searchable:  true,
 		searchHint:  "Use a Stripe search query, for example metadata['tenant_id']:'acme'",
+		usageText:   subscriptionsUsageText,
 		expandGet:   true,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
