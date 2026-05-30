@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
@@ -37,8 +36,8 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 		Short: "List recent events; defaults to NDJSON",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := url.Values{}
-			api.AddLimit(params, limit)
-			api.AddCreatedRange(params, createdGTE, createdLTE)
+			shared.AddLimit(params, limit)
+			shared.AddCreatedRange(params, createdGTE, createdLTE)
 			shared.AddString(params, "type", eventType)
 			shared.AddMulti(params, "types[]", eventTypes)
 			shared.AddString(params, "starting_after", startingAfter)

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -10,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
@@ -60,8 +58,8 @@ func (c *Client) PostForm(ctx context.Context, path string, params url.Values) (
 	return c.do(ctx, http.MethodPost, path, params)
 }
 
-func (c *Client) do(ctx context.Context, method, path string, body any) (json.RawMessage, error) {
-	req, err := c.buildRequest(ctx, method, path, body)
+func (c *Client) do(ctx context.Context, method, path string, form url.Values) (json.RawMessage, error) {
+	req, err := c.buildRequest(ctx, method, path, form)
 	if err != nil {
 		return nil, err
 	}
@@ -88,18 +86,10 @@ func (c *Client) do(ctx context.Context, method, path string, body any) (json.Ra
 	return json.RawMessage(respBody), nil
 }
 
-func (c *Client) buildRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
+func (c *Client) buildRequest(ctx context.Context, method, path string, form url.Values) (*http.Request, error) {
 	var bodyReader io.Reader
-	if body != nil {
-		if values, ok := body.(url.Values); ok {
-			bodyReader = strings.NewReader(values.Encode())
-		} else {
-			b, err := json.Marshal(body)
-			if err != nil {
-				return nil, agenterrors.Wrap(err, agenterrors.FixableByAgent)
-			}
-			bodyReader = bytes.NewReader(b)
-		}
+	if form != nil {
+		bodyReader = strings.NewReader(form.Encode())
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bodyReader)
@@ -108,7 +98,9 @@ func (c *Client) buildRequest(ctx context.Context, method, path string, body any
 	}
 
 	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(c.apiKey+":")))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if form != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	if c.context != "" {
 		req.Header.Set("Stripe-Context", c.context)
 	}
@@ -123,29 +115,6 @@ func buildPath(base string, params url.Values) string {
 		return base + "?" + encoded
 	}
 	return base
-}
-
-func AddLimit(params url.Values, limit int) {
-	if limit > 0 {
-		params.Set("limit", strconv.Itoa(limit))
-	}
-}
-
-func AddCreatedRange(params url.Values, gte, lte string) {
-	if gte != "" {
-		params.Set("created[gte]", gte)
-	}
-	if lte != "" {
-		params.Set("created[lte]", lte)
-	}
-}
-
-func AddExpand(params url.Values, expand []string) {
-	for _, item := range expand {
-		if item != "" {
-			params.Add("expand[]", item)
-		}
-	}
 }
 
 type ListResponse struct {

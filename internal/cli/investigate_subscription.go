@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 )
@@ -56,7 +55,7 @@ func newInvestigateCollectionRisk(globals shared.GlobalsFunc, outputOpts *invest
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				params := url.Values{"status": []string{"all"}}
-				api.AddLimit(params, limit)
+				shared.AddLimit(params, limit)
 				if days > 0 {
 					params.Set("current_period_end[lte]", strconv.FormatInt(time.Now().Add(time.Duration(days)*24*time.Hour).Unix(), 10))
 				}
@@ -102,7 +101,7 @@ func newInvestigateSubscriptionCancelRisk(globals shared.GlobalsFunc, outputOpts
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				params := url.Values{"status": []string{"all"}}
-				api.AddLimit(params, limit)
+				shared.AddLimit(params, limit)
 				if days > 0 {
 					params.Set("current_period_end[lte]", strconv.FormatInt(time.Now().Add(time.Duration(days)*24*time.Hour).Unix(), 10))
 				}
@@ -154,11 +153,11 @@ func (i investigator) findSubscriptions(subscription, customer, metadata string,
 				WithHint("Example: --metadata tenant_id=acme")
 		}
 		params := url.Values{"query": []string{"metadata['" + key + "']:'" + value + "'"}}
-		api.AddLimit(params, limit)
+		shared.AddLimit(params, limit)
 		return i.list("/v1/subscriptions/search", params)
 	default:
 		params := url.Values{}
-		api.AddLimit(params, limit)
+		shared.AddLimit(params, limit)
 		shared.AddString(params, "customer", customer)
 		return i.list("/v1/subscriptions", params)
 	}

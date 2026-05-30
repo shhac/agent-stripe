@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
@@ -26,7 +25,7 @@ func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *i
 			}
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				params := url.Values{"customer": []string{customer}}
-				api.AddLimit(params, limit)
+				shared.AddLimit(params, limit)
 				charges, err := inv.list("/v1/charges", params)
 				if err != nil {
 					return nil, err

@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
@@ -83,7 +82,7 @@ func appendListRecords(records []evidenceRecord, object string, items []map[stri
 
 func valuesWithLimit(limit int, pairs ...string) url.Values {
 	params := url.Values{}
-	api.AddLimit(params, limit)
+	shared.AddLimit(params, limit)
 	for idx := 0; idx+1 < len(pairs); idx += 2 {
 		shared.AddString(params, pairs[idx], pairs[idx+1])
 	}

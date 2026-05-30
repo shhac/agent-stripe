@@ -40,23 +40,6 @@ func TestClassifyHTTPErrorIncludesStripeHints(t *testing.T) {
 	}
 }
 
-func TestAddHelpers(t *testing.T) {
-	values := url.Values{}
-	AddLimit(values, 12)
-	AddCreatedRange(values, "100", "200")
-	AddExpand(values, []string{"latest_charge", "customer"})
-
-	if values.Get("limit") != "12" {
-		t.Fatalf("limit = %q", values.Get("limit"))
-	}
-	if values.Get("created[gte]") != "100" || values.Get("created[lte]") != "200" {
-		t.Fatalf("created range not set: %v", values)
-	}
-	if got := values["expand[]"]; len(got) != 2 {
-		t.Fatalf("expand[] = %v", got)
-	}
-}
-
 func TestPostFormSendsFormBody(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -83,5 +66,45 @@ func TestPostFormSendsFormBody(t *testing.T) {
 	}
 	if string(raw) == "" {
 		t.Fatalf("PostForm() returned empty body")
+	}
+}
+
+func TestGetSendsAuthContextVersionAndQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if got := r.URL.Query().Get("limit"); got != "3" {
+			t.Fatalf("limit query = %q, want 3", got)
+		}
+		if got := r.Header.Get("Stripe-Context"); got != "acct_123" {
+			t.Fatalf("Stripe-Context = %q, want acct_123", got)
+		}
+		if got := r.Header.Get("Stripe-Version"); got != "2025-10-29.clover" {
+			t.Fatalf("Stripe-Version = %q, want 2025-10-29.clover", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Basic c2tfdGVzdF8xMjM6" {
+			t.Fatalf("Authorization = %q, want encoded basic auth", got)
+		}
+		if got := r.Header.Get("Content-Type"); got != "" {
+			t.Fatalf("Content-Type = %q, want empty for GET", got)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"pi_123","object":"payment_intent"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(Options{
+		APIKey:     "sk_test_123",
+		Context:    "acct_123",
+		APIVersion: "2025-10-29.clover",
+		BaseURL:    server.URL,
+	})
+	raw, err := client.Get(t.Context(), "/v1/payment_intents/pi_123", url.Values{"limit": []string{"3"}})
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if string(raw) == "" {
+		t.Fatalf("Get() returned empty body")
 	}
 }

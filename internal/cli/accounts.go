@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
@@ -37,7 +36,7 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 		Short: "List connected accounts",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := url.Values{}
-			api.AddLimit(params, limit)
+			shared.AddLimit(params, limit)
 			shared.AddString(params, "starting_after", startingAfter)
 			return shared.GetRawList(globals(), "/v1/accounts", params)
 		},

@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
@@ -45,8 +44,8 @@ func newSubscriptionItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := url.Values{"subscription": []string{args[0]}}
-			api.AddLimit(params, limit)
-			api.AddExpand(params, expand)
+			shared.AddLimit(params, limit)
+			shared.AddExpand(params, expand)
 			return shared.GetRawList(globals(), "/v1/subscription_items", params)
 		},
 	}
@@ -65,7 +64,7 @@ func newSubscriptionInvoicesCommand(globals shared.GlobalsFunc) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := url.Values{"subscription": []string{args[0]}}
-			api.AddLimit(params, limit)
+			shared.AddLimit(params, limit)
 			shared.AddString(params, "status", invoiceStatus)
 			shared.AddString(params, "starting_after", startingAfter)
 			return shared.GetRawList(globals(), "/v1/invoices", params)
