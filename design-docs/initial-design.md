@@ -24,7 +24,7 @@ Use `profile` as the user-facing alias because Stripe's current docs distinguish
 - related-account context via `Stripe-Context`
 - Connect connected accounts
 
-Profiles store non-secret metadata in `~/.config/agent-stripe/config.json`:
+Profiles store non-secret metadata in `${XDG_CONFIG_HOME}/agent-stripe/config.json`, or `~/.config/agent-stripe/config.json` when `XDG_CONFIG_HOME` is not set:
 
 - alias
 - default `Stripe-Context`
@@ -56,6 +56,8 @@ Lists default to NDJSON so an LLM can stream, truncate, and resume investigation
 Stripe errors often include request IDs, request-log URLs, error codes, and decline codes. The API client should surface those in messages or hints when present.
 
 `--debug` is the global diagnostic switch. It prints structured JSON records to stderr for client setup and HTTP responses. Debug output may include Stripe response bodies and request URLs, but must not include raw API keys.
+
+Stripe rate limits and lock timeouts use HTTP 429. The CLI retries those responses with bounded exponential backoff and jitter, then emits a `fixable_by=retry` error with Stripe's rate-limit reason header when present. `--max-retries 0` disables automatic retries for callers that need one-shot behavior.
 
 ## Initial command surface
 

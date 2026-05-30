@@ -8,6 +8,7 @@ Stripe incident triage CLI for AI agents. It is designed for read-heavy investig
 - **Multi-profile support**: configure aliases for sandbox, live, organization, or holding-account workflows.
 - **Stripe context aware**: supports `Stripe-Context` for organization keys and related-account requests.
 - **LLM-shaped output**: lists default to NDJSON, single resources default to JSON, and errors include `fixable_by` plus hints.
+- **Bounded Stripe retries**: transient Stripe `429` responses retry with exponential backoff and jitter before returning a retryable error.
 - **Read-first triage**: balance, events, PaymentIntents, charges, disputes, accounts, and a GET-only raw API escape hatch.
 - **Subscription investigation**: inspect subscriptions, subscription items, invoices, and payment failures from one command group.
 - **Scenario investigations**: invoice payment evidence, customer card-last4 lookup, subscription renewal summaries, collection-risk outreach, failed incoming payments, and Connect money-movement failures.
@@ -60,6 +61,10 @@ Errors are written to stderr as JSON:
 ```
 
 Use `--debug` to emit extra JSON records to stderr while commands run. Debug output includes client setup details, credential source labels, request URLs, status codes, request IDs, and response bodies, but not raw API keys.
+
+Stripe `429` responses are retried automatically up to `--max-retries` times, which defaults to 2. After retries are exhausted, the CLI returns a JSON error with `fixable_by:"retry"` and includes Stripe's rate-limit reason header when present.
+
+Profile metadata is stored at `${XDG_CONFIG_HOME}/agent-stripe/config.json`, or `~/.config/agent-stripe/config.json` when `XDG_CONFIG_HOME` is not set. API keys are stored separately in macOS Keychain and are not written to that config file.
 
 ## Commands
 

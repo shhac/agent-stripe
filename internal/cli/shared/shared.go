@@ -19,6 +19,7 @@ type GlobalFlags struct {
 	BaseURL    string
 	Format     string
 	Timeout    int
+	MaxRetries int
 	Debug      bool
 	APIVersion string
 }

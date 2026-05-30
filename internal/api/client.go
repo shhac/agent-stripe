@@ -2,25 +2,32 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 )
 
 const defaultBaseURL = "https://api.stripe.com"
 
+var retryBaseDelay = 250 * time.Millisecond
+
 type Client struct {
 	baseURL    string
 	apiKey     string
 	context    string
 	apiVersion string
+	maxRetries int
 	http       *http.Client
 	debug      bool
 }
@@ -30,6 +37,7 @@ type Options struct {
 	Context    string
 	APIVersion string
 	BaseURL    string
+	MaxRetries int
 }
 
 func NewClient(opts Options) *Client {
@@ -42,6 +50,7 @@ func NewClient(opts Options) *Client {
 		apiKey:     opts.APIKey,
 		context:    opts.Context,
 		apiVersion: opts.APIVersion,
+		maxRetries: nonNegative(opts.MaxRetries),
 		http:       &http.Client{},
 	}
 }
@@ -59,31 +68,44 @@ func (c *Client) PostForm(ctx context.Context, path string, params url.Values) (
 }
 
 func (c *Client) do(ctx context.Context, method, path string, form url.Values) (json.RawMessage, error) {
-	req, err := c.buildRequest(ctx, method, path, form)
-	if err != nil {
-		return nil, err
-	}
+	for attempt := 0; ; attempt++ {
+		req, err := c.buildRequest(ctx, method, path, form)
+		if err != nil {
+			return nil, err
+		}
 
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, agenterrors.Wrap(err, agenterrors.FixableByRetry).WithHint("Network error: check connectivity and retry")
-	}
-	defer func() { _ = resp.Body.Close() }()
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return nil, agenterrors.Wrap(err, agenterrors.FixableByRetry).WithHint("Network error: check connectivity and retry")
+		}
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, agenterrors.Wrap(err, agenterrors.FixableByRetry)
-	}
+		respBody, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, agenterrors.Wrap(readErr, agenterrors.FixableByRetry)
+		}
 
-	if c.debug {
-		c.logDebug(method, req.URL.String(), resp.StatusCode, resp.Header.Get("Request-Id"), respBody)
-	}
+		if c.debug {
+			c.logDebug(method, req.URL.String(), resp.StatusCode, resp.Header.Get("Request-Id"), respBody)
+		}
 
-	if resp.StatusCode >= 400 {
-		return nil, classifyHTTPError(resp.StatusCode, resp.Header.Get("Request-Id"), respBody)
-	}
+		if shouldRetry(resp.StatusCode, attempt, c.maxRetries) {
+			delay := retryDelay(resp.Header.Get("Retry-After"), attempt)
+			if c.debug {
+				c.logRetry(method, req.URL.String(), resp.StatusCode, resp.Header.Get("Request-Id"), resp.Header.Get("Stripe-Rate-Limited-Reason"), attempt+1, c.maxRetries, delay)
+			}
+			if err := sleepWithContext(ctx, delay); err != nil {
+				return nil, agenterrors.Wrap(err, agenterrors.FixableByRetry).WithHint("Retry wait interrupted; re-run the command")
+			}
+			continue
+		}
 
-	return json.RawMessage(respBody), nil
+		if resp.StatusCode >= 400 {
+			return nil, classifyHTTPError(resp.StatusCode, resp.Header.Get("Request-Id"), resp.Header.Get("Stripe-Rate-Limited-Reason"), c.maxRetries, respBody)
+		}
+
+		return json.RawMessage(respBody), nil
+	}
 }
 
 func (c *Client) buildRequest(ctx context.Context, method, path string, form url.Values) (*http.Request, error) {
@@ -166,7 +188,7 @@ func extractErrorMessage(status int, body []byte) (string, string, string, strin
 	return msg, parsed.Error.Type, code, parsed.Error.RequestLogURL
 }
 
-func classifyHTTPError(status int, requestID string, body []byte) *agenterrors.APIError {
+func classifyHTTPError(status int, requestID, rateLimitedReason string, maxRetries int, body []byte) *agenterrors.APIError {
 	msg, errType, code, requestLogURL := extractErrorMessage(status, body)
 	if requestID != "" {
 		msg = msg + " (request_id: " + requestID + ")"
@@ -178,6 +200,9 @@ func classifyHTTPError(status int, requestID string, body []byte) *agenterrors.A
 	}
 	if requestLogURL != "" {
 		hintParts = append(hintParts, "request log: "+requestLogURL)
+	}
+	if rateLimitedReason != "" {
+		hintParts = append(hintParts, "rate limit reason: "+rateLimitedReason)
 	}
 
 	switch {
@@ -192,7 +217,7 @@ func classifyHTTPError(status int, requestID string, body []byte) *agenterrors.A
 			append(hintParts, "Check the ID, live/sandbox mode, and Stripe context")...)
 	case status == 429:
 		return withHint(agenterrors.New("Rate limited: "+msg, agenterrors.FixableByRetry),
-			append(hintParts, "Wait and retry with a smaller --limit or narrower time range")...)
+			append(hintParts, retryExhaustedHint(maxRetries))...)
 	case status >= 500:
 		return withHint(agenterrors.New("Stripe API error: "+msg, agenterrors.FixableByRetry),
 			append(hintParts, "Stripe returned a server error; retry later")...)
@@ -203,6 +228,73 @@ func classifyHTTPError(status int, requestID string, body []byte) *agenterrors.A
 		}
 		return withHint(agenterrors.New(msg, fixable), hintParts...)
 	}
+}
+
+func shouldRetry(status, attempt, maxRetries int) bool {
+	return status == http.StatusTooManyRequests && attempt < maxRetries
+}
+
+func retryDelay(retryAfter string, attempt int) time.Duration {
+	if parsed := retryAfterDelay(retryAfter); parsed > 0 {
+		return parsed
+	}
+	base := retryBaseDelay * time.Duration(1<<attempt)
+	if base <= 0 {
+		return 0
+	}
+	return base + randomJitter(base/2)
+}
+
+func retryAfterDelay(value string) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(value); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	if when, err := http.ParseTime(value); err == nil {
+		if delay := time.Until(when); delay > 0 {
+			return delay
+		}
+	}
+	return 0
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func retryExhaustedHint(maxRetries int) string {
+	if maxRetries <= 0 {
+		return "Wait and retry with a smaller --limit or narrower time range"
+	}
+	return fmt.Sprintf("Retried %d time(s); wait and retry with a smaller --limit, narrower time range, or fewer expansions", maxRetries)
+}
+
+func randomJitter(max time.Duration) time.Duration {
+	if max <= 0 {
+		return 0
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		return max / 2
+	}
+	return time.Duration(n.Int64())
+}
+
+func nonNegative(value int) int {
+	if value < 0 {
+		return 0
+	}
+	return value
 }
 
 func withHint(err *agenterrors.APIError, hints ...string) *agenterrors.APIError {
@@ -233,6 +325,27 @@ func (c *Client) logDebug(method, requestURL string, status int, requestID strin
 		entry["body"] = parsed
 	} else {
 		entry["body_raw"] = string(body)
+	}
+	enc := json.NewEncoder(os.Stderr)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(entry)
+}
+
+func (c *Client) logRetry(method, requestURL string, status int, requestID, rateLimitedReason string, attempt, maxRetries int, delay time.Duration) {
+	entry := map[string]any{
+		"@debug":      "retry",
+		"method":      method,
+		"url":         requestURL,
+		"status":      status,
+		"attempt":     attempt,
+		"max_retries": maxRetries,
+		"delay_ms":    delay.Milliseconds(),
+	}
+	if requestID != "" {
+		entry["request_id"] = requestID
+	}
+	if rateLimitedReason != "" {
+		entry["rate_limited_reason"] = rateLimitedReason
 	}
 	enc := json.NewEncoder(os.Stderr)
 	enc.SetEscapeHTML(false)

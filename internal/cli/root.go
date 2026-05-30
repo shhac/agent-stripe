@@ -29,6 +29,7 @@ func newRootCmd(version string) *cobra.Command {
 	root.PersistentFlags().StringVar(&globals.BaseURL, "base-url", "", "Stripe API base URL override for tests")
 	root.PersistentFlags().StringVarP(&globals.Format, "format", "f", "", "Output format: json, yaml, jsonl")
 	root.PersistentFlags().IntVarP(&globals.Timeout, "timeout", "t", 0, "Request timeout in milliseconds")
+	root.PersistentFlags().IntVar(&globals.MaxRetries, "max-retries", 2, "Maximum automatic retries for transient Stripe 429 responses")
 	root.PersistentFlags().StringVar(&globals.APIVersion, "api-version", "", "Stripe API version header override")
 	root.PersistentFlags().BoolVarP(&globals.Debug, "debug", "d", false, "Log HTTP requests and responses to stderr")
 	_ = root.PersistentFlags().MarkHidden("base-url")

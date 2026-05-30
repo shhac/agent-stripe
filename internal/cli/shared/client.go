@@ -116,6 +116,7 @@ func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error)
 			"api_version":       resolved.Profile.APIVersion,
 			"base_url":          resolvedBaseURL(resolved.BaseURL),
 			"timeout_ms":        flags.Timeout,
+			"max_retries":       flags.MaxRetries,
 		})
 	}
 	ctx, cancel := ContextWithTimeout(context.Background(), flags.Timeout)
@@ -126,6 +127,7 @@ func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error)
 		Context:    resolved.Profile.Context,
 		APIVersion: resolved.Profile.APIVersion,
 		BaseURL:    resolved.BaseURL,
+		MaxRetries: flags.MaxRetries,
 	})
 	client.SetDebug(flags.Debug)
 	if err := fn(ctx, client); err != nil {

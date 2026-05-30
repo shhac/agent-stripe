@@ -89,6 +89,7 @@ OUTPUT
   Lists default to NDJSON/jsonl, one object per line, with @pagination when there is another page.
   Single-object reads default to pretty JSON.
   Errors are JSON on stderr with fixable_by: agent|human|retry and a hint where possible.
+  Stripe 429s retry automatically with backoff and jitter before returning fixable_by=retry.
 
 GLOBAL FLAGS
   -p, --profile <alias>
@@ -96,5 +97,6 @@ GLOBAL FLAGS
   --api-version <version>
   --format json|yaml|jsonl
   --timeout <ms>
+  --max-retries <N>  Maximum automatic retries for transient Stripe 429 responses (default 2)
   --debug   Emit structured debug records to stderr (client setup + HTTP)
 `

@@ -34,6 +34,14 @@ Stripe search is not read-after-write consistent. Investigation commands should 
 
 Source: https://docs.stripe.com/search
 
+## Rate limiting
+
+Stripe returns HTTP 429 for rate limits and object lock timeouts. Rate-limited responses include `Stripe-Rate-Limited-Reason` when the limiter caused the response; 429s without that header can be lock timeouts. Stripe recommends exponential backoff with randomness.
+
+agent-stripe retries 429s a small bounded number of times, defaulting to 2. After that, it stops and emits a structured retryable error. Investigation commands should still narrow list filters, avoid unnecessary expansions, and prefer IDs or direct retrieval when available.
+
+Source: https://docs.stripe.com/rate-limits
+
 ## Invoice previews and billing
 
 Stripe's preview endpoint is `POST /v1/invoices/create_preview`. Passing `subscription` previews the upcoming invoice for an existing subscription; `preview_mode=recurring` can be used when a recurring estimate is desired.
