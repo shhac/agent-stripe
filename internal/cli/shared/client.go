@@ -104,7 +104,7 @@ func resolveBaseURL(flags *GlobalFlags) string {
 func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error) error {
 	resolved, err := ResolveProfile(flags)
 	if err != nil {
-		output.WriteError(os.Stderr, err)
+		output.WriteError(output.Stderr(), err)
 		return nil
 	}
 	if flags.Debug {
@@ -131,7 +131,7 @@ func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error)
 	})
 	client.SetDebug(flags.Debug)
 	if err := fn(ctx, client); err != nil {
-		output.WriteError(os.Stderr, err)
+		output.WriteError(output.Stderr(), err)
 		return nil
 	}
 	return nil
@@ -170,7 +170,7 @@ func PostFormRawItem(flags *GlobalFlags, path string, params url.Values) error {
 }
 
 func WriteDebug(fields map[string]any) {
-	enc := json.NewEncoder(os.Stderr)
+	enc := json.NewEncoder(output.Stderr())
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(fields)
 }

@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/shhac/agent-stripe/internal/cli/shared"
@@ -40,7 +39,7 @@ func writeEvidence(records []evidenceRecord, format string, opts evidenceOptions
 	records = normalizeEvidence(records, opts)
 	f := output.ResolveFormat(format, output.FormatNDJSON)
 	if f == output.FormatNDJSON {
-		w := output.NewNDJSONWriter(os.Stdout)
+		w := output.NewNDJSONWriter(output.Stdout())
 		for _, record := range records {
 			_ = w.WriteItem(record)
 		}

@@ -19,6 +19,8 @@ Stripe incident triage CLI for AI agents. It is designed for read-heavy investig
 make build
 ./agent-stripe auth add sandbox --form --context acct_...
 ./agent-stripe auth check sandbox
+./agent-stripe auth update sandbox --context acct_...
+./agent-stripe config show
 ./agent-stripe events list --type charge.failed --limit 20
 ./agent-stripe investigate resolve MOCK-0001
 ./agent-stripe investigate customer-context --customer cus_...
@@ -64,7 +66,9 @@ Use `--debug` to emit extra JSON records to stderr while commands run. Debug out
 
 Stripe `429` responses are retried automatically up to `--max-retries` times, which defaults to 2. After retries are exhausted, the CLI returns a JSON error with `fixable_by:"retry"` and includes Stripe's rate-limit reason header when present.
 
-Profile metadata is stored at `${XDG_CONFIG_HOME}/agent-stripe/config.json`, or `~/.config/agent-stripe/config.json` when `XDG_CONFIG_HOME` is not set. API keys are stored separately in macOS Keychain and are not written to that config file.
+Profile metadata is stored at `${XDG_CONFIG_HOME}/agent-stripe/config.json`, or `~/.config/agent-stripe/config.json` when `XDG_CONFIG_HOME` is not set. A non-secret `credentials.json` index in the same directory records which profiles are Keychain-managed. API keys are stored separately in macOS Keychain and are not written to either file.
+
+Use `agent-stripe auth update <profile>` to change non-secret profile metadata, and `agent-stripe config set max_retries|timeout_ms <value>` to persist global defaults. Command-line flags still override persisted defaults.
 
 ## Commands
 
@@ -88,6 +92,10 @@ agent-stripe payment-links list --active true
 agent-stripe early-fraud-warnings list --charge ch_...
 agent-stripe payments usage
 agent-stripe connect usage
+agent-stripe auth update prod --context acct_...
+agent-stripe config path
+agent-stripe config show
+agent-stripe config set max_retries 2
 ```
 
 Investigation commands walk common Stripe object graphs and emit evidence records plus findings:

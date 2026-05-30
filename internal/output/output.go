@@ -4,10 +4,48 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"sync"
 
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 	"gopkg.in/yaml.v3"
 )
+
+var (
+	writersMu sync.RWMutex
+	stdout    io.Writer = os.Stdout
+	stderr    io.Writer = os.Stderr
+)
+
+func Stdout() io.Writer {
+	writersMu.RLock()
+	defer writersMu.RUnlock()
+	return stdout
+}
+
+func Stderr() io.Writer {
+	writersMu.RLock()
+	defer writersMu.RUnlock()
+	return stderr
+}
+
+func SetWritersForTest(out, err io.Writer) func() {
+	writersMu.Lock()
+	previousOut := stdout
+	previousErr := stderr
+	if out != nil {
+		stdout = out
+	}
+	if err != nil {
+		stderr = err
+	}
+	writersMu.Unlock()
+	return func() {
+		writersMu.Lock()
+		stdout = previousOut
+		stderr = previousErr
+		writersMu.Unlock()
+	}
+}
 
 type Format string
 
@@ -79,7 +117,7 @@ func printJSON(data any, prune bool) {
 	if !ok {
 		return
 	}
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(Stdout())
 	enc.SetIndent("", "  ")
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(cleaned)
@@ -90,7 +128,7 @@ func printYAML(data any, prune bool) {
 	if !ok {
 		return
 	}
-	enc := yaml.NewEncoder(os.Stdout)
+	enc := yaml.NewEncoder(Stdout())
 	enc.SetIndent(2)
 	_ = enc.Encode(cleaned)
 }

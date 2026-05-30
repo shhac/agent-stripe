@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
-	"os"
 	"time"
 
 	"github.com/shhac/agent-stripe/internal/api"
@@ -37,7 +36,7 @@ func ToAnySlice[T any](s []T) []any {
 func WritePaginatedList(items []any, pagination *output.Pagination, format string) {
 	f := output.ResolveFormat(format, output.FormatNDJSON)
 	if f == output.FormatNDJSON {
-		w := output.NewNDJSONWriter(os.Stdout)
+		w := output.NewNDJSONWriter(output.Stdout())
 		for _, item := range items {
 			_ = w.WriteItem(item)
 		}
@@ -95,7 +94,7 @@ func RequireFlag(flag, value, hint string) bool {
 	if hint != "" {
 		err = err.WithHint(hint)
 	}
-	output.WriteError(os.Stderr, err)
+	output.WriteError(output.Stderr(), err)
 	return false
 }
 

@@ -14,7 +14,13 @@ PROFILE SETUP
   agent-stripe auth check [profile]
   agent-stripe auth list
   agent-stripe auth default <profile>
+  agent-stripe auth update <profile> [--context <ctx>|--clear-context] [--api-version <version>] [--default]
   agent-stripe auth remove <profile>
+  agent-stripe config path
+  agent-stripe config show
+  agent-stripe config get max_retries|timeout_ms
+  agent-stripe config set max_retries|timeout_ms <non-negative-int>
+  agent-stripe config unset max_retries|timeout_ms
   agent-stripe payments usage
   agent-stripe connect usage
 
@@ -23,6 +29,7 @@ CONTEXT
   For a platform connected account, use the connected account ID.
   For organization key access to a platform-connected account, use <platform_acct>/<connected_acct>.
   The API key is stored in macOS Keychain; this CLI never prints it back.
+  Non-secret config is stored in XDG config, usually ~/.config/agent-stripe/config.json.
   Prefer --form when an LLM is guiding setup so the user types the key into an OS popup.
 
 TRIAGE STARTERS

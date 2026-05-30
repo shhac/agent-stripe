@@ -1,0 +1,170 @@
+package cli
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/shhac/agent-stripe/internal/config"
+	"github.com/shhac/agent-stripe/internal/output"
+)
+
+type cliTestHarness struct {
+	t      *testing.T
+	stdout bytes.Buffer
+	stderr bytes.Buffer
+}
+
+func newCLITestHarness(t *testing.T) *cliTestHarness {
+	t.Helper()
+	config.SetConfigDir(t.TempDir())
+	t.Cleanup(func() { config.SetConfigDir("") })
+	t.Setenv("AGENT_STRIPE_PROFILE", "")
+	t.Setenv("STRIPE_API_KEY", "")
+	t.Setenv("STRIPE_CONTEXT", "")
+	t.Setenv("STRIPE_API_VERSION", "")
+	t.Setenv("AGENT_STRIPE_BASE_URL", "")
+	h := &cliTestHarness{t: t}
+	restore := output.SetWritersForTest(&h.stdout, &h.stderr)
+	t.Cleanup(restore)
+	return h
+}
+
+func (h *cliTestHarness) run(args ...string) (string, string) {
+	h.t.Helper()
+	h.stdout.Reset()
+	h.stderr.Reset()
+	cmd := newRootCmd("test")
+	cmd.SetArgs(args)
+	if err := cmd.Execute(); err != nil {
+		h.t.Fatalf("agent-stripe %v failed: %v\nstdout:\n%s\nstderr:\n%s", args, err, h.stdout.String(), h.stderr.String())
+	}
+	return h.stdout.String(), h.stderr.String()
+}
+
+func TestConfigCommandsEditNonSecretDefaults(t *testing.T) {
+	h := newCLITestHarness(t)
+
+	stdout, _ := h.run("config", "path")
+	if !strings.Contains(stdout, "credentials.json") {
+		t.Fatalf("config path missing credentials index path: %s", stdout)
+	}
+
+	stdout, _ = h.run("config", "set", "max-retries", "4")
+	assertJSONField(t, stdout, "status", "set")
+	cfg := config.Read()
+	if cfg.Defaults.MaxRetries == nil || *cfg.Defaults.MaxRetries != 4 {
+		t.Fatalf("MaxRetries = %#v, want 4", cfg.Defaults.MaxRetries)
+	}
+
+	stdout, _ = h.run("config", "get", "max_retries")
+	assertJSONField(t, stdout, "value", float64(4))
+
+	stdout, _ = h.run("config", "show")
+	if strings.Contains(stdout, "sk_test") {
+		t.Fatalf("config show leaked secret-looking value: %s", stdout)
+	}
+	if !strings.Contains(stdout, `"max_retries": 4`) {
+		t.Fatalf("config show missing max_retries: %s", stdout)
+	}
+
+	stdout, _ = h.run("config", "unset", "max-retries")
+	assertJSONField(t, stdout, "status", "unset")
+	cfg = config.Read()
+	if cfg.Defaults.MaxRetries != nil {
+		t.Fatalf("MaxRetries = %#v, want nil after unset", *cfg.Defaults.MaxRetries)
+	}
+}
+
+func TestAuthUpdateEditsProfileMetadata(t *testing.T) {
+	h := newCLITestHarness(t)
+	if err := config.StoreProfile("prod", config.Profile{Context: "acct_old", APIVersion: "2024-01-01"}); err != nil {
+		t.Fatalf("StoreProfile() error = %v", err)
+	}
+	if err := config.StoreProfile("sandbox", config.Profile{}); err != nil {
+		t.Fatalf("StoreProfile() error = %v", err)
+	}
+
+	stdout, _ := h.run("auth", "update", "sandbox", "--context", "acct_new", "--api-version", "2025-06-30.basil", "--default")
+	assertJSONField(t, stdout, "status", "updated")
+
+	cfg := config.Read()
+	if cfg.DefaultProfile != "sandbox" {
+		t.Fatalf("DefaultProfile = %q, want sandbox", cfg.DefaultProfile)
+	}
+	profile := cfg.Profiles["sandbox"]
+	if profile.Context != "acct_new" || profile.APIVersion != "2025-06-30.basil" {
+		t.Fatalf("profile = %+v", profile)
+	}
+
+	stdout, _ = h.run("auth", "update", "sandbox", "--clear-context")
+	assertJSONField(t, stdout, "context", "")
+	if got := config.Read().Profiles["sandbox"].Context; got != "" {
+		t.Fatalf("Context = %q, want cleared", got)
+	}
+}
+
+func TestConfigDefaultsApplyToClientWhenFlagsOmitted(t *testing.T) {
+	h := newCLITestHarness(t)
+	if err := config.SetDefaultValue("max_retries", 5); err != nil {
+		t.Fatalf("SetDefaultValue(max_retries) error = %v", err)
+	}
+	if err := config.SetDefaultValue("timeout_ms", 1234); err != nil {
+		t.Fatalf("SetDefaultValue(timeout_ms) error = %v", err)
+	}
+	server := newBalanceServer(t)
+	defer server.Close()
+
+	_, stderr := h.run("--api-key", "sk_test_123", "--base-url", server.URL, "--debug", "balance", "get")
+	if !strings.Contains(stderr, `"max_retries":5`) {
+		t.Fatalf("stderr missing configured max_retries: %s", stderr)
+	}
+	if !strings.Contains(stderr, `"timeout_ms":1234`) {
+		t.Fatalf("stderr missing configured timeout_ms: %s", stderr)
+	}
+}
+
+func TestGlobalFlagsOverrideConfigDefaults(t *testing.T) {
+	h := newCLITestHarness(t)
+	if err := config.SetDefaultValue("max_retries", 5); err != nil {
+		t.Fatalf("SetDefaultValue(max_retries) error = %v", err)
+	}
+	if err := config.SetDefaultValue("timeout_ms", 1234); err != nil {
+		t.Fatalf("SetDefaultValue(timeout_ms) error = %v", err)
+	}
+	server := newBalanceServer(t)
+	defer server.Close()
+
+	_, stderr := h.run("--api-key", "sk_test_123", "--base-url", server.URL, "--debug", "--max-retries", "0", "--timeout", "88", "balance", "get")
+	if !strings.Contains(stderr, `"max_retries":0`) {
+		t.Fatalf("stderr missing flag max_retries: %s", stderr)
+	}
+	if !strings.Contains(stderr, `"timeout_ms":88`) {
+		t.Fatalf("stderr missing flag timeout_ms: %s", stderr)
+	}
+}
+
+func newBalanceServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/balance" {
+			t.Fatalf("path = %s, want /v1/balance", r.URL.Path)
+		}
+		w.Header().Set("Request-Id", "req_test")
+		_, _ = w.Write([]byte(`{"object":"balance","available":[],"pending":[]}`))
+	}))
+}
+
+func assertJSONField(t *testing.T, raw, key string, want any) {
+	t.Helper()
+	var got map[string]any
+	if err := json.Unmarshal([]byte(raw), &got); err != nil {
+		t.Fatalf("output is not JSON: %v\n%s", err, raw)
+	}
+	if got[key] != want {
+		t.Fatalf("%s = %#v, want %#v in %s", key, got[key], want, raw)
+	}
+}

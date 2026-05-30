@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -11,7 +12,13 @@ const DefaultAPIVersion = "2025-06-30.basil"
 
 type Config struct {
 	DefaultProfile string             `json:"default_profile,omitempty"`
+	Defaults       Defaults           `json:"defaults,omitempty"`
 	Profiles       map[string]Profile `json:"profiles"`
+}
+
+type Defaults struct {
+	TimeoutMS  *int `json:"timeout_ms,omitempty"`
+	MaxRetries *int `json:"max_retries,omitempty"`
 }
 
 type Profile struct {
@@ -45,6 +52,10 @@ func ConfigDir() string {
 
 func configPath() string {
 	return filepath.Join(ConfigDir(), "config.json")
+}
+
+func ConfigPath() string {
+	return configPath()
 }
 
 func Read() *Config {
@@ -126,8 +137,52 @@ func RemoveProfile(alias string) error {
 func SetDefault(alias string) error {
 	cfg := Read()
 	if _, ok := cfg.Profiles[alias]; !ok {
-		return nil
+		return fmt.Errorf("profile %q is not configured", alias)
 	}
 	cfg.DefaultProfile = alias
 	return Write(cfg)
+}
+
+func UpdateProfile(alias string, update func(Profile) Profile) error {
+	cfg := Read()
+	profile, ok := cfg.Profiles[alias]
+	if !ok {
+		return fmt.Errorf("profile %q is not configured", alias)
+	}
+	profile = update(profile)
+	if profile.APIVersion == "" {
+		profile.APIVersion = DefaultAPIVersion
+	}
+	cfg.Profiles[alias] = profile
+	return Write(cfg)
+}
+
+func SetDefaultValue(key string, value int) error {
+	cfg := Read()
+	switch key {
+	case "timeout_ms":
+		cfg.Defaults.TimeoutMS = intPtr(value)
+	case "max_retries":
+		cfg.Defaults.MaxRetries = intPtr(value)
+	default:
+		return fmt.Errorf("unknown config key %q", key)
+	}
+	return Write(cfg)
+}
+
+func UnsetDefaultValue(key string) error {
+	cfg := Read()
+	switch key {
+	case "timeout_ms":
+		cfg.Defaults.TimeoutMS = nil
+	case "max_retries":
+		cfg.Defaults.MaxRetries = nil
+	default:
+		return fmt.Errorf("unknown config key %q", key)
+	}
+	return Write(cfg)
+}
+
+func intPtr(value int) *int {
+	return &value
 }

@@ -2,12 +2,13 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-stripe/internal/cli/auth"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
+	"github.com/shhac/agent-stripe/internal/config"
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 func newRootCmd(version string) *cobra.Command {
@@ -21,6 +22,9 @@ func newRootCmd(version string) *cobra.Command {
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			applyConfiguredDefaults(cmd, globals)
+		},
 	}
 
 	root.PersistentFlags().StringVarP(&globals.Profile, "profile", "p", "", "Stripe profile alias (or AGENT_STRIPE_PROFILE)")
@@ -35,6 +39,7 @@ func newRootCmd(version string) *cobra.Command {
 	_ = root.PersistentFlags().MarkHidden("base-url")
 
 	registerUsageCommand(root)
+	registerConfig(root)
 	registerPaymentsDomain(root)
 	registerConnectDomain(root)
 	auth.Register(root, globalsFunc)
@@ -65,10 +70,21 @@ func newRootCmd(version string) *cobra.Command {
 	return root
 }
 
+func applyConfiguredDefaults(cmd *cobra.Command, globals *shared.GlobalFlags) {
+	cfg := config.Read()
+	flags := cmd.Root().PersistentFlags()
+	if cfg.Defaults.TimeoutMS != nil && !flags.Changed("timeout") {
+		globals.Timeout = *cfg.Defaults.TimeoutMS
+	}
+	if cfg.Defaults.MaxRetries != nil && !flags.Changed("max-retries") {
+		globals.MaxRetries = *cfg.Defaults.MaxRetries
+	}
+}
+
 func Execute(version string) error {
 	err := newRootCmd(version).Execute()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(output.Stderr(), err)
 	}
 	return err
 }

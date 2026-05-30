@@ -28,7 +28,9 @@ Use `agent-stripe` when investigating Stripe payment incidents, invoice question
 ```bash
 agent-stripe auth list
 agent-stripe auth add prod --form --context acct_...
+agent-stripe auth update prod --context acct_...
 agent-stripe auth check
+agent-stripe config show
 agent-stripe usage
 agent-stripe investigate usage
 agent-stripe balance get
@@ -109,3 +111,5 @@ Investigation output uses evidence records:
 Expanded nested Stripe objects are emitted as separate `entity` records and replaced by ID in the parent `data`, so navigation IDs stay visible and downstream commands can use the same Stripe-shaped fields. Long strings may be truncated with `truncated_fields`; rerun with `--expand-field <path>` or `--full`.
 
 Stripe `429` responses retry automatically with bounded exponential backoff and jitter. Use `--max-retries 0` for one-shot behavior or `--debug` to see retry records on stderr.
+
+Non-secret profile/config metadata lives in XDG config. API keys live in Keychain. Use `agent-stripe config show` or `agent-stripe config path` for config inspection; use `auth update` rather than editing JSON by hand.

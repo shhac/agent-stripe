@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	"github.com/shhac/agent-stripe/internal/config"
 	"github.com/shhac/agent-stripe/internal/credential"
+	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 	"github.com/shhac/agent-stripe/internal/output"
 )
 
@@ -26,8 +26,72 @@ func Register(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerDefault(auth)
 	registerList(auth)
 	registerRemove(auth)
+	registerUpdate(auth)
 
 	root.AddCommand(auth)
+}
+
+func registerUpdate(parent *cobra.Command) {
+	var contextValue string
+	var apiVersion string
+	var clearContext bool
+	var setDefault bool
+
+	cmd := &cobra.Command{
+		Use:   "update <profile>",
+		Short: "Update non-secret profile metadata",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !cmd.Flags().Changed("context") && !cmd.Flags().Changed("api-version") && !clearContext && !setDefault {
+				output.WriteError(output.Stderr(), agenterrors.New("no profile updates requested", agenterrors.FixableByAgent).
+					WithHint("Use --context, --clear-context, --api-version, or --default"))
+				return nil
+			}
+			if clearContext && cmd.Flags().Changed("context") {
+				output.WriteError(output.Stderr(), agenterrors.New("--context and --clear-context cannot be used together", agenterrors.FixableByAgent))
+				return nil
+			}
+
+			alias := args[0]
+			if err := config.UpdateProfile(alias, func(profile config.Profile) config.Profile {
+				if cmd.Flags().Changed("context") {
+					profile.Context = contextValue
+				}
+				if clearContext {
+					profile.Context = ""
+				}
+				if cmd.Flags().Changed("api-version") {
+					profile.APIVersion = apiVersion
+				}
+				return profile
+			}); err != nil {
+				output.WriteError(output.Stderr(), agenterrors.Wrap(err, agenterrors.FixableByHuman).
+					WithHint("Run 'agent-stripe auth list' to see configured profiles"))
+				return nil
+			}
+			if setDefault {
+				if err := config.SetDefault(alias); err != nil {
+					output.WriteError(output.Stderr(), agenterrors.Wrap(err, agenterrors.FixableByHuman))
+					return nil
+				}
+			}
+			cfg := config.Read()
+			profile := cfg.Profiles[alias]
+			shared.WriteItem(map[string]any{
+				"status":      "updated",
+				"profile":     alias,
+				"default":     cfg.DefaultProfile == alias,
+				"context":     profile.Context,
+				"api_version": profile.APIVersion,
+			}, "")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&contextValue, "context", "", "Default Stripe-Context for this profile")
+	cmd.Flags().BoolVar(&clearContext, "clear-context", false, "Clear this profile's default Stripe-Context")
+	cmd.Flags().StringVar(&apiVersion, "api-version", "", "Default Stripe API version")
+	cmd.Flags().BoolVar(&setDefault, "default", false, "Make this the default profile")
+	parent.AddCommand(cmd)
 }
 
 func registerAdd(parent *cobra.Command) {
@@ -45,7 +109,7 @@ func registerAdd(parent *cobra.Command) {
 			if form {
 				filledKey, err := promptAPIKeyViaDialog(cmd.Context(), alias, apiKey)
 				if err != nil {
-					output.WriteError(os.Stderr, err)
+					output.WriteError(output.Stderr(), err)
 					return nil
 				}
 				apiKey = filledKey
@@ -56,7 +120,7 @@ func registerAdd(parent *cobra.Command) {
 
 			storage, err := credential.Store(alias, apiKey)
 			if err != nil {
-				output.WriteError(os.Stderr, err)
+				output.WriteError(output.Stderr(), err)
 				return nil
 			}
 
@@ -64,7 +128,7 @@ func registerAdd(parent *cobra.Command) {
 				apiVersion = config.DefaultAPIVersion
 			}
 			if err := config.StoreProfile(alias, config.Profile{Context: contextValue, APIVersion: apiVersion}); err != nil {
-				output.WriteError(os.Stderr, err)
+				output.WriteError(output.Stderr(), err)
 				return nil
 			}
 
@@ -124,7 +188,7 @@ func registerDefault(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			alias := args[0]
 			if err := config.SetDefault(alias); err != nil {
-				output.WriteError(os.Stderr, err)
+				output.WriteError(output.Stderr(), err)
 				return nil
 			}
 			shared.WriteItem(map[string]any{
@@ -168,11 +232,11 @@ func registerRemove(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			alias := args[0]
 			if err := credential.Remove(alias); err != nil {
-				output.WriteError(os.Stderr, err)
+				output.WriteError(output.Stderr(), err)
 				return nil
 			}
 			if err := config.RemoveProfile(alias); err != nil {
-				output.WriteError(os.Stderr, err)
+				output.WriteError(output.Stderr(), err)
 				return nil
 			}
 			shared.WriteItem(map[string]any{
