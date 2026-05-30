@@ -16,19 +16,23 @@ type listFlag struct {
 }
 
 type resourceOptions struct {
-	use          string
-	aliases      []string
-	short        string
-	path         string
-	idName       string
-	searchHint   string
-	searchable   bool
-	listFlags    []listFlag
-	expandGet    bool
-	expandList   bool
-	lineItems    bool
-	previewPath  string
-	previewFlags []listFlag
+	use           string
+	aliases       []string
+	short         string
+	path          string
+	idName        string
+	getShort      string
+	listShort     string
+	searchShort   string
+	searchHint    string
+	searchable    bool
+	listFlags     []listFlag
+	expandGet     bool
+	expandList    bool
+	lineItems     bool
+	previewPath   string
+	previewFlags  []listFlag
+	extraCommands []func(shared.GlobalsFunc) *cobra.Command
 }
 
 func registerResource(root *cobra.Command, globals shared.GlobalsFunc, opts resourceOptions) {
@@ -48,6 +52,9 @@ func registerResource(root *cobra.Command, globals shared.GlobalsFunc, opts reso
 	if opts.previewPath != "" {
 		resource.AddCommand(newInvoicePreviewCommand(globals, opts))
 	}
+	for _, newCommand := range opts.extraCommands {
+		resource.AddCommand(newCommand(globals))
+	}
 	root.AddCommand(resource)
 }
 
@@ -55,7 +62,7 @@ func newResourceGetCommand(globals shared.GlobalsFunc, opts resourceOptions) *co
 	var expand []string
 	cmd := &cobra.Command{
 		Use:   "get <" + opts.idName + ">",
-		Short: "Retrieve a " + opts.idName,
+		Short: resourceText(opts.getShort, "Retrieve a "+opts.idName),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := url.Values{}
@@ -78,7 +85,7 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 	values := make(map[string]*string, len(opts.listFlags))
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List " + opts.use,
+		Short: resourceText(opts.listShort, "List "+opts.use),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := url.Values{}
 			api.AddLimit(params, limit)
@@ -112,7 +119,7 @@ func newResourceSearchCommand(globals shared.GlobalsFunc, opts resourceOptions) 
 	var page string
 	cmd := &cobra.Command{
 		Use:   "search",
-		Short: "Search " + opts.use + " with Stripe Search Query Language",
+		Short: resourceText(opts.searchShort, "Search "+opts.use+" with Stripe Search Query Language"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !shared.RequireFlag("query", query, opts.searchHint) {
 				return nil
@@ -127,6 +134,13 @@ func newResourceSearchCommand(globals shared.GlobalsFunc, opts resourceOptions) 
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
 	cmd.Flags().StringVar(&page, "page", "", "Search pagination cursor")
 	return cmd
+}
+
+func resourceText(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
 }
 
 func newInvoiceLineItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
