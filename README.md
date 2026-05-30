@@ -22,6 +22,7 @@ make build
 ./agent-stripe payment-intents get pi_... --expand latest_charge
 ./agent-stripe subscriptions get sub_... --expand latest_invoice --expand latest_invoice.payment_intent
 ./agent-stripe subscriptions invoices sub_... --status open
+./agent-stripe investigate usage
 ./agent-stripe investigate invoice-payment in_...
 ./agent-stripe investigate customer-card-payment --customer cus_... --last4 4242
 ./agent-stripe investigate subscription-renewal --metadata tenant_id=acme

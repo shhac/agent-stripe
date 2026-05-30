@@ -2,4 +2,5 @@
 /mockstripe
 /dist/
 /release/
+/.cache/
 /.DS_Store

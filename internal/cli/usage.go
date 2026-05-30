@@ -37,6 +37,9 @@ TRIAGE STARTERS
   agent-stripe balance get
   agent-stripe events list [--type charge.failed] [--created-gte <unix>] [--limit N]
   agent-stripe events get <evt_id>
+  agent-stripe customers list [--email <email>]
+  agent-stripe invoices get <in_id> [--expand payment_intent]
+  agent-stripe invoices line-items <in_id>
   agent-stripe payment-intents get <pi_id> [--expand latest_charge] [--expand customer]
   agent-stripe payment-intents search --query "metadata['order_id']:'123'"
   agent-stripe charges get <ch_id> [--expand payment_intent] [--expand balance_transaction]
@@ -44,9 +47,26 @@ TRIAGE STARTERS
   agent-stripe subscriptions get <sub_id> --expand latest_invoice --expand latest_invoice.payment_intent
   agent-stripe subscriptions list [--customer <cus_id>] [--status active|past_due|unpaid|all]
   agent-stripe subscriptions invoices <sub_id> [--status open]
+  agent-stripe payment-methods list --customer <cus_id> --type card
   agent-stripe disputes list [--charge <ch_id>] [--payment-intent <pi_id>]
+  agent-stripe refunds list [--payment-intent <pi_id>]
+  agent-stripe transfers list [--destination <acct_id>]
+  agent-stripe payouts get <po_id>
+  agent-stripe balance-transactions get <txn_id>
   agent-stripe accounts list
   agent-stripe accounts get <acct_id>
+
+INVESTIGATIONS
+  agent-stripe investigate usage
+  agent-stripe investigate customer-card-payment --customer <cus_id> --last4 4242
+  agent-stripe investigate invoice-payment <in_id>
+  agent-stripe investigate invoice-metadata <in_id>
+  agent-stripe investigate subscription-renewal --subscription <sub_id>
+  agent-stripe investigate subscription-renewal --metadata tenant_id=acme
+  agent-stripe investigate collection-risk --days 30
+  agent-stripe investigate incoming-payment <pi_id|ch_id|in_id>
+  agent-stripe investigate outgoing-payment <tr_id|po_id|acct_id>
+  agent-stripe investigate refund-recovery <re_id|trr_id|ch_id|pi_id> [--transfer <tr_id>]
 
 RAW READ-ONLY API
   agent-stripe api get /v1/payment_intents/pi_... [--query expand[]=latest_charge]

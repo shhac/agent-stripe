@@ -7,6 +7,21 @@
 
 The resource commands remain available for direct exploration, but investigation commands should encode common incident paths.
 
+## Adding A Workflow
+
+Each investigation class should be mostly independent:
+
+1. Add a focused file in `internal/cli/investigate_<domain>.go`.
+2. Add a `newInvestigate<Name>(globals shared.GlobalsFunc) *cobra.Command` factory.
+3. Register the factory in `investigationCommands` in `internal/cli/investigate.go`.
+4. Keep Stripe traversal methods near the workflow that owns them unless they are clearly shared.
+5. Emit raw Stripe objects as `entity` records and conclusions as `finding` records.
+6. Add mock fixtures/routes in `internal/mockstripe`.
+7. Add a mock-backed e2e test that proves the user-facing scenario works.
+8. Update `agent-stripe investigate usage`, top-level `usage`, this design doc, and the skill.
+
+Good workflows accept incident-language inputs (`in_...`, `pi_...`, `last4`, metadata, customer, account) and return enough evidence for an LLM to answer without issuing five follow-up raw API calls.
+
 ## Customer Card Last4
 
 Command:
@@ -110,3 +125,15 @@ agent-stripe investigate refund-recovery trr_... --transfer tr_...
 ```
 
 These distinguish Transfers, Payouts, connected Accounts, Refunds, and Transfer Reversals. For transfer reversals, Stripe nests the reversal under its parent transfer, so the command requires `--transfer` when given only a `trr_` ID.
+
+## Improvements To Prioritize
+
+- Add a `resolve` investigation that accepts any Stripe ID or invoice number and emits the likely object type plus recommended commands.
+- Add `customer-context` to gather customer, default payment method, recent invoices, recent PaymentIntents, open disputes, and active subscriptions.
+- Add `webhook-event` to explain what an event means and fetch the underlying object.
+- Add `dispute-response` to summarize dispute status, due date, reason, evidence fields, and related charge/customer.
+- Add `refund-status` to distinguish pending, failed, succeeded, reversed, and Connect `reverse_transfer` cases.
+- Add `payout-failure` to include balance transactions and connected-account external account requirements.
+- Add `subscription-cancel-risk` to summarize cancellations, trial endings, unpaid status, and upcoming invoice amount.
+- Add richer collection-risk checks for expiring cards, missing default payment methods, invoice retry windows, and `requires_action` PaymentIntents.
+- Add optional `--include-raw=false` or `--summary-only` once evidence payloads become too large for routine LLM use.

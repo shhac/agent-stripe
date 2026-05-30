@@ -1,0 +1,123 @@
+package cli
+
+import (
+	"context"
+	"net/url"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/shhac/agent-stripe/internal/api"
+	"github.com/shhac/agent-stripe/internal/cli/shared"
+)
+
+func newInvestigateIncomingPayment(globals shared.GlobalsFunc) *cobra.Command {
+	return &cobra.Command{
+		Use:   "incoming-payment <payment-intent-id|charge-id|invoice-id>",
+		Short: "Explain what happened to a customer payment to you",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
+				inv := investigator{ctx: ctx, client: client}
+				return inv.incomingPayment(args[0])
+			})
+		},
+	}
+}
+
+func (i investigator) incomingPayment(id string) ([]evidenceRecord, error) {
+	switch {
+	case strings.HasPrefix(id, "in_"):
+		return i.invoicePayment(id)
+	case strings.HasPrefix(id, "ch_"):
+		charge, err := i.get("/v1/charges/"+url.PathEscape(id), url.Values{})
+		if err != nil {
+			return nil, err
+		}
+		return i.paymentIncidentFromCharge(charge)
+	default:
+		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(id), url.Values{})
+		if err != nil {
+			return nil, err
+		}
+		return i.paymentIncidentFromPI(pi)
+	}
+}
+
+func (i investigator) paymentIncidentFromPI(pi map[string]any) ([]evidenceRecord, error) {
+	records := []evidenceRecord{entityRecord("payment_intent", pi)}
+	charge, err := i.latestChargeForPaymentIntent(pi)
+	if err != nil {
+		return nil, err
+	}
+	if charge != nil {
+		records = append(records, entityRecord("charge", charge))
+	}
+	records = append(records, i.relatedDisputesAndRefunds(pi, charge)...)
+	records = append(records, evidenceRecord{
+		Type:     "finding",
+		Severity: severityForPayment(pi, charge),
+		Summary:  paymentFailureSummary(pi, charge),
+	})
+	return records, nil
+}
+
+func (i investigator) paymentIncidentFromCharge(charge map[string]any) ([]evidenceRecord, error) {
+	records := []evidenceRecord{entityRecord("charge", charge)}
+	if piID := idFromValue(charge["payment_intent"]); piID != "" {
+		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{})
+		if err == nil {
+			records = append(records, entityRecord("payment_intent", pi))
+		}
+	}
+	records = append(records, i.relatedDisputesAndRefunds(nil, charge)...)
+	records = append(records, evidenceRecord{
+		Type:     "finding",
+		Severity: severityForPayment(nil, charge),
+		Summary:  paymentFailureSummary(nil, charge),
+	})
+	return records, nil
+}
+
+func (i investigator) relatedDisputesAndRefunds(pi, charge map[string]any) []evidenceRecord {
+	records := []evidenceRecord{}
+	params := url.Values{}
+	if charge != nil {
+		shared.AddString(params, "charge", mapString(charge, "id"))
+	}
+	if pi != nil {
+		shared.AddString(params, "payment_intent", mapString(pi, "id"))
+	}
+	if len(params) == 0 {
+		return records
+	}
+	if disputes, err := i.list("/v1/disputes", params); err == nil {
+		for _, dispute := range disputes {
+			records = append(records, entityRecord("dispute", dispute))
+		}
+	}
+	if refunds, err := i.list("/v1/refunds", params); err == nil {
+		for _, refund := range refunds {
+			records = append(records, entityRecord("refund", refund))
+		}
+	}
+	return records
+}
+
+func (i investigator) latestChargeForPaymentIntent(pi map[string]any) (map[string]any, error) {
+	if pi == nil {
+		return nil, nil
+	}
+	if charge, ok := pi["latest_charge"].(map[string]any); ok {
+		return charge, nil
+	}
+	chargeID := idFromValue(pi["latest_charge"])
+	if chargeID != "" {
+		return i.get("/v1/charges/"+url.PathEscape(chargeID), url.Values{})
+	}
+	charges, err := i.list("/v1/charges", url.Values{"payment_intent": []string{mapString(pi, "id")}, "limit": []string{"1"}})
+	if err != nil || len(charges) == 0 {
+		return nil, err
+	}
+	return charges[0], nil
+}
