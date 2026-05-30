@@ -44,6 +44,34 @@ func newInvestigateRefundRecovery(globals shared.GlobalsFunc) *cobra.Command {
 	return cmd
 }
 
+func newInvestigateRefundStatus(globals shared.GlobalsFunc) *cobra.Command {
+	return &cobra.Command{
+		Use:   "refund-status <refund-id>",
+		Short: "Explain refund state, related payment, and Connect reversal details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
+				inv := investigator{ctx: ctx, client: client}
+				return inv.refundStatus(args[0])
+			})
+		},
+	}
+}
+
+func newInvestigatePayoutFailure(globals shared.GlobalsFunc) *cobra.Command {
+	return &cobra.Command{
+		Use:   "payout-failure <payout-id>",
+		Short: "Explain payout failure details and related ledger movement",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
+				inv := investigator{ctx: ctx, client: client}
+				return inv.payoutFailure(args[0])
+			})
+		},
+	}
+}
+
 func (i investigator) outgoingPayment(id string) ([]evidenceRecord, error) {
 	switch {
 	case strings.HasPrefix(id, "tr_"):
@@ -103,4 +131,54 @@ func (i investigator) refundRecovery(id, transferID string) ([]evidenceRecord, e
 	default:
 		return i.incomingPayment(id)
 	}
+}
+
+func (i investigator) refundStatus(refundID string) ([]evidenceRecord, error) {
+	refund, err := i.get("/v1/refunds/"+url.PathEscape(refundID), url.Values{})
+	if err != nil {
+		return nil, err
+	}
+	records := []evidenceRecord{entityRecord("refund", refund)}
+	if chargeID := idFromValue(refund["charge"]); chargeID != "" {
+		charge, err := i.get("/v1/charges/"+url.PathEscape(chargeID), url.Values{})
+		if err == nil {
+			records = append(records, entityRecord("charge", charge))
+		}
+	}
+	if piID := idFromValue(refund["payment_intent"]); piID != "" {
+		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{})
+		if err == nil {
+			records = append(records, entityRecord("payment_intent", pi))
+		}
+	}
+	if transferID := idFromValue(refund["transfer"]); transferID != "" {
+		transfer, err := i.get("/v1/transfers/"+url.PathEscape(transferID), url.Values{})
+		if err == nil {
+			records = append(records, entityRecord("transfer", transfer))
+		}
+		if reversalID := idFromValue(refund["transfer_reversal"]); reversalID != "" {
+			reversal, err := i.get("/v1/transfers/"+url.PathEscape(transferID)+"/reversals/"+url.PathEscape(reversalID), url.Values{})
+			if err == nil {
+				records = append(records, entityRecord("transfer_reversal", reversal))
+			}
+		}
+	}
+	records = append(records, moneyMovementFinding("refund", refund))
+	return records, nil
+}
+
+func (i investigator) payoutFailure(payoutID string) ([]evidenceRecord, error) {
+	payout, err := i.get("/v1/payouts/"+url.PathEscape(payoutID), url.Values{})
+	if err != nil {
+		return nil, err
+	}
+	records := []evidenceRecord{entityRecord("payout", payout)}
+	if txnID := idFromValue(payout["balance_transaction"]); txnID != "" {
+		txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(txnID), url.Values{})
+		if err == nil {
+			records = append(records, entityRecord("balance_transaction", txn))
+		}
+	}
+	records = append(records, moneyMovementFinding("payout", payout))
+	return records, nil
 }

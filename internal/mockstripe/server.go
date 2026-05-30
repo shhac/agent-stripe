@@ -31,11 +31,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/account", s.handleSelfAccount)
 	s.mux.HandleFunc("/v1/balance", s.handleBalance)
+	s.mux.HandleFunc("/v1/checkout/sessions", s.handleCheckoutSessionsList)
+	s.mux.HandleFunc("/v1/checkout/sessions/", s.handleCheckoutSessionGetOrLines)
 	s.mux.HandleFunc("/v1/customers/search", s.handleCustomerSearch)
 	s.mux.HandleFunc("/v1/customers", s.handleCustomersList)
 	s.mux.HandleFunc("/v1/customers/", s.handleCustomerGet)
 	s.mux.HandleFunc("/v1/events", s.handleEventsList)
 	s.mux.HandleFunc("/v1/events/", s.handleEventGet)
+	s.mux.HandleFunc("/v1/products/search", s.handleProductSearch)
+	s.mux.HandleFunc("/v1/products", s.handleProductsList)
+	s.mux.HandleFunc("/v1/products/", s.handleProductGet)
+	s.mux.HandleFunc("/v1/prices/search", s.handlePriceSearch)
+	s.mux.HandleFunc("/v1/prices", s.handlePricesList)
+	s.mux.HandleFunc("/v1/prices/", s.handlePriceGet)
 	s.mux.HandleFunc("/v1/invoices/search", s.handleInvoiceSearch)
 	s.mux.HandleFunc("/v1/invoices/create_preview", s.handleInvoicePreview)
 	s.mux.HandleFunc("/v1/invoices/", s.handleInvoiceGetOrLines)
@@ -43,6 +51,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/payment_intents/search", s.handlePaymentIntentSearch)
 	s.mux.HandleFunc("/v1/payment_intents", s.handlePaymentIntentsList)
 	s.mux.HandleFunc("/v1/payment_intents/", s.handlePaymentIntentGet)
+	s.mux.HandleFunc("/v1/setup_intents", s.handleSetupIntentsList)
+	s.mux.HandleFunc("/v1/setup_intents/", s.handleSetupIntentGet)
 	s.mux.HandleFunc("/v1/payment_methods", s.handlePaymentMethodsList)
 	s.mux.HandleFunc("/v1/payment_methods/", s.handlePaymentMethodGet)
 	s.mux.HandleFunc("/v1/charges/search", s.handleChargeSearch)
@@ -64,6 +74,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/balance_transactions/", s.handleBalanceTransactionGet)
 	s.mux.HandleFunc("/v1/application_fees", s.handleApplicationFeesList)
 	s.mux.HandleFunc("/v1/application_fees/", s.handleApplicationFeeGet)
+	s.mux.HandleFunc("/v1/payment_links", s.handlePaymentLinksList)
+	s.mux.HandleFunc("/v1/payment_links/", s.handlePaymentLinkGet)
+	s.mux.HandleFunc("/v1/radar/early_fraud_warnings", s.handleEarlyFraudWarningsList)
+	s.mux.HandleFunc("/v1/radar/early_fraud_warnings/", s.handleEarlyFraudWarningGet)
 	s.mux.HandleFunc("/v1/accounts", s.handleAccountsList)
 	s.mux.HandleFunc("/v1/accounts/", s.handleAccountGet)
 }
@@ -110,6 +124,39 @@ func (s *Server) handleEventsList(w http.ResponseWriter, r *http.Request) {
 	writeList(w, "/v1/events", limit(items, r))
 }
 
+func (s *Server) handleCheckoutSessionsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := checkoutSessions()
+	if customer := r.URL.Query().Get("customer"); customer != "" {
+		items = filterByString(items, "customer", customer)
+	}
+	if pi := r.URL.Query().Get("payment_intent"); pi != "" {
+		items = filterByString(items, "payment_intent", pi)
+	}
+	if subscription := r.URL.Query().Get("subscription"); subscription != "" {
+		items = filterByString(items, "subscription", subscription)
+	}
+	if paymentLink := r.URL.Query().Get("payment_link"); paymentLink != "" {
+		items = filterByString(items, "payment_link", paymentLink)
+	}
+	writeList(w, "/v1/checkout/sessions", limit(items, r))
+}
+
+func (s *Server) handleCheckoutSessionGetOrLines(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	rest := strings.TrimPrefix(r.URL.Path, "/v1/checkout/sessions/")
+	if strings.HasSuffix(rest, "/line_items") {
+		id := strings.TrimSuffix(rest, "/line_items")
+		writeList(w, "/v1/checkout/sessions/"+id+"/line_items", limit(checkoutLineItems(id), r))
+		return
+	}
+	writeOneByID(w, checkoutSessions(), rest, "checkout.session")
+}
+
 func (s *Server) handleCustomersList(w http.ResponseWriter, r *http.Request) {
 	if !requireGet(w, r) {
 		return
@@ -148,6 +195,72 @@ func (s *Server) handleEventGet(w http.ResponseWriter, r *http.Request) {
 	writeOneByID(w, events(), id, "event")
 }
 
+func (s *Server) handleProductsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := products()
+	if active := r.URL.Query().Get("active"); active != "" {
+		items = filterByBoolString(items, "active", active)
+	}
+	writeList(w, "/v1/products", limit(items, r))
+}
+
+func (s *Server) handleProductSearch(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	if r.URL.Query().Get("query") == "" {
+		writeStripeError(w, http.StatusBadRequest, "invalid_request_error", "parameter_missing", "Missing required param: query")
+		return
+	}
+	writeSearchList(w, "/v1/products/search", limit(products(), r))
+}
+
+func (s *Server) handleProductGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/products/")
+	writeOneByID(w, products(), id, "product")
+}
+
+func (s *Server) handlePricesList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := prices()
+	if active := r.URL.Query().Get("active"); active != "" {
+		items = filterByBoolString(items, "active", active)
+	}
+	if product := r.URL.Query().Get("product"); product != "" {
+		items = filterByString(items, "product", product)
+	}
+	if typ := r.URL.Query().Get("type"); typ != "" {
+		items = filterByString(items, "type", typ)
+	}
+	writeList(w, "/v1/prices", limit(items, r))
+}
+
+func (s *Server) handlePriceSearch(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	if r.URL.Query().Get("query") == "" {
+		writeStripeError(w, http.StatusBadRequest, "invalid_request_error", "parameter_missing", "Missing required param: query")
+		return
+	}
+	writeSearchList(w, "/v1/prices/search", limit(prices(), r))
+}
+
+func (s *Server) handlePriceGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/prices/")
+	writeOneByID(w, prices(), id, "price")
+}
+
 func (s *Server) handlePaymentIntentsList(w http.ResponseWriter, r *http.Request) {
 	if !requireGet(w, r) {
 		return
@@ -172,6 +285,28 @@ func (s *Server) handlePaymentIntentGet(w http.ResponseWriter, r *http.Request) 
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/v1/payment_intents/")
 	writeOneByID(w, paymentIntents(), id, "payment_intent")
+}
+
+func (s *Server) handleSetupIntentsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := setupIntents()
+	if customer := r.URL.Query().Get("customer"); customer != "" {
+		items = filterByString(items, "customer", customer)
+	}
+	if pm := r.URL.Query().Get("payment_method"); pm != "" {
+		items = filterByString(items, "payment_method", pm)
+	}
+	writeList(w, "/v1/setup_intents", limit(items, r))
+}
+
+func (s *Server) handleSetupIntentGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/setup_intents/")
+	writeOneByID(w, setupIntents(), id, "setup_intent")
 }
 
 func (s *Server) handlePaymentMethodsList(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +338,9 @@ func (s *Server) handleChargesList(w http.ResponseWriter, r *http.Request) {
 	items := charges()
 	if pi := r.URL.Query().Get("payment_intent"); pi != "" {
 		items = filterByString(items, "payment_intent", pi)
+	}
+	if customer := r.URL.Query().Get("customer"); customer != "" {
+		items = filterByString(items, "customer", customer)
 	}
 	writeList(w, "/v1/charges", limit(items, r))
 }
@@ -468,6 +606,47 @@ func (s *Server) handleApplicationFeeGet(w http.ResponseWriter, r *http.Request)
 	writeOneByID(w, applicationFees(), id, "application_fee")
 }
 
+func (s *Server) handlePaymentLinksList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := paymentLinks()
+	if active := r.URL.Query().Get("active"); active != "" {
+		items = filterByBoolString(items, "active", active)
+	}
+	writeList(w, "/v1/payment_links", limit(items, r))
+}
+
+func (s *Server) handlePaymentLinkGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/payment_links/")
+	writeOneByID(w, paymentLinks(), id, "payment_link")
+}
+
+func (s *Server) handleEarlyFraudWarningsList(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	items := earlyFraudWarnings()
+	if charge := r.URL.Query().Get("charge"); charge != "" {
+		items = filterByString(items, "charge", charge)
+	}
+	if pi := r.URL.Query().Get("payment_intent"); pi != "" {
+		items = filterByString(items, "payment_intent", pi)
+	}
+	writeList(w, "/v1/radar/early_fraud_warnings", limit(items, r))
+}
+
+func (s *Server) handleEarlyFraudWarningGet(w http.ResponseWriter, r *http.Request) {
+	if !requireGet(w, r) {
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/radar/early_fraud_warnings/")
+	writeOneByID(w, earlyFraudWarnings(), id, "early_fraud_warning")
+}
+
 func (s *Server) handleAccountsList(w http.ResponseWriter, r *http.Request) {
 	if !requireGet(w, r) {
 		return
@@ -582,6 +761,17 @@ func filterByString(items []map[string]any, key, want string) []map[string]any {
 	filtered := make([]map[string]any, 0, len(items))
 	for _, item := range items {
 		if got, _ := item[key].(string); got == want {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+func filterByBoolString(items []map[string]any, key, want string) []map[string]any {
+	filtered := make([]map[string]any, 0, len(items))
+	wantBool := want == "true"
+	for _, item := range items {
+		if got, _ := item[key].(bool); got == wantBool {
 			filtered = append(filtered, item)
 		}
 	}

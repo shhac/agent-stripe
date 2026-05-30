@@ -96,6 +96,53 @@ func newInvestigateCollectionRisk(globals shared.GlobalsFunc) *cobra.Command {
 	return cmd
 }
 
+func newInvestigateSubscriptionCancelRisk(globals shared.GlobalsFunc) *cobra.Command {
+	var days int
+	var limit int
+	cmd := &cobra.Command{
+		Use:   "subscription-cancel-risk",
+		Short: "Find subscriptions likely to cancel, end trial, or stop billing soon",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runInvestigation(globals(), func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
+				inv := investigator{ctx: ctx, client: client}
+				params := url.Values{"status": []string{"all"}}
+				api.AddLimit(params, limit)
+				if days > 0 {
+					params.Set("current_period_end[lte]", strconv.FormatInt(time.Now().Add(time.Duration(days)*24*time.Hour).Unix(), 10))
+				}
+				subs, err := inv.list("/v1/subscriptions", params)
+				if err != nil {
+					return nil, err
+				}
+				records := []evidenceRecord{}
+				for _, sub := range subs {
+					risk := subscriptionCancelRisk(sub)
+					if risk == "" {
+						continue
+					}
+					records = append(records, entityRecord("subscription", sub))
+					records = append(records, evidenceRecord{
+						Type:     "finding",
+						Severity: "warning",
+						Summary:  risk,
+						Data: map[string]any{
+							"customer":     mapString(sub, "customer"),
+							"subscription": mapString(sub, "id"),
+						},
+					})
+				}
+				if len(records) == 0 {
+					records = append(records, evidenceRecord{Type: "finding", Severity: "info", Summary: "No subscription cancellation risks found in the inspected window."})
+				}
+				return records, nil
+			})
+		},
+	}
+	cmd.Flags().IntVar(&days, "days", 30, "Upcoming window in days")
+	cmd.Flags().IntVar(&limit, "limit", 25, "Maximum subscriptions to inspect")
+	return cmd
+}
+
 func (i investigator) findSubscriptions(subscription, customer, metadata string, limit int) ([]map[string]any, error) {
 	switch {
 	case subscription != "":
@@ -150,11 +197,57 @@ func (i investigator) collectionRisk(sub map[string]any) string {
 	if status == "past_due" || status == "unpaid" || status == "incomplete" {
 		return fmt.Sprintf("Customer %s has subscription %s in %s status; outreach about payment details is recommended.", mapString(sub, "customer"), mapString(sub, "id"), status)
 	}
+	pmID := idFromValue(sub["default_payment_method"])
+	if pmID == "" {
+		if customer, err := i.get("/v1/customers/"+url.PathEscape(mapString(sub, "customer")), url.Values{}); err == nil {
+			settings := mapAnyMap(customer, "invoice_settings")
+			pmID = idFromValue(settings["default_payment_method"])
+		}
+		if pmID == "" {
+			return fmt.Sprintf("Customer %s has subscription %s with no default payment method visible.", mapString(sub, "customer"), mapString(sub, "id"))
+		}
+	}
+	if pmID != "" {
+		if pm, err := i.get("/v1/payment_methods/"+url.PathEscape(pmID), url.Values{}); err == nil && cardExpiresSoon(pm, time.Now()) {
+			return fmt.Sprintf("Customer %s has subscription %s with card payment method %s expiring soon.", mapString(sub, "customer"), mapString(sub, "id"), pmID)
+		}
+	}
 	if invoiceID := idFromValue(sub["latest_invoice"]); invoiceID != "" {
 		invoice, err := i.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{})
 		if err == nil && !mapBool(invoice, "paid") && mapString(invoice, "status") == "open" {
 			return fmt.Sprintf("Customer %s has an open unpaid invoice %s for subscription %s.", mapString(sub, "customer"), invoiceID, mapString(sub, "id"))
 		}
+		if err == nil && idFromValue(invoice["payment_intent"]) != "" {
+			pi, piErr := i.paymentIntentForInvoice(invoice)
+			if piErr == nil && mapString(pi, "status") == "requires_action" {
+				return fmt.Sprintf("Customer %s has subscription %s with latest invoice PaymentIntent requiring action.", mapString(sub, "customer"), mapString(sub, "id"))
+			}
+		}
 	}
 	return ""
+}
+
+func subscriptionCancelRisk(sub map[string]any) string {
+	status := mapString(sub, "status")
+	if status == "canceled" || status == "unpaid" {
+		return fmt.Sprintf("Subscription %s for customer %s is %s.", mapString(sub, "id"), mapString(sub, "customer"), status)
+	}
+	if mapBool(sub, "cancel_at_period_end") {
+		return fmt.Sprintf("Subscription %s for customer %s is set to cancel at period end %v.", mapString(sub, "id"), mapString(sub, "customer"), mapValue(sub, "current_period_end"))
+	}
+	if trialEnd, ok := mapInt64(sub, "trial_end"); ok && trialEnd > 0 {
+		return fmt.Sprintf("Subscription %s for customer %s trial ends at %d.", mapString(sub, "id"), mapString(sub, "customer"), trialEnd)
+	}
+	return ""
+}
+
+func cardExpiresSoon(paymentMethod map[string]any, now time.Time) bool {
+	card := mapAnyMap(paymentMethod, "card")
+	year, yearOK := mapInt64(card, "exp_year")
+	month, monthOK := mapInt64(card, "exp_month")
+	if !yearOK || !monthOK || month < 1 || month > 12 {
+		return false
+	}
+	expiry := time.Date(int(year), time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
+	return expiry.Before(now.AddDate(0, 2, 0))
 }

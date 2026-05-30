@@ -28,6 +28,17 @@ func events() []map[string]any {
 				"object": paymentIntents()[0],
 			},
 		},
+		{
+			"id":          "evt_mock_invoice_failed",
+			"object":      "event",
+			"type":        "invoice.payment_failed",
+			"api_version": "2025-06-30.basil",
+			"created":     1760000500,
+			"livemode":    false,
+			"data": map[string]any{
+				"object": invoices()[1],
+			},
+		},
 	}
 }
 
@@ -62,6 +73,19 @@ func paymentIntents() []map[string]any {
 			},
 			"metadata": map[string]string{
 				"order_id": "order_failed",
+			},
+		},
+		{
+			"id":             "pi_mock_requires_action",
+			"object":         "payment_intent",
+			"amount":         5500,
+			"currency":       "usd",
+			"status":         "requires_action",
+			"customer":       "cus_mock_expiring",
+			"payment_method": "pm_mock_expiring",
+			"latest_charge":  "ch_mock_requires_action",
+			"metadata": map[string]string{
+				"order_id": "order_action",
 			},
 		},
 	}
@@ -122,6 +146,30 @@ func charges() []map[string]any {
 				},
 			},
 		},
+		{
+			"id":             "ch_mock_requires_action",
+			"object":         "charge",
+			"amount":         5500,
+			"currency":       "usd",
+			"status":         "failed",
+			"paid":           false,
+			"customer":       "cus_mock_expiring",
+			"payment_method": "pm_mock_expiring",
+			"payment_intent": "pi_mock_requires_action",
+			"outcome": map[string]any{
+				"type":           "issuer_declined",
+				"network_status": "requires_action",
+			},
+			"payment_method_details": map[string]any{
+				"type": "card",
+				"card": map[string]any{
+					"brand":     "visa",
+					"last4":     "0341",
+					"exp_month": 1,
+					"exp_year":  2026,
+				},
+			},
+		},
 	}
 }
 
@@ -177,6 +225,49 @@ func subscriptions() []map[string]any {
 			"cancel_at_period_end": false,
 			"metadata": map[string]string{
 				"tenant_id": "delinquent",
+			},
+		},
+		{
+			"id":                   "sub_mock_canceling",
+			"object":               "subscription",
+			"customer":             "cus_mock_123",
+			"status":               "active",
+			"collection_method":    "charge_automatically",
+			"latest_invoice":       "in_mock_paid",
+			"current_period_start": 1760000000,
+			"current_period_end":   1762592000,
+			"cancel_at_period_end": true,
+			"metadata": map[string]string{
+				"tenant_id": "acme",
+			},
+		},
+		{
+			"id":                     "sub_mock_expiring_card",
+			"object":                 "subscription",
+			"customer":               "cus_mock_expiring",
+			"status":                 "active",
+			"collection_method":      "charge_automatically",
+			"default_payment_method": "pm_mock_expiring",
+			"latest_invoice":         "in_mock_requires_action",
+			"current_period_start":   1760000000,
+			"current_period_end":     1762592000,
+			"cancel_at_period_end":   false,
+			"metadata": map[string]string{
+				"tenant_id": "expiring",
+			},
+		},
+		{
+			"id":                   "sub_mock_missing_pm",
+			"object":               "subscription",
+			"customer":             "cus_mock_missing_pm",
+			"status":               "active",
+			"collection_method":    "charge_automatically",
+			"latest_invoice":       "in_mock_missing_pm",
+			"current_period_start": 1760000000,
+			"current_period_end":   1762592000,
+			"cancel_at_period_end": false,
+			"metadata": map[string]string{
+				"tenant_id": "missing_pm",
 			},
 		},
 	}
@@ -250,6 +341,35 @@ func invoices() []map[string]any {
 			"attempt_count":        3,
 			"next_payment_attempt": 1760100000,
 		},
+		{
+			"id":                   "in_mock_requires_action",
+			"object":               "invoice",
+			"subscription":         "sub_mock_expiring_card",
+			"customer":             "cus_mock_expiring",
+			"status":               "open",
+			"paid":                 false,
+			"amount_due":           5500,
+			"amount_paid":          0,
+			"currency":             "usd",
+			"number":               "MOCK-0003",
+			"payment_intent":       "pi_mock_requires_action",
+			"attempt_count":        1,
+			"next_payment_attempt": 1760200000,
+		},
+		{
+			"id":             "in_mock_missing_pm",
+			"object":         "invoice",
+			"subscription":   "sub_mock_missing_pm",
+			"customer":       "cus_mock_missing_pm",
+			"status":         "draft",
+			"paid":           false,
+			"amount_due":     1200,
+			"amount_paid":    0,
+			"currency":       "usd",
+			"number":         "MOCK-0004",
+			"payment_intent": "",
+			"attempt_count":  0,
+		},
 	}
 }
 
@@ -279,6 +399,30 @@ func customers() []map[string]any {
 				"tenant_id": "delinquent",
 			},
 		},
+		{
+			"id":     "cus_mock_expiring",
+			"object": "customer",
+			"email":  "expiring@example.com",
+			"name":   "Mock Expiring",
+			"invoice_settings": map[string]any{
+				"default_payment_method": "pm_mock_expiring",
+			},
+			"metadata": map[string]string{
+				"tenant_id": "expiring",
+			},
+		},
+		{
+			"id":     "cus_mock_missing_pm",
+			"object": "customer",
+			"email":  "missingpm@example.com",
+			"name":   "Mock Missing PM",
+			"invoice_settings": map[string]any{
+				"default_payment_method": "",
+			},
+			"metadata": map[string]string{
+				"tenant_id": "missing_pm",
+			},
+		},
 	}
 }
 
@@ -306,6 +450,18 @@ func paymentMethods() []map[string]any {
 				"last4":     "0002",
 				"exp_month": 1,
 				"exp_year":  2025,
+			},
+		},
+		{
+			"id":       "pm_mock_expiring",
+			"object":   "payment_method",
+			"type":     "card",
+			"customer": "cus_mock_expiring",
+			"card": map[string]any{
+				"brand":     "visa",
+				"last4":     "0341",
+				"exp_month": 1,
+				"exp_year":  2026,
 			},
 		},
 	}
@@ -338,6 +494,7 @@ func refunds() []map[string]any {
 			"status":              "requires_action",
 			"failure_reason":      "lost_or_stolen_card",
 			"balance_transaction": "txn_mock_refund",
+			"transfer":            "tr_mock_failed",
 			"transfer_reversal":   "trr_mock_failed",
 		},
 	}
@@ -424,6 +581,125 @@ func applicationFees() []map[string]any {
 			"account":  "acct_mock_connected",
 		},
 	}
+}
+
+func products() []map[string]any {
+	return []map[string]any{
+		{
+			"id":          "prod_mock_basic",
+			"object":      "product",
+			"active":      true,
+			"name":        "Basic Plan",
+			"description": longMockDescription(),
+			"metadata": map[string]string{
+				"internal_product_id": "prod_internal_basic",
+			},
+		},
+	}
+}
+
+func prices() []map[string]any {
+	return []map[string]any{
+		{
+			"id":          "price_mock_basic",
+			"object":      "price",
+			"active":      true,
+			"type":        "recurring",
+			"currency":    "usd",
+			"unit_amount": 4200,
+			"product":     "prod_mock_basic",
+			"recurring": map[string]string{
+				"interval": "month",
+			},
+		},
+	}
+}
+
+func checkoutSessions() []map[string]any {
+	return []map[string]any{
+		{
+			"id":             "cs_mock_paid",
+			"object":         "checkout.session",
+			"customer":       "cus_mock_123",
+			"payment_intent": "pi_mock_succeeded",
+			"payment_link":   "plink_mock_basic",
+			"mode":           "payment",
+			"payment_status": "paid",
+			"amount_total":   4200,
+			"currency":       "usd",
+			"metadata": map[string]string{
+				"cart_id": "cart_123",
+			},
+		},
+	}
+}
+
+func checkoutLineItems(sessionID string) []map[string]any {
+	return []map[string]any{
+		{
+			"id":       "li_mock_" + sessionID,
+			"object":   "item",
+			"amount":   4200,
+			"currency": "usd",
+			"price":    prices()[0],
+			"quantity": 1,
+		},
+	}
+}
+
+func setupIntents() []map[string]any {
+	return []map[string]any{
+		{
+			"id":             "seti_mock_succeeded",
+			"object":         "setup_intent",
+			"customer":       "cus_mock_123",
+			"payment_method": "pm_mock_visa",
+			"status":         "succeeded",
+			"usage":          "off_session",
+		},
+	}
+}
+
+func paymentLinks() []map[string]any {
+	return []map[string]any{
+		{
+			"id":     "plink_mock_basic",
+			"object": "payment_link",
+			"active": true,
+			"url":    "https://buy.stripe.com/mock",
+			"line_items": map[string]any{
+				"object":   "list",
+				"has_more": false,
+				"data": []map[string]any{
+					{
+						"id":       "li_mock_payment_link",
+						"object":   "item",
+						"price":    "price_mock_basic",
+						"quantity": 1,
+					},
+				},
+			},
+		},
+	}
+}
+
+func earlyFraudWarnings() []map[string]any {
+	return []map[string]any{
+		{
+			"id":             "issfr_mock_123",
+			"object":         "radar.early_fraud_warning",
+			"charge":         "ch_mock_succeeded",
+			"payment_intent": "pi_mock_succeeded",
+			"fraud_type":     "misc",
+			"actionable":     true,
+		},
+	}
+}
+
+func longMockDescription() string {
+	return "This product description is intentionally long so investigation output can demonstrate truncation controls. " +
+		"Agents should see an explicit truncated_fields note and can rerun with --expand-field description or --full when this text matters. " +
+		"Basic navigation IDs remain visible even when verbose descriptive fields are shortened for token efficiency."
 }
 
 func accounts() []map[string]any {

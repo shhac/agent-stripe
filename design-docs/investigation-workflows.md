@@ -7,6 +7,8 @@
 
 The resource commands remain available for direct exploration, but investigation commands should encode common incident paths.
 
+Investigation output preserves Stripe-shaped `data` as much as possible. When Stripe returns an expanded nested object in a field that can also be an ID string, the parent field is replaced by the nested object's ID and the nested object is emitted as its own `entity` record. Long strings are truncated by default, with `truncated_fields` pointing at `--expand-field <path>` or `--full`.
+
 ## Adding A Workflow
 
 Each investigation class should be mostly independent:
@@ -21,6 +23,23 @@ Each investigation class should be mostly independent:
 8. Update `agent-stripe investigate usage`, top-level `usage`, this design doc, and the skill.
 
 Good workflows accept incident-language inputs (`in_...`, `pi_...`, `last4`, metadata, customer, account) and return enough evidence for an LLM to answer without issuing five follow-up raw API calls.
+
+Current workflow families:
+
+- `resolve`: identify a Stripe ID or invoice number and suggest next command.
+- `customer-context`: gather recent objects around a customer.
+- `customer-card-payment`: bounded last4 lookup for a customer.
+- `webhook-event`: fetch event and underlying object.
+- `dispute-response`: summarize dispute response status and related payment.
+- `invoice-payment`: invoice to PaymentIntent to latest Charge.
+- `invoice-metadata`: invoice to PaymentIntent metadata.
+- `subscription-renewal`: latest and next invoice/payment.
+- `collection-risk`: payment-method outreach candidates.
+- `subscription-cancel-risk`: cancellations and trial/period end risk.
+- `incoming-payment`: failed/successful customer payment explanation.
+- `outgoing-payment`: transfers, payouts, and connected account readiness.
+- `refund-status` and `refund-recovery`: refund and transfer reversal state.
+- `payout-failure`: payout failure plus ledger movement.
 
 ## Customer Card Last4
 
@@ -128,12 +147,27 @@ These distinguish Transfers, Payouts, connected Accounts, Refunds, and Transfer 
 
 ## Improvements To Prioritize
 
-- Add a `resolve` investigation that accepts any Stripe ID or invoice number and emits the likely object type plus recommended commands.
-- Add `customer-context` to gather customer, default payment method, recent invoices, recent PaymentIntents, open disputes, and active subscriptions.
-- Add `webhook-event` to explain what an event means and fetch the underlying object.
-- Add `dispute-response` to summarize dispute status, due date, reason, evidence fields, and related charge/customer.
-- Add `refund-status` to distinguish pending, failed, succeeded, reversed, and Connect `reverse_transfer` cases.
-- Add `payout-failure` to include balance transactions and connected-account external account requirements.
-- Add `subscription-cancel-risk` to summarize cancellations, trial endings, unpaid status, and upcoming invoice amount.
-- Add richer collection-risk checks for expiring cards, missing default payment methods, invoice retry windows, and `requires_action` PaymentIntents.
-- Add optional `--include-raw=false` or `--summary-only` once evidence payloads become too large for routine LLM use.
+The next likely common triage scenarios:
+
+- Checkout conversion: `Checkout Session -> PaymentIntent/Subscription -> line items -> product/price metadata`.
+- Duplicate charge: customer, amount, card last4, and time window to identify repeated PaymentIntents/Charges.
+- Unknown statement descriptor: descriptor to Charge/PaymentIntent/Customer candidates.
+- Refund missing from bank: Refund -> BalanceTransaction -> Charge -> bank/card network status.
+- Failed setup for future billing: SetupIntent -> PaymentMethod -> mandate/last setup error.
+- SCA required: PaymentIntent or Invoice requiring customer action, with hosted invoice/payment links when available.
+- Product entitlement mismatch: invoice/checkout line items -> Price -> Product metadata/internal IDs.
+- Account onboarding blocker: connected Account requirements and recent failed payouts/transfers.
+- Balance discrepancy: BalanceTransaction ledger around a charge/refund/transfer/payout.
+- Fraud triage: Early Fraud Warning -> Charge -> Customer -> Refund/Dispute state.
+- Webhook delivery confusion: Event type, request ID/idempotency key, underlying object, and likely handler action.
+- Subscription quantity/price drift: Subscription items -> Price/Product metadata over time.
+- Tax or total mismatch: Invoice line items, discounts, tax amounts, customer tax IDs, and final amount paid.
+- Payment Link issue: Payment Link -> Checkout Sessions -> line items -> resulting PaymentIntent/Subscription.
+- Connect refund liability: Refund with reverse transfer/application fee refund and connected account balance state.
+
+Potential output improvements:
+
+- `--summary-only` for high-level finding records without entity payloads.
+- `--include-object <type>` / `--exclude-object <type>` for large investigations.
+- `--redact-field <path>` for customer PII-heavy contexts.
+- `--limit-related N` to cap fan-out per related collection.
