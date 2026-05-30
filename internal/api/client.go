@@ -48,22 +48,12 @@ func NewClient(opts Options) *Client {
 	}
 }
 
-func NewTestClient(baseURL string, opts Options) *Client {
-	c := NewClient(opts)
-	c.baseURL = baseURL
-	return c
-}
-
 func (c *Client) SetDebug(enabled bool) {
 	c.debug = enabled
 }
 
 func (c *Client) Get(ctx context.Context, path string, params url.Values) (json.RawMessage, error) {
 	return c.do(ctx, http.MethodGet, buildPath(path, params), nil)
-}
-
-func (c *Client) RawGet(ctx context.Context, path string, params url.Values) (json.RawMessage, error) {
-	return c.Get(ctx, path, params)
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body any) (json.RawMessage, error) {

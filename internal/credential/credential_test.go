@@ -89,14 +89,6 @@ func TestStoreGetListRemove(t *testing.T) {
 		t.Fatalf("Get() = %q", got)
 	}
 
-	names, err := List()
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-	if len(names) != 1 || names[0] != "prod" {
-		t.Fatalf("List() = %v", names)
-	}
-
 	if err := Remove("prod"); err != nil {
 		t.Fatalf("Remove() error = %v", err)
 	}

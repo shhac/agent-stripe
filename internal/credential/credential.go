@@ -103,15 +103,3 @@ func Remove(name string) error {
 	delete(index, name)
 	return writeIndex(index)
 }
-
-func List() ([]string, error) {
-	index, err := readIndex()
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(index))
-	for name := range index {
-		names = append(names, name)
-	}
-	return names, nil
-}
