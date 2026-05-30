@@ -101,6 +101,8 @@ Investigation output keeps Stripe-shaped `data` while emitting nested expanded S
 make test
 make build
 make build-mock
+make mock
+make mock-dev ARGS="events list --type charge.failed"
 make dev ARGS="usage"
 ```
 
@@ -110,9 +112,12 @@ Run a local mock server for safe e2e development:
 
 ```bash
 make build-mock
+./mockstripe --routes
 ./mockstripe --addr 127.0.0.1:12111
 AGENT_STRIPE_BASE_URL=http://127.0.0.1:12111 agent-stripe --api-key sk_test_mock events list
 ```
+
+`make mock-dev ARGS="..."` runs `agent-stripe` against the default mock server URL with a mock API key.
 
 ## License
 

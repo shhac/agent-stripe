@@ -56,3 +56,54 @@ func TestServerRejectsMissingAuth(t *testing.T) {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
+
+func TestServerIndexExposesRouteMapWithoutAuth(t *testing.T) {
+	server := httptest.NewServer(NewServer())
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	var body struct {
+		Service string   `json:"service"`
+		Routes  []string `json:"routes"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	if body.Service != "mockstripe" {
+		t.Fatalf("service = %q, want mockstripe", body.Service)
+	}
+	if len(body.Routes) == 0 {
+		t.Fatal("expected route map")
+	}
+}
+
+func TestRoutesIncludesDescriptorResources(t *testing.T) {
+	routes := Routes()
+	for _, want := range []string{
+		"GET  /v1/payment_intents",
+		"GET  /v1/payment_intents/search",
+		"GET  /v1/payment_intents/<id>",
+		"GET  /v1/radar/early_fraud_warnings/<id>",
+	} {
+		if !hasRoute(routes, want) {
+			t.Fatalf("Routes() missing %q in %#v", want, routes)
+		}
+	}
+}
+
+func hasRoute(routes []string, want string) bool {
+	for _, route := range routes {
+		if route == want {
+			return true
+		}
+	}
+	return false
+}

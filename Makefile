@@ -9,6 +9,12 @@ build:
 build-mock:
 	GOCACHE=$(GOCACHE) go build -buildvcs=false -o mockstripe ./cmd/mockstripe
 
+mock:
+	GOCACHE=$(GOCACHE) go run ./cmd/mockstripe
+
+mock-dev:
+	AGENT_STRIPE_BASE_URL=http://127.0.0.1:12111 STRIPE_API_KEY=sk_test_mock GOCACHE=$(GOCACHE) go run ./cmd/agent-stripe $(ARGS)
+
 test:
 	GOCACHE=$(GOCACHE) go test ./... -count=1
 
@@ -33,4 +39,4 @@ dev:
 vet:
 	GOCACHE=$(GOCACHE) go vet ./...
 
-.PHONY: build build-mock test test-short lint fmt clean dev vet
+.PHONY: build build-mock mock mock-dev test test-short lint fmt clean dev vet

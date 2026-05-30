@@ -40,6 +40,16 @@ AGENT_STRIPE_BASE_URL=http://127.0.0.1:12111
 
 There is also a hidden `--base-url` flag for subprocess e2e tests. It should stay hidden from normal user help so LLM-facing guidance continues to emphasize real Stripe profile setup rather than internal test plumbing.
 
+For development:
+
+```bash
+make mock
+make mock-dev ARGS="events list --type charge.failed"
+mockstripe --routes
+```
+
+The mock server exposes a route map at `GET /` without authentication. Stripe-shaped `/v1/...` endpoints still require a mock Basic API key so tests exercise auth wiring.
+
 ## Fixtures
 
 Fixtures should be intentionally small but incident-shaped:
