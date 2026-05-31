@@ -37,13 +37,7 @@ func ToAnySlice[T any](s []T) []any {
 func WritePaginatedList(items []any, pagination *output.Pagination, format string) {
 	f := output.ResolveFormat(format, output.FormatNDJSON)
 	if f == output.FormatNDJSON {
-		w := output.NewNDJSONWriter(output.Stdout())
-		for _, item := range items {
-			_ = w.WriteItem(item)
-		}
-		if pagination != nil {
-			_ = w.WritePagination(pagination)
-		}
+		WriteNDJSONItems(items, pagination)
 		return
 	}
 	result := map[string]any{"data": items}
@@ -51,6 +45,16 @@ func WritePaginatedList(items []any, pagination *output.Pagination, format strin
 		result["pagination"] = pagination
 	}
 	output.Print(result, f, true)
+}
+
+func WriteNDJSONItems(items []any, pagination *output.Pagination) {
+	w := output.NewNDJSONWriter(output.Stdout())
+	for _, item := range items {
+		_ = w.WriteItem(item)
+	}
+	if pagination != nil {
+		_ = w.WritePagination(pagination)
+	}
 }
 
 func WriteItem(data any, format string) {
@@ -80,14 +84,6 @@ func WriteRawList(raw json.RawMessage, format string, redaction output.Redaction
 	if err != nil {
 		return err
 	}
-	items := make([]any, 0, len(list.Data))
-	for _, item := range list.Data {
-		var decoded any
-		if err := json.Unmarshal(item, &decoded); err != nil {
-			return agenterrors.Wrap(err, agenterrors.FixableByAgent)
-		}
-		items = append(items, output.Redact(decoded, redaction))
-	}
 	var pagination *output.Pagination
 	if list.HasMore || list.NextPage != "" {
 		pagination = &output.Pagination{
@@ -95,8 +91,38 @@ func WriteRawList(raw json.RawMessage, format string, redaction output.Redaction
 			NextPage: list.NextPage,
 		}
 	}
+	if output.ResolveFormat(format, output.FormatNDJSON) == output.FormatNDJSON {
+		w := output.NewNDJSONWriter(output.Stdout())
+		for _, item := range list.Data {
+			decoded, err := redactedRawListItem(item, redaction)
+			if err != nil {
+				return err
+			}
+			_ = w.WriteItem(decoded)
+		}
+		if pagination != nil {
+			_ = w.WritePagination(pagination)
+		}
+		return nil
+	}
+	items := make([]any, 0, len(list.Data))
+	for _, item := range list.Data {
+		decoded, err := redactedRawListItem(item, redaction)
+		if err != nil {
+			return err
+		}
+		items = append(items, decoded)
+	}
 	WritePaginatedList(items, pagination, format)
 	return nil
+}
+
+func redactedRawListItem(item json.RawMessage, redaction output.RedactionOptions) (any, error) {
+	var decoded any
+	if err := json.Unmarshal(item, &decoded); err != nil {
+		return nil, agenterrors.Wrap(err, agenterrors.FixableByAgent)
+	}
+	return output.Redact(decoded, redaction), nil
 }
 
 func RequireFlag(flag, value, hint string) bool {

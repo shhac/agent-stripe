@@ -143,17 +143,39 @@ func getSummarizedList(flags *shared.GlobalFlags, path string, params url.Values
 		if err != nil {
 			return err
 		}
+		if output.ResolveFormat(flags.Format, output.FormatNDJSON) == output.FormatNDJSON {
+			w := output.NewNDJSONWriter(output.Stdout())
+			for _, rawItem := range list.Data {
+				item, err := summarizedListItem(rawItem, summarize)
+				if err != nil {
+					return err
+				}
+				_ = w.WriteItem(item)
+			}
+			if pagination := listPagination(list); pagination != nil {
+				_ = w.WritePagination(pagination)
+			}
+			return nil
+		}
 		items := make([]any, 0, len(list.Data))
 		for _, rawItem := range list.Data {
-			var item map[string]any
-			if err := json.Unmarshal(rawItem, &item); err != nil {
-				return agenterrors.Wrap(err, agenterrors.FixableByAgent)
+			item, err := summarizedListItem(rawItem, summarize)
+			if err != nil {
+				return err
 			}
-			items = append(items, summarize(item))
+			items = append(items, item)
 		}
 		shared.WritePaginatedList(items, listPagination(list), flags.Format)
 		return nil
 	})
+}
+
+func summarizedListItem(raw json.RawMessage, summarize func(map[string]any) map[string]any) (map[string]any, error) {
+	var item map[string]any
+	if err := json.Unmarshal(raw, &item); err != nil {
+		return nil, agenterrors.Wrap(err, agenterrors.FixableByAgent)
+	}
+	return summarize(item), nil
 }
 
 func listPagination(list *api.ListResponse) *output.Pagination {
