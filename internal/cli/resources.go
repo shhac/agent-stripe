@@ -17,6 +17,9 @@ func newInvoiceLineItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 		Short: "List line items on an invoice",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateExpectedStripeID(args[0], "invoice"); err != nil {
+				return writeCLIError(err)
+			}
 			params := url.Values{}
 			shared.AddLimit(params, limit)
 			shared.AddString(params, "starting_after", startingAfter)
@@ -58,6 +61,7 @@ func registerCustomers(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:      "Customer lookup and search",
 		path:       "/v1/customers",
 		idName:     "customer-id",
+		idKind:     "customer",
 		searchable: true,
 		searchHint: "Use a Stripe search query, for example email:'person@example.com' or metadata['tenant_id']:'acme'",
 		listFlags: []listFlag{
@@ -72,6 +76,7 @@ func registerInvoices(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:      "Invoice lookup, line items, and payment bridge investigation",
 		path:       "/v1/invoices",
 		idName:     "invoice-id",
+		idKind:     "invoice",
 		searchable: true,
 		searchHint: "Use a Stripe search query, for example number:'ABC-0001' or metadata['order_id']:'123'",
 		usageText:  invoicesUsageText,
@@ -101,6 +106,7 @@ func registerPaymentMethods(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:  "PaymentMethod lookup by customer and type",
 		path:   "/v1/payment_methods",
 		idName: "payment-method-id",
+		idKind: "payment_method",
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
 			{name: "type", param: "type", help: "PaymentMethod type, for example card or us_bank_account"},
@@ -114,6 +120,7 @@ func registerRefunds(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:     "Refund lookup for failed or reversed customer payments",
 		path:      "/v1/refunds",
 		idName:    "refund-id",
+		idKind:    "refund",
 		expandGet: true,
 		listFlags: []listFlag{
 			{name: "charge", param: "charge", help: "Charge ID"},
@@ -128,6 +135,7 @@ func registerTransfers(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:     "Connect transfer lookup and reversals",
 		path:      "/v1/transfers",
 		idName:    "transfer-id",
+		idKind:    "transfer",
 		expandGet: true,
 		listFlags: []listFlag{
 			{name: "destination", param: "destination", help: "Connected account ID"},
@@ -142,6 +150,7 @@ func registerPayouts(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:     "Payout lookup for Stripe balance to bank movement",
 		path:      "/v1/payouts",
 		idName:    "payout-id",
+		idKind:    "payout",
 		expandGet: true,
 		listFlags: []listFlag{
 			{name: "status", param: "status", help: "Payout status"},
@@ -157,6 +166,7 @@ func registerBalanceTransactions(root *cobra.Command, globals shared.GlobalsFunc
 		short:   "Balance transaction ledger lookup",
 		path:    "/v1/balance_transactions",
 		idName:  "balance-transaction-id",
+		idKind:  "balance_transaction",
 		listFlags: []listFlag{
 			{name: "type", param: "type", help: "Balance transaction type"},
 			{name: "payout", param: "payout", help: "Payout ID"},
@@ -171,6 +181,7 @@ func registerApplicationFees(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:     "Connect application fee lookup",
 		path:      "/v1/application_fees",
 		idName:    "application-fee-id",
+		idKind:    "application_fee",
 		expandGet: true,
 		listFlags: []listFlag{
 			{name: "charge", param: "charge", help: "Charge ID"},
@@ -184,6 +195,7 @@ func registerProducts(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:      "Product catalog lookup and search",
 		path:       "/v1/products",
 		idName:     "product-id",
+		idKind:     "product",
 		searchable: true,
 		searchHint: "Use a Stripe search query, for example metadata['internal_id']:'prod_123' or name:'Pro'",
 		listFlags: []listFlag{
@@ -198,6 +210,7 @@ func registerPrices(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:      "Price lookup and search",
 		path:       "/v1/prices",
 		idName:     "price-id",
+		idKind:     "price",
 		searchable: true,
 		searchHint: "Use a Stripe search query, for example product:'prod_...' or metadata['internal_id']:'price_123'",
 		expandGet:  true,
@@ -216,6 +229,7 @@ func registerSetupIntents(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:     "SetupIntent lookup for saved payment method setup",
 		path:      "/v1/setup_intents",
 		idName:    "setup-intent-id",
+		idKind:    "setup_intent",
 		expandGet: true,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
@@ -231,6 +245,7 @@ func registerPaymentLinks(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:     "Payment Link lookup",
 		path:      "/v1/payment_links",
 		idName:    "payment-link-id",
+		idKind:    "payment_link",
 		expandGet: true,
 		listFlags: []listFlag{
 			{name: "active", param: "active", help: "Filter by active=true|false"},
@@ -245,6 +260,7 @@ func registerEarlyFraudWarnings(root *cobra.Command, globals shared.GlobalsFunc)
 		short:     "Radar early fraud warning lookup",
 		path:      "/v1/radar/early_fraud_warnings",
 		idName:    "early-fraud-warning-id",
+		idKind:    "early_fraud_warning",
 		expandGet: true,
 		listFlags: []listFlag{
 			{name: "charge", param: "charge", help: "Charge ID"},
@@ -260,6 +276,7 @@ func registerCheckoutSessions(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:     "Checkout Session lookup and line items",
 		path:      "/v1/checkout/sessions",
 		idName:    "checkout-session-id",
+		idKind:    "checkout_session",
 		getShort:  "Retrieve a Checkout Session",
 		listShort: "List Checkout Sessions",
 		expandGet: true,
@@ -284,6 +301,9 @@ func newCheckoutSessionLineItemsCommand(globals shared.GlobalsFunc) *cobra.Comma
 		Short: "List Checkout Session line items",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateExpectedStripeID(args[0], "checkout_session"); err != nil {
+				return writeCLIError(err)
+			}
 			params := url.Values{}
 			shared.AddLimit(params, limit)
 			shared.AddString(params, "starting_after", lineItemsStartingAfter)

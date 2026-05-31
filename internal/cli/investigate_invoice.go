@@ -46,6 +46,9 @@ func newInvestigateInvoiceMetadata(globals shared.GlobalsFunc, outputOpts *inves
 					}
 					invoiceID = mapString(found[0], "id")
 				}
+				if err := validateExpectedStripeID(invoiceID, "invoice"); err != nil {
+					return nil, err
+				}
 				invoice, err := inv.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{})
 				if err != nil {
 					return nil, err
@@ -77,6 +80,9 @@ func newInvestigateInvoiceMetadata(globals shared.GlobalsFunc, outputOpts *inves
 }
 
 func (i investigator) invoicePayment(invoiceID string) ([]evidenceRecord, error) {
+	if err := validateExpectedStripeID(invoiceID, "invoice"); err != nil {
+		return nil, err
+	}
 	invoice, err := i.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{})
 	if err != nil {
 		return nil, err

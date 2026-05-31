@@ -15,6 +15,7 @@ func registerSubscriptions(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:       "Subscription lifecycle, invoice, and item investigation",
 		path:        "/v1/subscriptions",
 		idName:      "subscription-id",
+		idKind:      "subscription",
 		getShort:    "Retrieve a subscription by ID",
 		listShort:   "List subscriptions; defaults to NDJSON",
 		searchShort: "Search subscriptions with Stripe Search Query Language",
@@ -46,6 +47,9 @@ func newSubscriptionItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 		Short: "List subscription items for a subscription",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateExpectedStripeID(args[0], "subscription"); err != nil {
+				return writeCLIError(err)
+			}
 			params := url.Values{"subscription": []string{args[0]}}
 			shared.AddLimit(params, limit)
 			shared.AddString(params, "starting_after", startingAfter)
@@ -72,6 +76,9 @@ func newSubscriptionInvoicesCommand(globals shared.GlobalsFunc) *cobra.Command {
 		Short: "List invoices for a subscription",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateExpectedStripeID(args[0], "subscription"); err != nil {
+				return writeCLIError(err)
+			}
 			params := url.Values{"subscription": []string{args[0]}}
 			shared.AddLimit(params, limit)
 			shared.AddString(params, "status", invoiceStatus)

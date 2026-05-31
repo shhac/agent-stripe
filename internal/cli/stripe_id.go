@@ -1,0 +1,135 @@
+package cli
+
+import (
+	"fmt"
+	"strings"
+
+	agenterrors "github.com/shhac/agent-stripe/internal/errors"
+	"github.com/shhac/agent-stripe/internal/output"
+)
+
+type stripeIDKind struct {
+	Kind               string
+	Display            string
+	Prefixes           []string
+	GetCommand         string
+	InvestigateCommand string
+}
+
+var stripeIDKinds = []stripeIDKind{
+	{Kind: "transfer_reversal", Display: "transfer reversal", Prefixes: []string{"trr_"}, InvestigateCommand: "agent-stripe investigate refund-recovery --transfer <transfer-id>"},
+	{Kind: "payment_intent", Display: "PaymentIntent", Prefixes: []string{"pi_"}, GetCommand: "agent-stripe payment-intents get", InvestigateCommand: "agent-stripe investigate incoming-payment"},
+	{Kind: "setup_intent", Display: "SetupIntent", Prefixes: []string{"seti_"}, GetCommand: "agent-stripe setup-intents get"},
+	{Kind: "checkout_session", Display: "Checkout Session", Prefixes: []string{"cs_"}, GetCommand: "agent-stripe checkout-sessions get"},
+	{Kind: "early_fraud_warning", Display: "early fraud warning", Prefixes: []string{"issfr_"}, GetCommand: "agent-stripe early-fraud-warnings get"},
+	{Kind: "balance_transaction", Display: "balance transaction", Prefixes: []string{"txn_"}, GetCommand: "agent-stripe balance-transactions get"},
+	{Kind: "application_fee", Display: "application fee", Prefixes: []string{"fee_"}, GetCommand: "agent-stripe application-fees get"},
+	{Kind: "payment_link", Display: "Payment Link", Prefixes: []string{"plink_"}, GetCommand: "agent-stripe payment-links get"},
+	{Kind: "payment_method", Display: "PaymentMethod", Prefixes: []string{"pm_"}, GetCommand: "agent-stripe payment-methods get"},
+	{Kind: "subscription_item", Display: "subscription item", Prefixes: []string{"si_"}},
+	{Kind: "customer", Display: "customer", Prefixes: []string{"cus_"}, GetCommand: "agent-stripe customers get", InvestigateCommand: "agent-stripe investigate customer-context --customer"},
+	{Kind: "invoice", Display: "invoice", Prefixes: []string{"in_"}, GetCommand: "agent-stripe invoices get", InvestigateCommand: "agent-stripe investigate invoice-payment"},
+	{Kind: "charge", Display: "charge", Prefixes: []string{"ch_"}, GetCommand: "agent-stripe charges get", InvestigateCommand: "agent-stripe investigate incoming-payment"},
+	{Kind: "subscription", Display: "subscription", Prefixes: []string{"sub_"}, GetCommand: "agent-stripe subscriptions get", InvestigateCommand: "agent-stripe investigate subscription-renewal --subscription"},
+	{Kind: "dispute", Display: "dispute", Prefixes: []string{"dp_"}, GetCommand: "agent-stripe disputes get", InvestigateCommand: "agent-stripe investigate dispute-response"},
+	{Kind: "refund", Display: "refund", Prefixes: []string{"re_"}, GetCommand: "agent-stripe refunds get", InvestigateCommand: "agent-stripe investigate refund-status"},
+	{Kind: "transfer", Display: "transfer", Prefixes: []string{"tr_"}, GetCommand: "agent-stripe transfers get", InvestigateCommand: "agent-stripe investigate outgoing-payment"},
+	{Kind: "payout", Display: "payout", Prefixes: []string{"po_"}, GetCommand: "agent-stripe payouts get", InvestigateCommand: "agent-stripe investigate payout-failure"},
+	{Kind: "account", Display: "account", Prefixes: []string{"acct_"}, GetCommand: "agent-stripe accounts get", InvestigateCommand: "agent-stripe investigate outgoing-payment"},
+	{Kind: "event", Display: "event", Prefixes: []string{"evt_"}, GetCommand: "agent-stripe events get", InvestigateCommand: "agent-stripe investigate webhook-event"},
+	{Kind: "price", Display: "price", Prefixes: []string{"price_"}, GetCommand: "agent-stripe prices get"},
+	{Kind: "product", Display: "product", Prefixes: []string{"prod_"}, GetCommand: "agent-stripe products get"},
+}
+
+func classifyStripeID(id string) (stripeIDKind, bool) {
+	for _, kind := range stripeIDKinds {
+		for _, prefix := range kind.Prefixes {
+			if strings.HasPrefix(id, prefix) {
+				return kind, true
+			}
+		}
+	}
+	return stripeIDKind{}, false
+}
+
+func stripeIDKindByName(name string) (stripeIDKind, bool) {
+	for _, kind := range stripeIDKinds {
+		if kind.Kind == name {
+			return kind, true
+		}
+	}
+	return stripeIDKind{}, false
+}
+
+func validateExpectedStripeID(id, expectedKind string) error {
+	if expectedKind == "" {
+		return nil
+	}
+	actual, ok := classifyStripeID(id)
+	if !ok || actual.Kind == expectedKind {
+		return nil
+	}
+	expected, ok := stripeIDKindByName(expectedKind)
+	if !ok {
+		return nil
+	}
+	return unexpectedStripeIDError(id, actual, expected)
+}
+
+func validateAllowedStripeID(id string, allowedKinds ...string) error {
+	actual, ok := classifyStripeID(id)
+	if !ok {
+		return nil
+	}
+	for _, allowed := range allowedKinds {
+		if actual.Kind == allowed {
+			return nil
+		}
+	}
+	allowed := make([]stripeIDKind, 0, len(allowedKinds))
+	for _, name := range allowedKinds {
+		if kind, ok := stripeIDKindByName(name); ok {
+			allowed = append(allowed, kind)
+		}
+	}
+	return unexpectedStripeIDForInvestigationError(id, actual, allowed)
+}
+
+func unexpectedStripeIDError(id string, actual, expected stripeIDKind) *agenterrors.APIError {
+	msg := fmt.Sprintf("%s looks like a %s ID (%s), but this command expects %s ID (%s)",
+		id, actual.Display, strings.Join(actual.Prefixes, " or "), expected.Display, strings.Join(expected.Prefixes, " or "))
+	return agenterrors.New(msg, agenterrors.FixableByAgent).WithHint(idMismatchHint(id, actual, expected))
+}
+
+func unexpectedStripeIDForInvestigationError(id string, actual stripeIDKind, allowed []stripeIDKind) *agenterrors.APIError {
+	expected := make([]string, 0, len(allowed))
+	for _, kind := range allowed {
+		expected = append(expected, kind.Display+" ID ("+strings.Join(kind.Prefixes, " or ")+")")
+	}
+	msg := fmt.Sprintf("%s looks like a %s ID (%s), but this investigation expects %s",
+		id, actual.Display, strings.Join(actual.Prefixes, " or "), strings.Join(expected, ", "))
+	return agenterrors.New(msg, agenterrors.FixableByAgent).WithHint(idMismatchHint(id, actual, stripeIDKind{}))
+}
+
+func idMismatchHint(id string, actual, expected stripeIDKind) string {
+	hints := []string{}
+	if actual.GetCommand != "" {
+		hints = append(hints, "use '"+actual.GetCommand+" "+id+"'")
+	}
+	if actual.InvestigateCommand != "" {
+		hints = append(hints, "or '"+actual.InvestigateCommand+" "+id+"'")
+	}
+	if expected.InvestigateCommand != "" {
+		hints = append(hints, "for relationship-aware triage, try '"+expected.InvestigateCommand+" <"+expected.Kind+"-id>'")
+	}
+	if len(hints) == 0 {
+		return "Run 'agent-stripe investigate resolve " + id + "' to identify the object and choose the next command"
+	}
+	hints = append(hints, "or run 'agent-stripe investigate resolve "+id+"'")
+	return strings.Join(hints, "; ")
+}
+
+func writeCLIError(err error) error {
+	output.WriteError(output.Stderr(), err)
+	return nil
+}

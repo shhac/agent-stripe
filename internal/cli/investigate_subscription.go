@@ -177,6 +177,9 @@ func newInvestigateSubscriptionAmountChange(globals shared.GlobalsFunc, outputOp
 func (i investigator) findSubscriptions(subscription, customer, metadata string, limit int) ([]map[string]any, error) {
 	switch {
 	case subscription != "":
+		if err := validateExpectedStripeID(subscription, "subscription"); err != nil {
+			return nil, err
+		}
 		sub, err := i.get("/v1/subscriptions/"+url.PathEscape(subscription), url.Values{})
 		if err != nil {
 			return nil, err
@@ -216,6 +219,9 @@ type subscriptionItemsBundle struct {
 }
 
 func (i investigator) subscriptionItemsBundle(subscriptionID string) (*subscriptionItemsBundle, error) {
+	if err := validateExpectedStripeID(subscriptionID, "subscription"); err != nil {
+		return nil, err
+	}
 	records := []evidenceRecord{}
 	sub, err := i.get("/v1/subscriptions/"+url.PathEscape(subscriptionID), url.Values{})
 	if err != nil {

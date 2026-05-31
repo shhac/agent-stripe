@@ -22,6 +22,9 @@ func newInvestigateWebhookEvent(globals shared.GlobalsFunc, outputOpts *investig
 }
 
 func (i investigator) webhookEvent(eventID string) ([]evidenceRecord, error) {
+	if err := validateExpectedStripeID(eventID, "event"); err != nil {
+		return nil, err
+	}
 	event, err := i.get("/v1/events/"+url.PathEscape(eventID), url.Values{})
 	if err != nil {
 		return nil, err

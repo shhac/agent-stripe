@@ -12,6 +12,7 @@ func registerCharges(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:       "Charge lookup and search",
 		path:        "/v1/charges",
 		idName:      "charge-id",
+		idKind:      "charge",
 		getShort:    "Retrieve a charge by ID",
 		listShort:   "List charges",
 		searchShort: "Search charges with Stripe Search Query Language",

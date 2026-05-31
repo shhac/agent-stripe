@@ -29,6 +29,9 @@ func newInvestigateCustomerContext(globals shared.GlobalsFunc, outputOpts *inves
 }
 
 func (i investigator) customerContext(customer string, limit int) ([]evidenceRecord, error) {
+	if err := validateExpectedStripeID(customer, "customer"); err != nil {
+		return nil, err
+	}
 	records := []evidenceRecord{}
 	customerObj, err := i.get("/v1/customers/"+url.PathEscape(customer), url.Values{})
 	if err != nil {

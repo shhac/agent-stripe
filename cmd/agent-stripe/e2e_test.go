@@ -172,6 +172,41 @@ func TestCLINewResourcePrimitivesAgainstMockStripe(t *testing.T) {
 	}
 }
 
+func TestCLIWrongIDPrefixHintsAgainstMockStripe(t *testing.T) {
+	checks := []struct {
+		name  string
+		args  []string
+		wants []string
+	}{
+		{
+			name:  "resource get rejects known wrong prefix",
+			args:  []string{"invoices", "get", "pi_mock_succeeded"},
+			wants: []string{`"fixable_by":"agent"`, `looks like a PaymentIntent ID`, `this command expects invoice ID`, `agent-stripe payment-intents get pi_mock_succeeded`, `agent-stripe investigate incoming-payment pi_mock_succeeded`},
+		},
+		{
+			name:  "nested resource rejects known wrong prefix",
+			args:  []string{"invoices", "line-items", "pi_mock_succeeded"},
+			wants: []string{`"fixable_by":"agent"`, `looks like a PaymentIntent ID`, `this command expects invoice ID`},
+		},
+		{
+			name:  "investigation rejects unrecoverable known prefix",
+			args:  []string{"investigate", "incoming-payment", "sub_mock_active"},
+			wants: []string{`"fixable_by":"agent"`, `looks like a subscription ID`, `this investigation expects invoice ID`, `agent-stripe subscriptions get sub_mock_active`, `agent-stripe investigate subscription-renewal --subscription sub_mock_active`},
+		},
+		{
+			name:  "recoverable investigation still accepts related prefixes",
+			args:  []string{"investigate", "incoming-payment", "ch_mock_succeeded"},
+			wants: []string{`"object":"charge"`, `"id":"ch_mock_succeeded"`, `"last4":"4242"`},
+		},
+	}
+	for _, check := range checks {
+		t.Run(check.name, func(t *testing.T) {
+			out := runMockCLI(t, check.args...)
+			assertContains(t, out, check.wants...)
+		})
+	}
+}
+
 func TestCLICursorFlagsAreMutuallyExclusiveAgainstMockStripe(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	allArgs := []string{"run", "./cmd/agent-stripe", "--api-key", "sk_test_mock", "--base-url", runner.server.URL, "customers", "list", "--starting-after", "cus_mock_123", "--ending-before", "cus_mock_456"}

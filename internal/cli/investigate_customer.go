@@ -24,6 +24,9 @@ func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *i
 				return nil
 			}
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+				if err := validateExpectedStripeID(customer, "customer"); err != nil {
+					return nil, err
+				}
 				params := url.Values{"customer": []string{customer}}
 				shared.AddLimit(params, limit)
 				charges, err := inv.list("/v1/charges", params)

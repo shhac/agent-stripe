@@ -23,6 +23,9 @@ func newInvestigateIncomingPayment(globals shared.GlobalsFunc, outputOpts *inves
 }
 
 func (i investigator) incomingPayment(id string) ([]evidenceRecord, error) {
+	if err := validateAllowedStripeID(id, "invoice", "charge", "payment_intent"); err != nil {
+		return nil, err
+	}
 	switch {
 	case strings.HasPrefix(id, "in_"):
 		return i.invoicePayment(id)

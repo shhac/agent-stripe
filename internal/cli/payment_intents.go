@@ -13,6 +13,7 @@ func registerPaymentIntents(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:       "PaymentIntent lookup and search",
 		path:        "/v1/payment_intents",
 		idName:      "payment-intent-id",
+		idKind:      "payment_intent",
 		getShort:    "Retrieve a PaymentIntent by ID",
 		listShort:   "List PaymentIntents; use search for richer filters",
 		searchShort: "Search PaymentIntents with Stripe Search Query Language",

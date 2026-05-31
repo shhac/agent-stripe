@@ -29,6 +29,9 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 		Short: "Retrieve a connected account by ID",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateExpectedStripeID(args[0], "account"); err != nil {
+				return writeCLIError(err)
+			}
 			return shared.GetRawItem(globals(), "/v1/accounts/"+url.PathEscape(args[0]), url.Values{})
 		},
 	})

@@ -12,6 +12,7 @@ func registerDisputes(root *cobra.Command, globals shared.GlobalsFunc) {
 		short:     "Dispute lookup and evidence-status triage",
 		path:      "/v1/disputes",
 		idName:    "dispute-id",
+		idKind:    "dispute",
 		getShort:  "Retrieve a dispute by ID",
 		listShort: "List disputes, optionally by charge or PaymentIntent",
 		listFlags: []listFlag{

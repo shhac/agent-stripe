@@ -20,6 +20,7 @@ type resourceOptions struct {
 	short         string
 	path          string
 	idName        string
+	idKind        string
 	getShort      string
 	listShort     string
 	searchShort   string
@@ -59,6 +60,9 @@ func newResourceGetCommand(globals shared.GlobalsFunc, opts resourceOptions) *co
 		Short: resourceText(opts.getShort, "Retrieve a "+opts.idName),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateExpectedStripeID(args[0], opts.idKind); err != nil {
+				return writeCLIError(err)
+			}
 			params := url.Values{}
 			shared.AddExpand(params, expand)
 			return shared.GetRawItem(globals(), opts.path+"/"+url.PathEscape(args[0]), params)

@@ -23,6 +23,9 @@ func newInvestigateDisputeResponse(globals shared.GlobalsFunc, outputOpts *inves
 }
 
 func (i investigator) disputeResponse(disputeID string) ([]evidenceRecord, error) {
+	if err := validateExpectedStripeID(disputeID, "dispute"); err != nil {
+		return nil, err
+	}
 	dispute, err := i.get("/v1/disputes/"+url.PathEscape(disputeID), url.Values{})
 	if err != nil {
 		return nil, err

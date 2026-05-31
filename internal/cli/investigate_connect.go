@@ -67,6 +67,9 @@ func newInvestigatePayoutFailure(globals shared.GlobalsFunc, outputOpts *investi
 }
 
 func (i investigator) outgoingPayment(id string) ([]evidenceRecord, error) {
+	if err := validateAllowedStripeID(id, "transfer", "payout", "account"); err != nil {
+		return nil, err
+	}
 	switch {
 	case strings.HasPrefix(id, "tr_"):
 		transfer, err := i.get("/v1/transfers/"+url.PathEscape(id), url.Values{})
@@ -105,6 +108,9 @@ func (i investigator) outgoingPayment(id string) ([]evidenceRecord, error) {
 }
 
 func (i investigator) refundRecovery(id, transferID string) ([]evidenceRecord, error) {
+	if err := validateAllowedStripeID(id, "refund", "transfer_reversal", "charge", "payment_intent"); err != nil {
+		return nil, err
+	}
 	switch {
 	case strings.HasPrefix(id, "re_"):
 		refund, err := i.get("/v1/refunds/"+url.PathEscape(id), url.Values{})
@@ -128,6 +134,9 @@ func (i investigator) refundRecovery(id, transferID string) ([]evidenceRecord, e
 }
 
 func (i investigator) refundStatus(refundID string) ([]evidenceRecord, error) {
+	if err := validateExpectedStripeID(refundID, "refund"); err != nil {
+		return nil, err
+	}
 	refund, err := i.get("/v1/refunds/"+url.PathEscape(refundID), url.Values{})
 	if err != nil {
 		return nil, err
@@ -162,6 +171,9 @@ func (i investigator) refundStatus(refundID string) ([]evidenceRecord, error) {
 }
 
 func (i investigator) payoutFailure(payoutID string) ([]evidenceRecord, error) {
+	if err := validateExpectedStripeID(payoutID, "payout"); err != nil {
+		return nil, err
+	}
 	payout, err := i.get("/v1/payouts/"+url.PathEscape(payoutID), url.Values{})
 	if err != nil {
 		return nil, err

@@ -25,6 +25,14 @@ func newInvestigateResolve(globals shared.GlobalsFunc, outputOpts *investigation
 func (i investigator) resolve(value string) ([]evidenceRecord, error) {
 	object, path, next := resolvePath(value)
 	if path == "" {
+		if object != "" {
+			return []evidenceRecord{{
+				Type:     "finding",
+				Severity: "warning",
+				Summary:  "Resolved " + value + " as " + object + ", but it requires a parent object to retrieve directly.",
+				Command:  next + value,
+			}}, nil
+		}
 		found, err := i.list("/v1/invoices/search", url.Values{"query": []string{stripeSearchEquals("number", value)}, "limit": []string{"1"}})
 		if err != nil {
 			return nil, err
@@ -64,6 +72,8 @@ func resolvePath(id string) (object, path, commandPrefix string) {
 		return "dispute", "/v1/disputes", "agent-stripe investigate dispute-response "
 	case strings.HasPrefix(id, "re_"):
 		return "refund", "/v1/refunds", "agent-stripe investigate refund-status "
+	case strings.HasPrefix(id, "trr_"):
+		return "transfer_reversal", "", "agent-stripe investigate refund-recovery --transfer <transfer-id> "
 	case strings.HasPrefix(id, "tr_"):
 		return "transfer", "/v1/transfers", "agent-stripe investigate outgoing-payment "
 	case strings.HasPrefix(id, "po_"):
@@ -76,6 +86,14 @@ func resolvePath(id string) (object, path, commandPrefix string) {
 		return "payment_method", "/v1/payment_methods", "agent-stripe payment-methods get "
 	case strings.HasPrefix(id, "seti_"):
 		return "setup_intent", "/v1/setup_intents", "agent-stripe setup-intents get "
+	case strings.HasPrefix(id, "txn_"):
+		return "balance_transaction", "/v1/balance_transactions", "agent-stripe balance-transactions get "
+	case strings.HasPrefix(id, "fee_"):
+		return "application_fee", "/v1/application_fees", "agent-stripe application-fees get "
+	case strings.HasPrefix(id, "plink_"):
+		return "payment_link", "/v1/payment_links", "agent-stripe payment-links get "
+	case strings.HasPrefix(id, "issfr_"):
+		return "early_fraud_warning", "/v1/radar/early_fraud_warnings", "agent-stripe early-fraud-warnings get "
 	case strings.HasPrefix(id, "cs_"):
 		return "checkout.session", "/v1/checkout/sessions", "agent-stripe checkout-sessions get "
 	case strings.HasPrefix(id, "price_"):
