@@ -64,7 +64,7 @@ func TestRedactSensitiveFieldsByDefault(t *testing.T) {
 	if _, ok := metadata["@redacted"]; ok {
 		t.Fatalf("nested @redacted note present: %#v", metadata)
 	}
-	notes, ok := redacted["@redacted"].([]any)
+	notes, ok := redacted["@redacted"].([]RedactionNote)
 	if !ok {
 		t.Fatalf("@redacted note missing: %#v", redacted)
 	}
@@ -95,11 +95,10 @@ func TestRedactHonorsExposeByPathOrKey(t *testing.T) {
 	}
 }
 
-func assertRedactionPath(t *testing.T, notes []any, path string) {
+func assertRedactionPath(t *testing.T, notes []RedactionNote, path string) {
 	t.Helper()
 	for _, note := range notes {
-		item, ok := note.(map[string]any)
-		if ok && item["path"] == path {
+		if note.Path == path {
 			return
 		}
 	}

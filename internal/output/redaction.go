@@ -10,7 +10,7 @@ type RedactionOptions struct {
 
 const RedactedString = "[REDACTED]"
 
-type redactionNote struct {
+type RedactionNote struct {
 	Path       string `json:"path"`
 	Reason     string `json:"reason"`
 	ExposeHint string `json:"expose_hint"`
@@ -43,12 +43,12 @@ func Redact(data any, opts RedactionOptions) any {
 		return result
 	}
 	if item, ok := result.(map[string]any); ok {
-		item["@redacted"] = notesAsAny(notes)
+		item["@redacted"] = notes
 	}
 	return result
 }
 
-func redactValue(value any, path, currentObject string, expose map[string]bool) (any, []redactionNote) {
+func redactValue(value any, path, currentObject string, expose map[string]bool) (any, []RedactionNote) {
 	switch v := value.(type) {
 	case map[string]any:
 		return redactMap(v, path, currentObject, expose)
@@ -59,16 +59,16 @@ func redactValue(value any, path, currentObject string, expose map[string]bool) 
 	}
 }
 
-func redactMap(item map[string]any, path, currentObject string, expose map[string]bool) (map[string]any, []redactionNote) {
+func redactMap(item map[string]any, path, currentObject string, expose map[string]bool) (map[string]any, []RedactionNote) {
 	if object, ok := item["object"].(string); ok && object != "" {
 		currentObject = object
 	}
 	out := make(map[string]any, len(item))
-	var notes []redactionNote
+	var notes []RedactionNote
 	for key, value := range item {
 		fieldPath := joinRedactionPath(path, key)
 		if shouldRedactField(key, fieldPath, currentObject) && !isExposed(key, fieldPath, expose) {
-			note := redactionNote{
+			note := RedactionNote{
 				Path:       fieldPath,
 				Reason:     "sensitive_field",
 				ExposeHint: "--expose " + fieldPath,
@@ -91,9 +91,9 @@ func redactedPlaceholder(value any) any {
 	return RedactedString
 }
 
-func redactSlice(items []any, path, currentObject string, expose map[string]bool) ([]any, []redactionNote) {
+func redactSlice(items []any, path, currentObject string, expose map[string]bool) ([]any, []RedactionNote) {
 	out := make([]any, len(items))
-	var notes []redactionNote
+	var notes []RedactionNote
 	for idx, item := range items {
 		itemPath := path + "[]"
 		redacted, childNotes := redactValue(item, itemPath, currentObject, expose)
@@ -150,18 +150,6 @@ func exposeSet(values []string) map[string]bool {
 
 func normalizeExpose(value string) string {
 	return strings.Trim(strings.ToLower(strings.TrimSpace(value)), ".")
-}
-
-func notesAsAny(notes []redactionNote) []any {
-	out := make([]any, len(notes))
-	for idx, note := range notes {
-		out[idx] = map[string]any{
-			"path":        note.Path,
-			"reason":      note.Reason,
-			"expose_hint": note.ExposeHint,
-		}
-	}
-	return out
 }
 
 func joinRedactionPath(base, key string) string {
