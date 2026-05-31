@@ -7,6 +7,8 @@
 - Investigation commands default to NDJSON evidence records.
 - Errors are JSON on stderr with `error`, `fixable_by`, and usually `hint`.
 
+Some list commands return compact summaries by default because their Stripe objects can carry bulky nested payloads or sensitive person/payment details. Use `--full` on that list command for full redacted objects, or use `get <id>` for one focused object. On compact list commands, `--expand` requires `--full`.
+
 ## Evidence Records
 
 Investigation commands emit `entity` and `finding` records:

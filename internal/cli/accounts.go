@@ -10,7 +10,6 @@ import (
 	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
-	"github.com/shhac/agent-stripe/internal/output"
 )
 
 func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
@@ -166,16 +165,6 @@ func addCapabilitiesSummary(summary, account map[string]any) {
 	}
 	if len(out) > 0 {
 		summary["capabilities"] = out
-	}
-}
-
-func listPagination(list *api.ListResponse) *output.Pagination {
-	if !list.HasMore && list.NextPage == "" {
-		return nil
-	}
-	return &output.Pagination{
-		HasMore:  list.HasMore,
-		NextPage: list.NextPage,
 	}
 }
 

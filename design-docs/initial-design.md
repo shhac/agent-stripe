@@ -60,7 +60,7 @@ Examples:
 
 ## Output contract
 
-Lists default to NDJSON so an LLM can stream, truncate, and resume investigation without parsing a large JSON array. Single-resource commands default to pretty JSON. Errors are JSON on stderr with:
+Lists default to NDJSON so an LLM can stream, truncate, and resume investigation without parsing a large JSON array. List commands that commonly carry bulky nested payloads or sensitive person/payment details use compact summaries by default and expose `--full` for full redacted Stripe objects. On compact list commands, `--expand` requires `--full` so expanded payloads are never silently discarded. Single-resource commands default to pretty JSON. Errors are JSON on stderr with:
 
 - `error`
 - `fixable_by`: `agent`, `human`, or `retry`
@@ -133,7 +133,7 @@ agent-stripe usage
 agent-stripe api get <path>
 ```
 
-`accounts list` is intentionally a compact summary command rather than a raw Account-object dump. It preserves navigation IDs and operational enablement/requirements/capability counts, while leaving KYC/profile/settings/external-account details to `accounts get <acct_id>` or the explicit `accounts list --full` escape hatch.
+The compact-summary list commands preserve navigation IDs and operational status while leaving bulky or sensitive full-object details to `get <id>` or explicit `list --full`. This currently covers customers, payment methods, PaymentIntents, charges, invoices, subscriptions, setup intents, Checkout Sessions, Payment Links, Events, and connected accounts. `accounts list` is intentionally compact rather than a raw Account-object dump: it preserves navigation IDs and operational enablement/requirements/capability counts, while leaving KYC/profile/settings/external-account details to `accounts get <acct_id>` or `accounts list --full`.
 
 ## Stripe docs checked
 

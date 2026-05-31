@@ -97,6 +97,8 @@ RAW READ-ONLY API
 
 OUTPUT
   Lists default to NDJSON/jsonl, one object per line, with @pagination when there is another page.
+  Bulky or sensitive list surfaces use compact summaries by default; add --full for raw redacted objects.
+  On compact list commands, --expand requires --full; use get <id> for focused expanded reads.
   Single-object reads default to pretty JSON.
   Sensitive Stripe fields are replaced by "[REDACTED]" and indexed in @redacted; use --expose <path,key> to opt in.
   Errors are JSON on stderr with fixable_by: agent|human|retry and a hint where possible.

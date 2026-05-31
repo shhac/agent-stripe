@@ -20,6 +20,7 @@ func registerCharges(root *cobra.Command, globals shared.GlobalsFunc) {
 		searchHint:  "Use a Stripe search query, for example metadata['order_id']:'123'",
 		usageText:   paymentsUsageText,
 		expandGet:   true,
+		listSummary: chargeListSummary,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
 			{name: "payment-intent", param: "payment_intent", help: "PaymentIntent ID"},

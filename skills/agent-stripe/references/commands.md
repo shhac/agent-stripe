@@ -45,7 +45,7 @@ agent-stripe investigate usage
 - `agent-stripe early-fraud-warnings list|get`
 - `agent-stripe accounts self|list|get` - `accounts list` returns compact status summaries by default; use `accounts list --full` for full redacted Account objects.
 
-Most list commands accept `--limit`, `--created-gte`, `--created-lte`, `--starting-after`, and `--ending-before`. Search commands accept `--query`, `--limit`, and `--page`.
+Most list commands accept `--limit`, `--created-gte`, `--created-lte`, `--starting-after`, and `--ending-before`. List commands with compact defaults also accept `--full` for full redacted Stripe objects; when such a command supports `--expand`, use `--full` with `--expand`. Search commands accept `--query`, `--limit`, and `--page`.
 
 ## Investigations
 

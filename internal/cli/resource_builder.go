@@ -1,11 +1,16 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
 	"net/url"
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
+	agenterrors "github.com/shhac/agent-stripe/internal/errors"
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 type listFlag struct {
@@ -30,6 +35,7 @@ type resourceOptions struct {
 	listFlags     []listFlag
 	expandGet     bool
 	expandList    bool
+	listSummary   func(map[string]any) map[string]any
 	extraCommands []func(shared.GlobalsFunc) *cobra.Command
 }
 
@@ -81,6 +87,7 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 	var startingAfter string
 	var endingBefore string
 	var expand []string
+	var full bool
 	values := make(map[string]*string, len(opts.listFlags))
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -95,6 +102,14 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 			for _, flag := range opts.listFlags {
 				shared.AddString(params, flag.param, *values[flag.name])
 			}
+			if opts.listSummary != nil && len(expand) > 0 && !full {
+				output.WriteError(output.Stderr(), agenterrors.New("--expand requires --full on compact list commands", agenterrors.FixableByAgent).
+					WithHint("Re-run with --full, or use get <id> for focused expanded fields"))
+				return nil
+			}
+			if opts.listSummary != nil && !full {
+				return getSummarizedList(globals(), opts.path, params, opts.listSummary)
+			}
 			return shared.GetRawList(globals(), opts.path, params)
 		},
 	}
@@ -107,12 +122,48 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 	if opts.expandList {
 		cmd.Flags().StringArrayVar(&expand, "expand", nil, "Expand response property; repeatable")
 	}
+	if opts.listSummary != nil {
+		cmd.Flags().BoolVar(&full, "full", false, "Return full Stripe objects instead of compact summaries")
+	}
 	for _, flag := range opts.listFlags {
 		var value string
 		values[flag.name] = &value
 		cmd.Flags().StringVar(&value, flag.name, "", flag.help)
 	}
 	return cmd
+}
+
+func getSummarizedList(flags *shared.GlobalFlags, path string, params url.Values, summarize func(map[string]any) map[string]any) error {
+	return shared.WithClient(flags, func(ctx context.Context, client *api.Client) error {
+		raw, err := client.Get(ctx, path, params)
+		if err != nil {
+			return err
+		}
+		list, err := api.DecodeList(raw)
+		if err != nil {
+			return err
+		}
+		items := make([]any, 0, len(list.Data))
+		for _, rawItem := range list.Data {
+			var item map[string]any
+			if err := json.Unmarshal(rawItem, &item); err != nil {
+				return agenterrors.Wrap(err, agenterrors.FixableByAgent)
+			}
+			items = append(items, summarize(item))
+		}
+		shared.WritePaginatedList(items, listPagination(list), flags.Format)
+		return nil
+	})
+}
+
+func listPagination(list *api.ListResponse) *output.Pagination {
+	if !list.HasMore && list.NextPage == "" {
+		return nil
+	}
+	return &output.Pagination{
+		HasMore:  list.HasMore,
+		NextPage: list.NextPage,
+	}
 }
 
 func newResourceSearchCommand(globals shared.GlobalsFunc, opts resourceOptions) *cobra.Command {

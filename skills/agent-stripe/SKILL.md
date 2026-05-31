@@ -75,6 +75,8 @@ For local testing, run `mockstripe` and set `AGENT_STRIPE_BASE_URL` to its base 
 
 Lists and investigation output default to NDJSON. Single resources default to JSON. Errors include `fixable_by` and usually a `hint`.
 
+List commands that commonly carry bulky nested payloads or sensitive person/payment details return compact summaries by default. This includes customers, payment methods, PaymentIntents, charges, invoices, subscriptions, setup intents, Checkout Sessions, Payment Links, Events, and connected accounts. Add `--full` to those list commands only when raw redacted Stripe objects are needed.
+
 Sensitive Stripe fields are redacted by default with `"[REDACTED]"` leaf values and a top-level `@redacted` path list. Use `--expose <path,key>` only when the user explicitly needs that field for the investigation; `--expose` can be comma-separated or repeated.
 
 Investigation output uses evidence records:

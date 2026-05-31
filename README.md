@@ -116,6 +116,8 @@ agent-stripe config show
 agent-stripe config set max_retries 2
 ```
 
+List commands that commonly carry bulky nested payloads or sensitive person/payment details return compact summaries by default. This includes customers, payment methods, PaymentIntents, charges, invoices, subscriptions, setup intents, Checkout Sessions, Payment Links, Events, and connected accounts. Add `--full` to those list commands when you need the full redacted Stripe object; use `get <id>` for focused inspection. On compact list commands, `--expand` requires `--full`.
+
 Investigation commands walk common Stripe object graphs and emit evidence records plus findings:
 
 ```bash

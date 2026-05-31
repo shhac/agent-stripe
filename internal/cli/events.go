@@ -17,6 +17,7 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 	var startingAfter string
 	var endingBefore string
 	var deliverySuccess string
+	var full bool
 
 	events := &cobra.Command{
 		Use:   "events",
@@ -38,6 +39,7 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 		Use:   "list",
 		Short: "List recent events; defaults to NDJSON",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			flags := globals()
 			params := url.Values{}
 			shared.AddLimit(params, limit)
 			shared.AddCreatedRange(params, createdGTE, createdLTE)
@@ -46,7 +48,10 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 			shared.AddString(params, "starting_after", startingAfter)
 			shared.AddString(params, "ending_before", endingBefore)
 			shared.AddString(params, "delivery_success", deliverySuccess)
-			return shared.GetRawList(globals(), "/v1/events", params)
+			if full {
+				return shared.GetRawList(flags, "/v1/events", params)
+			}
+			return getSummarizedList(flags, "/v1/events", params, eventListSummary)
 		},
 	}
 	list.Flags().IntVar(&limit, "limit", 10, "Maximum events to return (1-100)")
@@ -58,6 +63,7 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 	list.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
 	markCursorFlagsMutuallyExclusive(list)
 	list.Flags().StringVar(&deliverySuccess, "delivery-success", "", "Filter true/false for webhook delivery success")
+	list.Flags().BoolVar(&full, "full", false, "Return full Stripe event objects instead of compact summaries")
 	events.AddCommand(list)
 	root.AddCommand(events)
 }

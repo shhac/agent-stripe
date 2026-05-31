@@ -55,7 +55,7 @@ WHEN A CUSTOMER SENDS AN INVOICE COPY
 
 OUTPUT NOTES
   Invoice, PaymentIntent, Charge, and line-item IDs are preserved in compact output.
-  Use --expand payment_intent on direct invoice reads when you need raw expanded fields.
+  Invoice lists are compact by default; use invoices list --full or invoices get in_... when you need raw expanded fields.
   Sensitive URLs and customer contact fields are redacted by default; use --expose only when needed.
 `
 
@@ -81,6 +81,7 @@ QUESTIONS THIS ANSWERS
 
 OUTPUT NOTES
   Investigation output emits subscription, invoice, payment, item, price, and product evidence records.
+  Subscription lists are compact by default; use subscriptions list --full or subscriptions get sub_... for full objects.
   Use --full or --expand-field for verbose item/product metadata.
   Redaction is independent from truncation; use --expose for redacted fields.
 `
@@ -105,6 +106,7 @@ PAYMENT FAILURE FLOW
 CARD LAST4 FLOW
   Last4 is not unique, so include --customer.
   Use customer-card-payment for the most recent matching charge.
+  PaymentIntent, Charge, and PaymentMethod lists are compact by default; use list --full or get <id> for full objects.
   Card last4 stays visible for triage; fingerprints, receipts, tokens, and client secrets are redacted by default.
 `
 
@@ -131,5 +133,6 @@ CONTEXT
 
 OUTPUT NOTES
   Findings summarize failed/canceled/reversed movement and include failure_code, failure_message, failure_reason, or failure balance transaction when present.
+  accounts list is compact by default; use accounts list --full or accounts get acct_... for full Account objects.
   Connected account IDs and ledger IDs stay visible; sensitive URLs/contact fields remain redacted unless exposed.
 `

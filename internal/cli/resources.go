@@ -57,13 +57,14 @@ func newInvoicePreviewCommand(globals shared.GlobalsFunc, path string, flags []l
 
 func registerCustomers(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
-		use:        "customers",
-		short:      "Customer lookup and search",
-		path:       "/v1/customers",
-		idName:     "customer-id",
-		idKind:     "customer",
-		searchable: true,
-		searchHint: "Use a Stripe search query, for example email:'person@example.com' or metadata['tenant_id']:'acme'",
+		use:         "customers",
+		short:       "Customer lookup and search",
+		path:        "/v1/customers",
+		idName:      "customer-id",
+		idKind:      "customer",
+		searchable:  true,
+		searchHint:  "Use a Stripe search query, for example email:'person@example.com' or metadata['tenant_id']:'acme'",
+		listSummary: customerListSummary,
 		listFlags: []listFlag{
 			{name: "email", param: "email", help: "Customer email address"},
 		},
@@ -72,16 +73,17 @@ func registerCustomers(root *cobra.Command, globals shared.GlobalsFunc) {
 
 func registerInvoices(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
-		use:        "invoices",
-		short:      "Invoice lookup, line items, and payment bridge investigation",
-		path:       "/v1/invoices",
-		idName:     "invoice-id",
-		idKind:     "invoice",
-		searchable: true,
-		searchHint: "Use a Stripe search query, for example number:'ABC-0001' or metadata['order_id']:'123'",
-		usageText:  invoicesUsageText,
-		expandGet:  true,
-		expandList: true,
+		use:         "invoices",
+		short:       "Invoice lookup, line items, and payment bridge investigation",
+		path:        "/v1/invoices",
+		idName:      "invoice-id",
+		idKind:      "invoice",
+		searchable:  true,
+		searchHint:  "Use a Stripe search query, for example number:'ABC-0001' or metadata['order_id']:'123'",
+		usageText:   invoicesUsageText,
+		expandGet:   true,
+		expandList:  true,
+		listSummary: invoiceListSummary,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
 			{name: "subscription", param: "subscription", help: "Subscription ID"},
@@ -102,11 +104,12 @@ func registerInvoices(root *cobra.Command, globals shared.GlobalsFunc) {
 
 func registerPaymentMethods(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
-		use:    "payment-methods",
-		short:  "PaymentMethod lookup by customer and type",
-		path:   "/v1/payment_methods",
-		idName: "payment-method-id",
-		idKind: "payment_method",
+		use:         "payment-methods",
+		short:       "PaymentMethod lookup by customer and type",
+		path:        "/v1/payment_methods",
+		idName:      "payment-method-id",
+		idKind:      "payment_method",
+		listSummary: paymentMethodListSummary,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
 			{name: "type", param: "type", help: "PaymentMethod type, for example card or us_bank_account"},
@@ -224,13 +227,14 @@ func registerPrices(root *cobra.Command, globals shared.GlobalsFunc) {
 
 func registerSetupIntents(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
-		use:       "setup-intents",
-		aliases:   []string{"setup_intents"},
-		short:     "SetupIntent lookup for saved payment method setup",
-		path:      "/v1/setup_intents",
-		idName:    "setup-intent-id",
-		idKind:    "setup_intent",
-		expandGet: true,
+		use:         "setup-intents",
+		aliases:     []string{"setup_intents"},
+		short:       "SetupIntent lookup for saved payment method setup",
+		path:        "/v1/setup_intents",
+		idName:      "setup-intent-id",
+		idKind:      "setup_intent",
+		expandGet:   true,
+		listSummary: setupIntentListSummary,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
 			{name: "payment-method", param: "payment_method", help: "PaymentMethod ID"},
@@ -240,13 +244,14 @@ func registerSetupIntents(root *cobra.Command, globals shared.GlobalsFunc) {
 
 func registerPaymentLinks(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
-		use:       "payment-links",
-		aliases:   []string{"payment_links"},
-		short:     "Payment Link lookup",
-		path:      "/v1/payment_links",
-		idName:    "payment-link-id",
-		idKind:    "payment_link",
-		expandGet: true,
+		use:         "payment-links",
+		aliases:     []string{"payment_links"},
+		short:       "Payment Link lookup",
+		path:        "/v1/payment_links",
+		idName:      "payment-link-id",
+		idKind:      "payment_link",
+		expandGet:   true,
+		listSummary: paymentLinkListSummary,
 		listFlags: []listFlag{
 			{name: "active", param: "active", help: "Filter by active=true|false"},
 		},
@@ -271,15 +276,16 @@ func registerEarlyFraudWarnings(root *cobra.Command, globals shared.GlobalsFunc)
 
 func registerCheckoutSessions(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
-		use:       "checkout-sessions",
-		aliases:   []string{"checkout_sessions"},
-		short:     "Checkout Session lookup and line items",
-		path:      "/v1/checkout/sessions",
-		idName:    "checkout-session-id",
-		idKind:    "checkout_session",
-		getShort:  "Retrieve a Checkout Session",
-		listShort: "List Checkout Sessions",
-		expandGet: true,
+		use:         "checkout-sessions",
+		aliases:     []string{"checkout_sessions"},
+		short:       "Checkout Session lookup and line items",
+		path:        "/v1/checkout/sessions",
+		idName:      "checkout-session-id",
+		idKind:      "checkout_session",
+		getShort:    "Retrieve a Checkout Session",
+		listShort:   "List Checkout Sessions",
+		expandGet:   true,
+		listSummary: checkoutSessionListSummary,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
 			{name: "payment-intent", param: "payment_intent", help: "PaymentIntent ID"},

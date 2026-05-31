@@ -23,6 +23,7 @@ func registerSubscriptions(root *cobra.Command, globals shared.GlobalsFunc) {
 		searchHint:  "Use a Stripe search query, for example metadata['tenant_id']:'acme'",
 		usageText:   subscriptionsUsageText,
 		expandGet:   true,
+		listSummary: subscriptionListSummary,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
 			{name: "status", param: "status", help: "Subscription status: incomplete, trialing, active, past_due, canceled, unpaid, paused, all, ended"},

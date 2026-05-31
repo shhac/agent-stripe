@@ -21,6 +21,7 @@ func registerPaymentIntents(root *cobra.Command, globals shared.GlobalsFunc) {
 		searchHint:  "Use a Stripe search query, for example metadata['order_id']:'123'",
 		usageText:   paymentsUsageText,
 		expandGet:   true,
+		listSummary: paymentIntentListSummary,
 		listFlags: []listFlag{
 			{name: "customer", param: "customer", help: "Customer ID"},
 		},
