@@ -1,6 +1,6 @@
 # Stripe Docs Alignment
 
-This file records checks against Stripe's public API docs so agent-stripe stays close to the API's real shape. Last checked: 2026-05-30.
+This file records checks against Stripe's public API docs so agent-stripe stays close to the API's real shape. Last checked: 2026-05-31.
 
 ## Expandable fields
 
@@ -32,6 +32,8 @@ Sources:
 
 Stripe search is not read-after-write consistent. Investigation commands should use direct retrieval or list endpoints when the user already has an ID or needs freshly-created data. Search is appropriate for flexible lookup, including invoice numbers and metadata, and generated clauses quote and escape values before sending them.
 
+Stripe's search docs currently list supported search resources that match our wrapped search commands: Charges, Customers, Invoices, PaymentIntents, Prices, Products, and Subscriptions. Search has its own rate limit of 20 read operations per second, so broad investigation workflows should avoid using search as a fan-out primitive.
+
 Source: https://docs.stripe.com/search
 
 ## Rate limiting
@@ -58,3 +60,12 @@ Sources:
 Transfer reversals are nested under the transfer: `GET /v1/transfers/<transfer>/reversals/<reversal>`. A reversal ID alone is not enough to build that API path, so investigation commands that start from a reversal require or discover the transfer ID.
 
 Source: https://docs.stripe.com/api/transfer_reversals/retrieve
+
+## ID prefix guidance
+
+Stripe's v1 resource APIs are generally organized around resource-specific IDs. agent-stripe uses known Stripe ID prefixes as a local navigation aid, not as an authorization or existence check:
+
+- Direct resource `get` commands preflight known wrong prefixes and suggest the likely command before making an avoidable Stripe request.
+- Investigation commands can accept multiple related prefixes when the object graph is recoverable.
+- Unknown values still pass through to Stripe or search-oriented commands so invoice numbers and future Stripe ID shapes are not rejected prematurely.
+- Nested resources remain special: transfer reversal IDs require a parent transfer ID, and line item listing commands validate only the parent resource ID they can route with.

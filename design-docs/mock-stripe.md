@@ -6,29 +6,38 @@
 
 ## Scope
 
-The mock should cover the read-first command surface:
+The mock should cover the read-first command surface and the safe read-like POSTs used by investigation workflows:
 
 - `GET /v1/account`
 - `GET /v1/balance`
-- `GET /v1/events`
-- `GET /v1/events/:id`
-- `GET /v1/payment_intents`
-- `GET /v1/payment_intents/:id`
-- `GET /v1/payment_intents/search`
-- `GET /v1/charges`
-- `GET /v1/charges/:id`
-- `GET /v1/charges/search`
-- `GET /v1/disputes`
-- `GET /v1/disputes/:id`
-- `GET /v1/subscriptions`
-- `GET /v1/subscriptions/:id`
-- `GET /v1/subscriptions/search`
-- `GET /v1/subscription_items`
+- `GET /v1/customers`, `GET /v1/customers/:id`, `GET /v1/customers/search`
+- `GET /v1/events`, `GET /v1/events/:id`
+- `GET /v1/products`, `GET /v1/products/:id`, `GET /v1/products/search`
+- `GET /v1/prices`, `GET /v1/prices/:id`, `GET /v1/prices/search`
+- `GET /v1/payment_intents`, `GET /v1/payment_intents/:id`, `GET /v1/payment_intents/search`
+- `GET /v1/setup_intents`, `GET /v1/setup_intents/:id`
+- `GET /v1/payment_methods`, `GET /v1/payment_methods/:id`
+- `GET /v1/charges`, `GET /v1/charges/:id`, `GET /v1/charges/search`
+- `GET /v1/disputes`, `GET /v1/disputes/:id`
+- `GET /v1/refunds`, `GET /v1/refunds/:id`
+- `GET /v1/subscriptions`, `GET /v1/subscriptions/:id`, `GET /v1/subscriptions/search`
+- `GET /v1/subscription_items`, `GET /v1/subscription_items/:id`
 - `GET /v1/invoices`
+- `GET /v1/invoices/:id`
+- `GET /v1/invoices/:id/lines`
+- `GET /v1/invoices/search`
+- `POST /v1/invoices/create_preview`
+- `GET /v1/checkout/sessions`, `GET /v1/checkout/sessions/:id`, `GET /v1/checkout/sessions/:id/line_items`
+- `GET /v1/transfers`, `GET /v1/transfers/:id`, `GET /v1/transfers/:id/reversals/:reversal_id`
+- `GET /v1/payouts`, `GET /v1/payouts/:id`
+- `GET /v1/balance_transactions`, `GET /v1/balance_transactions/:id`
+- `GET /v1/application_fees`, `GET /v1/application_fees/:id`
+- `GET /v1/payment_links`, `GET /v1/payment_links/:id`
+- `GET /v1/radar/early_fraud_warnings`, `GET /v1/radar/early_fraud_warnings/:id`
 - `GET /v1/accounts`
 - `GET /v1/accounts/:id`
 
-The mock intentionally rejects missing credentials and non-GET methods. This keeps tests honest about authentication wiring while preserving the CLI's read-only safety posture.
+The mock intentionally rejects missing credentials and unsupported methods. Most Stripe-shaped endpoints are GET-only; `POST /v1/invoices/create_preview` is allowed because it is the API shape Stripe uses for previewing a future invoice and is central to subscription investigations.
 
 ## CLI wiring
 
@@ -60,5 +69,8 @@ Fixtures should be intentionally small but incident-shaped:
 - a `payment_intent.succeeded` event
 - a dispute needing response
 - a connected account missing an external account
+- subscription renewal, past-due, cancellation, missing payment method, and expiring-card cases
+- invoice line items, subscription items, prices, and products with metadata
+- refunds, transfer reversals, payouts, balance transactions, application fees, payment links, Checkout Sessions, SetupIntents, and early fraud warnings
 
 Prefer adding focused fixture fields that support a real triage workflow over copying full Stripe objects.

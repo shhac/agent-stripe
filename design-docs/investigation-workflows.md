@@ -21,8 +21,20 @@ Each investigation class should be mostly independent:
 6. Add mock fixtures/routes in `internal/mockstripe`.
 7. Add a mock-backed e2e test that proves the user-facing scenario works.
 8. Update `agent-stripe investigate usage`, top-level `usage`, this design doc, and the skill.
+9. Add or update ID-prefix validation when the workflow accepts only specific object types. Use `validateAllowedStripeID` when related prefixes are recoverable, and `validateExpectedStripeID` when the input must be one object type.
 
 Good workflows accept incident-language inputs (`in_...`, `pi_...`, `last4`, metadata, customer, account) and return enough evidence for an LLM to answer without issuing five follow-up raw API calls.
+
+## ID Handling
+
+Direct `get` commands reject known wrong Stripe ID prefixes before making a request. For example, `invoices get pi_...` returns a JSON error that points at `payment-intents get`, `investigate incoming-payment`, and `investigate resolve`.
+
+Investigation commands should be relationship-aware:
+
+- Accept alternate IDs when the workflow can recover by traversing related objects, such as `incoming-payment` accepting `in_`, `ch_`, and `pi_`.
+- Reject unrelated known prefixes with `fixable_by=agent` and a suggested command.
+- Let unknown strings pass through when a workflow intentionally supports invoice numbers, search terms, or future Stripe ID shapes.
+- Keep navigable IDs visible in output even when an expanded object is emitted separately.
 
 Current workflow families:
 
