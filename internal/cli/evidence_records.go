@@ -61,26 +61,47 @@ type evidenceStreamer struct {
 }
 
 type evidenceCollector struct {
-	stream *evidenceStreamer
+	stream  *evidenceStreamer
+	seen    map[string]bool
+	records []evidenceRecord
 }
 
 func newEvidenceCollector(stream *evidenceStreamer) *evidenceCollector {
-	return &evidenceCollector{stream: stream}
+	return &evidenceCollector{
+		stream: stream,
+		seen:   map[string]bool{},
+	}
 }
 
 func (c *evidenceCollector) append(records []evidenceRecord, newRecords ...evidenceRecord) []evidenceRecord {
-	for _, record := range newRecords {
-		c.emit(record)
-		records = append(records, record)
+	if c == nil {
+		return append(records, newRecords...)
 	}
-	return records
+	for _, record := range newRecords {
+		c.add(record)
+	}
+	return c.records
 }
 
 func (c *evidenceCollector) appendAll(records []evidenceRecord, newRecords []evidenceRecord) []evidenceRecord {
-	for _, record := range newRecords {
-		c.emit(record)
+	if c == nil {
+		return append(records, newRecords...)
 	}
-	return append(records, newRecords...)
+	for _, record := range newRecords {
+		c.add(record)
+	}
+	return c.records
+}
+
+func (c *evidenceCollector) add(record evidenceRecord) {
+	if key := evidenceRecordKey(record); key != "" {
+		if c.seen[key] {
+			return
+		}
+		c.seen[key] = true
+	}
+	c.records = append(c.records, record)
+	c.emit(record)
 }
 
 func (c *evidenceCollector) emit(record evidenceRecord) {
@@ -113,15 +134,6 @@ func (s *evidenceStreamer) emit(record evidenceRecord) {
 	s.write(normalized)
 	for _, child := range extracted {
 		s.write(child)
-	}
-}
-
-func (s *evidenceStreamer) writeRemaining(records []evidenceRecord) {
-	if s == nil {
-		return
-	}
-	for _, record := range records {
-		s.emit(record)
 	}
 }
 

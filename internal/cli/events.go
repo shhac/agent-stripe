@@ -14,8 +14,7 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 	var eventTypes []string
 	var createdGTE string
 	var createdLTE string
-	var startingAfter string
-	var endingBefore string
+	var cursor cursorFlags
 	var deliverySuccess string
 	var full bool
 
@@ -45,8 +44,7 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 			shared.AddCreatedRange(params, createdGTE, createdLTE)
 			shared.AddString(params, "type", eventType)
 			shared.AddMulti(params, "types[]", eventTypes)
-			shared.AddString(params, "starting_after", startingAfter)
-			shared.AddString(params, "ending_before", endingBefore)
+			cursor.AddTo(params)
 			shared.AddString(params, "delivery_success", deliverySuccess)
 			if full {
 				return shared.GetRawList(flags, "/v1/events", params)
@@ -59,9 +57,7 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 	list.Flags().StringArrayVar(&eventTypes, "types", nil, "Event type filter; repeatable, up to Stripe's limit")
 	list.Flags().StringVar(&createdGTE, "created-gte", "", "Created at or after Unix timestamp")
 	list.Flags().StringVar(&createdLTE, "created-lte", "", "Created at or before Unix timestamp")
-	list.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
-	list.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
-	markCursorFlagsMutuallyExclusive(list)
+	cursor.AddFlags(list)
 	list.Flags().StringVar(&deliverySuccess, "delivery-success", "", "Filter true/false for webhook delivery success")
 	list.Flags().BoolVar(&full, "full", false, "Return full Stripe event objects instead of compact summaries")
 	events.AddCommand(list)

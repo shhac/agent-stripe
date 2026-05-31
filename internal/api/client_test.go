@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 func TestDecodeList(t *testing.T) {
@@ -41,6 +44,12 @@ func TestClassifyHTTPErrorIncludesStripeHints(t *testing.T) {
 	}
 	if err.Message == "" || err.Message == "HTTP 404" {
 		t.Fatalf("Message = %q", err.Message)
+	}
+	if strings.Contains(err.Hint, "dashboard.stripe.com") || strings.Contains(err.Hint, "req_123") {
+		t.Fatalf("Hint leaked request log URL: %q", err.Hint)
+	}
+	if !strings.Contains(err.Hint, "request log URL redacted") {
+		t.Fatalf("Hint = %q, want redacted request log note", err.Hint)
 	}
 }
 
@@ -136,6 +145,32 @@ func TestPostFormRetriesPreviewBody(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&requests); got != 2 {
 		t.Fatalf("requests = %d, want 2", got)
+	}
+}
+
+func TestRetryWaitHonorsCanceledContext(t *testing.T) {
+	var requests int32
+	ctx, cancel := context.WithCancel(t.Context())
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"too many requests","code":"rate_limit"}}`))
+		cancel()
+	}))
+	defer server.Close()
+
+	client := NewClient(Options{APIKey: "sk_test_123", BaseURL: server.URL, MaxRetries: 2})
+	_, err := client.Get(ctx, "/v1/events", nil)
+	var apiErr *agenterrors.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error = %#v, want APIError", err)
+	}
+	if apiErr.FixableBy != agenterrors.FixableByRetry {
+		t.Fatalf("FixableBy = %q, want retry", apiErr.FixableBy)
+	}
+	if got := atomic.LoadInt32(&requests); got != 1 {
+		t.Fatalf("requests = %d, want no retry after cancellation", got)
 	}
 }
 
@@ -235,5 +270,29 @@ func TestGetSendsAuthContextVersionAndQuery(t *testing.T) {
 	}
 	if string(raw) == "" {
 		t.Fatalf("Get() returned empty body")
+	}
+}
+
+func TestDebugRedactsNonJSONResponseBodies(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	restore := output.SetWritersForTest(&stdout, &stderr)
+	defer restore()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html>client_secret=pi_secret_leak api_key=sk_test_leak</html>`))
+	}))
+	defer server.Close()
+
+	client := NewClient(Options{APIKey: "sk_test_123", BaseURL: server.URL})
+	client.SetDebug(true)
+	if _, err := client.Get(t.Context(), "/v1/events", nil); err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if strings.Contains(stderr.String(), "pi_secret_leak") || strings.Contains(stderr.String(), "sk_test_leak") {
+		t.Fatalf("debug stderr leaked non-JSON body: %s", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), `"body_raw":"[REDACTED]"`) {
+		t.Fatalf("debug stderr = %s, want redacted body_raw", stderr.String())
 	}
 }

@@ -3,7 +3,7 @@ package credential
 type keychainBackend interface {
 	Store(name, apiKey string) error
 	Get(name string) (string, error)
-	Delete(name string)
+	Delete(name string) error
 }
 
 var keychain keychainBackend = securityKeychain{}

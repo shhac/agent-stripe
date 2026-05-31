@@ -84,8 +84,7 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 	var limit int
 	var createdGTE string
 	var createdLTE string
-	var startingAfter string
-	var endingBefore string
+	var cursor cursorFlags
 	var expand []string
 	var full bool
 	values := make(map[string]*string, len(opts.listFlags))
@@ -96,8 +95,7 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 			params := url.Values{}
 			shared.AddLimit(params, limit)
 			shared.AddCreatedRange(params, createdGTE, createdLTE)
-			shared.AddString(params, "starting_after", startingAfter)
-			shared.AddString(params, "ending_before", endingBefore)
+			cursor.AddTo(params)
 			shared.AddExpand(params, expand)
 			for _, flag := range opts.listFlags {
 				shared.AddString(params, flag.param, *values[flag.name])
@@ -116,9 +114,7 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
 	cmd.Flags().StringVar(&createdGTE, "created-gte", "", "Created at or after Unix timestamp")
 	cmd.Flags().StringVar(&createdLTE, "created-lte", "", "Created at or before Unix timestamp")
-	cmd.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
-	cmd.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
-	markCursorFlagsMutuallyExclusive(cmd)
+	cursor.AddFlags(cmd)
 	if opts.expandList {
 		cmd.Flags().StringArrayVar(&expand, "expand", nil, "Expand response property; repeatable")
 	}

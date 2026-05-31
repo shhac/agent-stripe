@@ -10,8 +10,7 @@ import (
 
 func newInvoiceLineItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 	var limit int
-	var startingAfter string
-	var endingBefore string
+	var cursor cursorFlags
 	cmd := &cobra.Command{
 		Use:   "line-items <invoice-id>",
 		Short: "List line items on an invoice",
@@ -22,15 +21,12 @@ func newInvoiceLineItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 			}
 			params := url.Values{}
 			shared.AddLimit(params, limit)
-			shared.AddString(params, "starting_after", startingAfter)
-			shared.AddString(params, "ending_before", endingBefore)
+			cursor.AddTo(params)
 			return shared.GetRawList(globals(), "/v1/invoices/"+url.PathEscape(args[0])+"/lines", params)
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
-	cmd.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
-	cmd.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
-	markCursorFlagsMutuallyExclusive(cmd)
+	cursor.AddFlags(cmd)
 	return cmd
 }
 
@@ -300,8 +296,7 @@ func registerCheckoutSessions(root *cobra.Command, globals shared.GlobalsFunc) {
 
 func newCheckoutSessionLineItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 	var limit int
-	var lineItemsStartingAfter string
-	var lineItemsEndingBefore string
+	var cursor cursorFlags
 	lineItems := &cobra.Command{
 		Use:   "line-items <checkout-session-id>",
 		Short: "List Checkout Session line items",
@@ -312,14 +307,11 @@ func newCheckoutSessionLineItemsCommand(globals shared.GlobalsFunc) *cobra.Comma
 			}
 			params := url.Values{}
 			shared.AddLimit(params, limit)
-			shared.AddString(params, "starting_after", lineItemsStartingAfter)
-			shared.AddString(params, "ending_before", lineItemsEndingBefore)
+			cursor.AddTo(params)
 			return shared.GetRawList(globals(), "/v1/checkout/sessions/"+url.PathEscape(args[0])+"/line_items", params)
 		},
 	}
 	lineItems.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
-	lineItems.Flags().StringVar(&lineItemsStartingAfter, "starting-after", "", "Stripe cursor")
-	lineItems.Flags().StringVar(&lineItemsEndingBefore, "ending-before", "", "Stripe cursor")
-	markCursorFlagsMutuallyExclusive(lineItems)
+	cursor.AddFlags(lineItems)
 	return lineItems
 }

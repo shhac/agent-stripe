@@ -12,7 +12,6 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	"github.com/shhac/agent-stripe/internal/config"
 	"github.com/shhac/agent-stripe/internal/credential"
-	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 	"github.com/shhac/agent-stripe/internal/output"
 )
 
@@ -37,108 +36,12 @@ func Register(root *cobra.Command, globals shared.GlobalsFunc) {
 	root.AddCommand(auth)
 }
 
-func registerUpdate(parent *cobra.Command) {
-	var apiKey string
-	var contextValue string
-	var apiVersion string
-	var clearContext bool
-	var setDefault bool
-	var form bool
-
-	cmd := &cobra.Command{
-		Use:   "update <profile>",
-		Short: "Update a profile key or non-secret metadata",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			keyRequested := cmd.Flags().Changed("api-key") || form
-			if !cmd.Flags().Changed("context") && !cmd.Flags().Changed("api-version") && !clearContext && !setDefault && !keyRequested {
-				output.WriteError(output.Stderr(), agenterrors.New("no profile updates requested", agenterrors.FixableByAgent).
-					WithHint("Use --api-key, --form, --context, --clear-context, --api-version, or --default"))
-				return nil
-			}
-			if clearContext && cmd.Flags().Changed("context") {
-				output.WriteError(output.Stderr(), agenterrors.New("--context and --clear-context cannot be used together", agenterrors.FixableByAgent))
-				return nil
-			}
-
-			alias := args[0]
-			if _, ok := config.Read().Profiles[alias]; !ok {
-				output.WriteError(output.Stderr(), agenterrors.Newf(agenterrors.FixableByHuman, "Profile %q is not configured", alias).
-					WithHint("Run 'agent-stripe auth list' to see configured profiles"))
-				return nil
-			}
-			var credentialType string
-			var storage string
-			if keyRequested {
-				if form {
-					filledKey, err := promptAPIKeyViaDialog(cmd.Context(), alias, apiKey)
-					if err != nil {
-						output.WriteError(output.Stderr(), err)
-						return nil
-					}
-					apiKey = filledKey
-				}
-				if !shared.RequireFlag("api-key", apiKey, "Provide --api-key <rk_live...|rk_test...|sk_live...|sk_test...> or use --form") {
-					return nil
-				}
-				var err error
-				storage, err = credentialStore(alias, apiKey)
-				if err != nil {
-					output.WriteError(output.Stderr(), err)
-					return nil
-				}
-				credentialType = credential.Type(apiKey)
-			}
-			if err := config.UpdateProfile(alias, func(profile config.Profile) config.Profile {
-				if cmd.Flags().Changed("context") {
-					profile.Context = contextValue
-				}
-				if clearContext {
-					profile.Context = ""
-				}
-				if cmd.Flags().Changed("api-version") {
-					profile.APIVersion = apiVersion
-				}
-				if keyRequested {
-					profile.CredentialType = credentialType
-				}
-				return profile
-			}); err != nil {
-				output.WriteError(output.Stderr(), agenterrors.Wrap(err, agenterrors.FixableByHuman).
-					WithHint("Run 'agent-stripe auth list' to see configured profiles"))
-				return nil
-			}
-			if setDefault {
-				if err := config.SetDefault(alias); err != nil {
-					output.WriteError(output.Stderr(), agenterrors.Wrap(err, agenterrors.FixableByHuman))
-					return nil
-				}
-			}
-			cfg := config.Read()
-			profile := cfg.Profiles[alias]
-			fields := map[string]any{
-				"status":      "updated",
-				"profile":     alias,
-				"default":     cfg.DefaultProfile == alias,
-				"context":     profile.Context,
-				"api_version": profile.APIVersion,
-				"credential":  "keychain",
-			}
-			addCredentialType(fields, profile)
-			if keyRequested {
-				fields["storage"] = storage
-			}
-			shared.WriteItem(fields, "")
-			return nil
-		},
+func writeAuthError(err error) error {
+	if err == nil {
+		return nil
 	}
-	cmd.Flags().StringVar(&apiKey, "api-key", "", "Replacement Stripe restricted or secret API key")
-	cmd.Flags().StringVar(&contextValue, "context", "", "Default Stripe-Context for this profile")
-	cmd.Flags().BoolVar(&clearContext, "clear-context", false, "Clear this profile's default Stripe-Context")
-	cmd.Flags().StringVar(&apiVersion, "api-version", "", "Default Stripe API version")
-	cmd.Flags().BoolVar(&setDefault, "default", false, "Make this the default profile")
-	cmd.Flags().BoolVar(&form, "form", false, "Prompt for the replacement API key via a native OS dialog")
-	parent.AddCommand(cmd)
+	output.WriteError(output.Stderr(), err)
+	return nil
 }
 
 func registerAdd(parent *cobra.Command) {

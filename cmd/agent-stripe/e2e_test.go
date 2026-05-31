@@ -237,7 +237,8 @@ func TestCLINewResourcePrimitivesAgainstMockStripe(t *testing.T) {
 		{[]string{"checkout-sessions", "list", "--customer", "cus_mock_123"}, `"cs_mock_paid"`},
 		{[]string{"checkout-sessions", "line-items", "cs_mock_paid"}, `"price_mock_basic"`},
 		{[]string{"customers", "list", "--email", "buyer@example.com"}, `"cus_mock_123"`},
-		{[]string{"customers", "list", "--ending-before", "cus_mock_123"}, `"cus_mock_123"`},
+		{[]string{"customers", "list", "--ending-before", "cus_mock_456"}, `"cus_mock_123"`},
+		{[]string{"customers", "list", "--starting-after", "cus_mock_123"}, `"cus_mock_456"`},
 		{[]string{"products", "list", "--active", "true"}, `"prod_mock_basic"`},
 		{[]string{"prices", "list", "--product", "prod_mock_basic"}, `"price_mock_basic"`},
 		{[]string{"invoices", "line-items", "in_mock_paid", "--ending-before", "li_mock_basic"}, `"internal_product_id":"prod_internal_basic"`},
@@ -248,7 +249,6 @@ func TestCLINewResourcePrimitivesAgainstMockStripe(t *testing.T) {
 		{[]string{"balance-transactions", "get", "txn_mock_succeeded"}, `"txn_mock_succeeded"`},
 		{[]string{"payment-links", "list", "--active", "true"}, `"plink_mock_basic"`},
 		{[]string{"early-fraud-warnings", "list", "--charge", "ch_mock_succeeded"}, `"issfr_mock_123"`},
-		{[]string{"checkout-sessions", "line-items", "cs_mock_paid", "--starting-after", "li_mock_basic"}, `"price_mock_basic"`},
 	}
 	for _, check := range checks {
 		out := runMockCLI(t, check.args...)

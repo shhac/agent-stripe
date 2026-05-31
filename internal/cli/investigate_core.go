@@ -22,16 +22,19 @@ type investigationOutputOptions struct {
 	maxString    int
 }
 
-func runInvestigation(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(context.Context, *api.Client, *evidenceStreamer) ([]evidenceRecord, error)) error {
+func runInvestigation(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(context.Context, *api.Client, *evidenceCollector) ([]evidenceRecord, error)) error {
 	return shared.WithClient(flags, func(ctx context.Context, client *api.Client) error {
 		evidenceOpts := outputOpts.evidenceOptions(flags)
 		stream := newEvidenceStreamer(flags.Format, evidenceOpts)
-		records, err := fn(ctx, client, stream)
+		collector := newEvidenceCollector(stream)
+		records, err := fn(ctx, client, collector)
 		if err != nil {
 			return err
 		}
+		if len(collector.records) > 0 {
+			records = collector.records
+		}
 		if stream != nil {
-			stream.writeRemaining(records)
 			return nil
 		}
 		writeEvidence(records, flags.Format, evidenceOpts)
@@ -40,8 +43,8 @@ func runInvestigation(flags *shared.GlobalFlags, outputOpts *investigationOutput
 }
 
 func runWithInvestigator(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(investigator) ([]evidenceRecord, error)) error {
-	return runInvestigation(flags, outputOpts, func(ctx context.Context, client *api.Client, stream *evidenceStreamer) ([]evidenceRecord, error) {
-		return fn(investigator{ctx: ctx, client: client, evidence: newEvidenceCollector(stream)})
+	return runInvestigation(flags, outputOpts, func(ctx context.Context, client *api.Client, evidence *evidenceCollector) ([]evidenceRecord, error) {
+		return fn(investigator{ctx: ctx, client: client, evidence: evidence})
 	})
 }
 

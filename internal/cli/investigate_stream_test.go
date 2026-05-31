@@ -57,24 +57,23 @@ func TestInvestigatorGetStreamsDecodedEntity(t *testing.T) {
 	}
 }
 
-func TestEvidenceStreamerDeduplicatesFinalEntity(t *testing.T) {
+func TestEvidenceCollectorDeduplicatesRecords(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	restore := output.SetWritersForTest(&stdout, &stderr)
 	defer restore()
 
-	stream := newEvidenceStreamer("jsonl", defaultEvidenceOptions())
+	collector := newEvidenceCollector(newEvidenceStreamer("jsonl", defaultEvidenceOptions()))
 	entity := entityRecord("payment_intent", map[string]any{
 		"id":     "pi_stream",
 		"object": "payment_intent",
 		"status": "succeeded",
 	})
 	finding := evidenceRecord{Type: "finding", Severity: "info", Summary: "investigation complete"}
-	stream.emit(entity)
-	stream.emit(finding)
-	stream.writeRemaining([]evidenceRecord{
-		entity,
-		finding,
-	})
+	records := collector.append(nil, entity, finding)
+	records = collector.appendAll(records, []evidenceRecord{entity, finding})
+	if len(records) != 2 {
+		t.Fatalf("collector records = %d, want entity plus finding", len(records))
+	}
 
 	lines := ndjsonLines(stdout.String())
 	if len(lines) != 2 {
@@ -132,6 +131,36 @@ func TestWorkflowFindingsStreamThroughCollector(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), `"summary":"Invoice in_stream paid 4200 USD minor units with card ending 4242 through PaymentIntent pi_stream."`) {
 		t.Fatalf("stdout missing streamed workflow finding:\n%s", stdout.String())
+	}
+}
+
+func TestStreamingEvidenceNormalizesBeforeEmit(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	restore := output.SetWritersForTest(&stdout, &stderr)
+	defer restore()
+
+	opts := defaultEvidenceOptions()
+	opts.maxString = 12
+	collector := newEvidenceCollector(newEvidenceStreamer("jsonl", opts))
+	collector.append(nil, entityRecord("payment_intent", map[string]any{
+		"id":            "pi_stream",
+		"object":        "payment_intent",
+		"client_secret": "pi_stream_secret_leak",
+		"description":   "this description is intentionally long",
+	}))
+
+	lines := ndjsonLines(stdout.String())
+	if len(lines) != 1 {
+		t.Fatalf("streamed %d lines, want 1: %s", len(lines), stdout.String())
+	}
+	if strings.Contains(lines[0], "pi_stream_secret_leak") {
+		t.Fatalf("stream leaked client_secret: %s", lines[0])
+	}
+	if !strings.Contains(lines[0], `"client_secret":"[REDACTED]"`) || !strings.Contains(lines[0], `"@redacted"`) {
+		t.Fatalf("stream did not redact sensitive field: %s", lines[0])
+	}
+	if !strings.Contains(lines[0], `"truncated_fields"`) || !strings.Contains(lines[0], `"path":"description"`) {
+		t.Fatalf("stream did not include truncation note: %s", lines[0])
 	}
 }
 

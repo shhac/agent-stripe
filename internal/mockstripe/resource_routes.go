@@ -39,7 +39,7 @@ func (r mockResource) handleList(w http.ResponseWriter, req *http.Request) {
 	if !requireGet(w, req) {
 		return
 	}
-	writeList(w, r.path, limit(r.filteredItems(req), req))
+	writeList(w, r.path, r.filteredItems(req), req)
 }
 
 func (r mockResource) handleSearch(w http.ResponseWriter, req *http.Request) {
@@ -50,7 +50,7 @@ func (r mockResource) handleSearch(w http.ResponseWriter, req *http.Request) {
 		writeStripeError(w, http.StatusBadRequest, "invalid_request_error", "parameter_missing", "Missing required param: query")
 		return
 	}
-	writeSearchList(w, r.path+"/search", limit(r.items(), req))
+	writeSearchList(w, r.path+"/search", r.items(), req)
 }
 
 func (r mockResource) handleGet(w http.ResponseWriter, req *http.Request) {

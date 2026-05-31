@@ -39,9 +39,9 @@ func (securityKeychain) Get(name string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func (securityKeychain) Delete(name string) {
+func (securityKeychain) Delete(name string) error {
 	if runtime.GOOS != "darwin" {
-		return
+		return nil
 	}
-	_ = exec.Command("security", "delete-generic-password", "-s", keychainService, "-a", name).Run()
+	return exec.Command("security", "delete-generic-password", "-s", keychainService, "-a", name).Run()
 }

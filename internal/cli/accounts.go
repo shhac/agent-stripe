@@ -14,8 +14,7 @@ import (
 
 func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 	var limit int
-	var startingAfter string
-	var endingBefore string
+	var cursor cursorFlags
 	var full bool
 
 	accounts := &cobra.Command{
@@ -47,8 +46,7 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 			flags := globals()
 			params := url.Values{}
 			shared.AddLimit(params, limit)
-			shared.AddString(params, "starting_after", startingAfter)
-			shared.AddString(params, "ending_before", endingBefore)
+			cursor.AddTo(params)
 			if full {
 				return shared.GetRawList(flags, "/v1/accounts", params)
 			}
@@ -56,10 +54,8 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 		},
 	}
 	list.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
-	list.Flags().StringVar(&startingAfter, "starting-after", "", "Stripe cursor")
-	list.Flags().StringVar(&endingBefore, "ending-before", "", "Stripe cursor")
+	cursor.AddFlags(list)
 	list.Flags().BoolVar(&full, "full", false, "Return full Stripe account objects instead of compact summaries")
-	markCursorFlagsMutuallyExclusive(list)
 	accounts.AddCommand(list)
 	root.AddCommand(accounts)
 }

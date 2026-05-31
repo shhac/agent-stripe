@@ -97,7 +97,9 @@ func Remove(name string) error {
 	}
 
 	if entry.KeychainManaged {
-		keychain.Delete(name)
+		if err := keychain.Delete(name); err != nil {
+			return err
+		}
 	}
 
 	delete(index, name)

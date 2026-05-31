@@ -11,9 +11,10 @@ import (
 )
 
 type fakeKeychain struct {
-	values  map[string]string
-	deleted []string
-	err     error
+	values    map[string]string
+	deleted   []string
+	err       error
+	deleteErr error
 }
 
 func (f *fakeKeychain) Store(name, apiKey string) error {
@@ -38,9 +39,13 @@ func (f *fakeKeychain) Get(name string) (string, error) {
 	return value, nil
 }
 
-func (f *fakeKeychain) Delete(name string) {
+func (f *fakeKeychain) Delete(name string) error {
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
 	f.deleted = append(f.deleted, name)
 	delete(f.values, name)
+	return nil
 }
 
 func withCredentialTestDir(t *testing.T, backend keychainBackend) string {
@@ -108,6 +113,25 @@ func TestStoreReturnsKeychainErrorWithoutWritingIndex(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "credentials.json")); !os.IsNotExist(err) {
 		t.Fatalf("credentials index should not exist, stat err = %v", err)
+	}
+}
+
+func TestRemoveReturnsDeleteErrorWithoutRemovingIndex(t *testing.T) {
+	fake := &fakeKeychain{deleteErr: errors.New("keychain delete failed")}
+	dir := withCredentialTestDir(t, fake)
+	if err := os.WriteFile(filepath.Join(dir, "credentials.json"), []byte(`{"prod":{"keychain_managed":true}}`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	if err := Remove("prod"); err == nil || !strings.Contains(err.Error(), "keychain delete failed") {
+		t.Fatalf("Remove() error = %v, want keychain delete failed", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "credentials.json"))
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !strings.Contains(string(data), "prod") {
+		t.Fatalf("credentials index removed prod after delete failure: %s", data)
 	}
 }
 

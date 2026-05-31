@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -116,7 +117,7 @@ func (s *Server) handleCheckoutSessionsList(w http.ResponseWriter, r *http.Reque
 	if paymentLink := r.URL.Query().Get("payment_link"); paymentLink != "" {
 		items = filterByString(items, "payment_link", paymentLink)
 	}
-	writeList(w, "/v1/checkout/sessions", limit(items, r))
+	writeList(w, "/v1/checkout/sessions", items, r)
 }
 
 func (s *Server) handleCheckoutSessionGetOrLines(w http.ResponseWriter, r *http.Request) {
@@ -126,7 +127,7 @@ func (s *Server) handleCheckoutSessionGetOrLines(w http.ResponseWriter, r *http.
 	rest := strings.TrimPrefix(r.URL.Path, "/v1/checkout/sessions/")
 	if strings.HasSuffix(rest, "/line_items") {
 		id := strings.TrimSuffix(rest, "/line_items")
-		writeList(w, "/v1/checkout/sessions/"+id+"/line_items", limit(checkoutLineItems(id), r))
+		writeList(w, "/v1/checkout/sessions/"+id+"/line_items", checkoutLineItems(id), r)
 		return
 	}
 	writeOneByID(w, checkoutSessions(), rest, "checkout.session")
@@ -140,7 +141,7 @@ func (s *Server) handleInvoiceSearch(w http.ResponseWriter, r *http.Request) {
 		writeStripeError(w, http.StatusBadRequest, "invalid_request_error", "parameter_missing", "Missing required param: query")
 		return
 	}
-	writeSearchList(w, "/v1/invoices/search", limit(invoices(), r))
+	writeSearchList(w, "/v1/invoices/search", invoices(), r)
 }
 
 func (s *Server) handleInvoicePreview(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +184,7 @@ func (s *Server) handleInvoicesList(w http.ResponseWriter, r *http.Request) {
 	if status := r.URL.Query().Get("status"); status != "" {
 		items = filterByString(items, "status", status)
 	}
-	writeList(w, "/v1/invoices", limit(items, r))
+	writeList(w, "/v1/invoices", items, r)
 }
 
 func (s *Server) handleInvoiceGetOrLines(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +194,7 @@ func (s *Server) handleInvoiceGetOrLines(w http.ResponseWriter, r *http.Request)
 	rest := strings.TrimPrefix(r.URL.Path, "/v1/invoices/")
 	if strings.HasSuffix(rest, "/lines") {
 		id := strings.TrimSuffix(rest, "/lines")
-		writeList(w, "/v1/invoices/"+id+"/lines", limit(invoiceLines(id), r))
+		writeList(w, "/v1/invoices/"+id+"/lines", invoiceLines(id), r)
 		return
 	}
 	writeOneByID(w, invoices(), rest, "invoice")
@@ -210,7 +211,7 @@ func (s *Server) handleTransfersList(w http.ResponseWriter, r *http.Request) {
 	if group := r.URL.Query().Get("transfer_group"); group != "" {
 		items = filterByString(items, "transfer_group", group)
 	}
-	writeList(w, "/v1/transfers", limit(items, r))
+	writeList(w, "/v1/transfers", items, r)
 }
 
 func (s *Server) handleTransferGetOrReversal(w http.ResponseWriter, r *http.Request) {
@@ -263,22 +264,28 @@ func writeOneByID(w http.ResponseWriter, items []map[string]any, id string, obje
 	writeStripeError(w, http.StatusNotFound, "invalid_request_error", "resource_missing", "No such "+objectName+": '"+id+"'")
 }
 
-func writeList(w http.ResponseWriter, path string, items []map[string]any) {
+func writeList(w http.ResponseWriter, path string, items []map[string]any, r *http.Request) {
+	page := listPage(items, r)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"object":   "list",
 		"url":      path,
-		"has_more": false,
-		"data":     items,
+		"has_more": page.hasMore,
+		"data":     page.items,
 	})
 }
 
-func writeSearchList(w http.ResponseWriter, path string, items []map[string]any) {
+func writeSearchList(w http.ResponseWriter, path string, items []map[string]any, r *http.Request) {
+	page := listPage(items, r)
+	var nextPage any
+	if page.hasMore && len(page.items) > 0 {
+		nextPage = "mock_next_" + stringValue(page.items[len(page.items)-1], "id")
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"object":    "search_result",
 		"url":       path,
-		"has_more":  false,
-		"next_page": nil,
-		"data":      items,
+		"has_more":  page.hasMore,
+		"next_page": nextPage,
+		"data":      page.items,
 	})
 }
 
@@ -301,17 +308,53 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = enc.Encode(payload)
 }
 
-func limit(items []map[string]any, r *http.Request) []map[string]any {
+type pagedList struct {
+	items   []map[string]any
+	hasMore bool
+}
+
+func listPage(items []map[string]any, r *http.Request) pagedList {
+	items = applyCursor(items, r.URL.Query())
 	n := 10
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed >= 0 {
 			n = parsed
 		}
 	}
-	if n > len(items) {
-		n = len(items)
+	if n >= len(items) {
+		return pagedList{items: items}
 	}
-	return items[:n]
+	return pagedList{items: items[:n], hasMore: true}
+}
+
+func applyCursor(items []map[string]any, query url.Values) []map[string]any {
+	if startingAfter := query.Get("starting_after"); startingAfter != "" {
+		if idx := indexByID(items, startingAfter); idx >= 0 && idx+1 < len(items) {
+			items = items[idx+1:]
+		} else if idx >= 0 {
+			items = nil
+		}
+	}
+	if endingBefore := query.Get("ending_before"); endingBefore != "" {
+		if idx := indexByID(items, endingBefore); idx >= 0 {
+			items = items[:idx]
+		}
+	}
+	return items
+}
+
+func indexByID(items []map[string]any, id string) int {
+	for idx, item := range items {
+		if stringValue(item, "id") == id {
+			return idx
+		}
+	}
+	return -1
+}
+
+func stringValue(item map[string]any, key string) string {
+	value, _ := item[key].(string)
+	return value
 }
 
 func filterByString(items []map[string]any, key, want string) []map[string]any {

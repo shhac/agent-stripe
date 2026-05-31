@@ -42,6 +42,57 @@ func TestServerListsFilteredEvents(t *testing.T) {
 	}
 }
 
+func TestServerListPaginationCursors(t *testing.T) {
+	server := httptest.NewServer(NewServer())
+	defer server.Close()
+
+	tests := []struct {
+		name    string
+		query   string
+		wantIDs []string
+		hasMore bool
+	}{
+		{name: "limit has more", query: "limit=1", wantIDs: []string{"cus_mock_123"}, hasMore: true},
+		{name: "starting after", query: "starting_after=cus_mock_123&limit=1", wantIDs: []string{"cus_mock_456"}, hasMore: true},
+		{name: "ending before", query: "ending_before=cus_mock_456", wantIDs: []string{"cus_mock_123"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, server.URL+"/v1/customers?"+tt.query, nil)
+			if err != nil {
+				t.Fatalf("NewRequest() error = %v", err)
+			}
+			req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("sk_test_mock:")))
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("Do() error = %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d", resp.StatusCode)
+			}
+			var body struct {
+				HasMore bool             `json:"has_more"`
+				Data    []map[string]any `json:"data"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+				t.Fatalf("Decode() error = %v", err)
+			}
+			if body.HasMore != tt.hasMore {
+				t.Fatalf("has_more = %t, want %t", body.HasMore, tt.hasMore)
+			}
+			if len(body.Data) != len(tt.wantIDs) {
+				t.Fatalf("len(data) = %d, want %d: %#v", len(body.Data), len(tt.wantIDs), body.Data)
+			}
+			for idx, want := range tt.wantIDs {
+				if body.Data[idx]["id"] != want {
+					t.Fatalf("data[%d].id = %v, want %s", idx, body.Data[idx]["id"], want)
+				}
+			}
+		})
+	}
+}
+
 func TestServerRejectsMissingAuth(t *testing.T) {
 	server := httptest.NewServer(NewServer())
 	defer server.Close()
