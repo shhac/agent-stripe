@@ -1,0 +1,89 @@
+# agent-stripe Command Reference
+
+Run `agent-stripe usage` for the concise in-CLI reference. Run domain usage commands before a focused investigation:
+
+```bash
+agent-stripe invoices usage
+agent-stripe subscriptions usage
+agent-stripe payments usage
+agent-stripe connect usage
+agent-stripe investigate usage
+```
+
+## Auth And Config
+
+- `agent-stripe auth add <profile> --form [--context <ctx>] [--api-version <version>]` - LLM-safe setup. The user types the API key into a native OS dialog.
+- `agent-stripe auth add <profile> --api-key <key> [--context <ctx>] [--api-version <version>]` - direct setup when the key is already in the user's shell, not chat.
+- `agent-stripe auth check [profile]` - verify the active or named profile.
+- `agent-stripe auth list` - list profile metadata without secrets.
+- `agent-stripe auth default <profile>` - set the default profile.
+- `agent-stripe auth update <profile> [--context <ctx>|--clear-context] [--api-version <version>] [--default]` - edit non-secret profile metadata.
+- `agent-stripe auth remove <profile>` - remove a stored profile.
+- `agent-stripe config path|show|get|set|unset` - inspect or edit non-secret config.
+
+## Direct Resource Exploration
+
+- `agent-stripe balance get`
+- `agent-stripe events list|get`
+- `agent-stripe customers list|get|search`
+- `agent-stripe checkout-sessions list|get|line-items`
+- `agent-stripe products list|get|search`
+- `agent-stripe prices list|get|search`
+- `agent-stripe invoices list|get|search|line-items`
+- `agent-stripe payment-intents list|get|search`
+- `agent-stripe setup-intents list|get`
+- `agent-stripe charges list|get|search`
+- `agent-stripe payment-methods list|get`
+- `agent-stripe subscriptions list|get|search|items|invoices`
+- `agent-stripe disputes list|get`
+- `agent-stripe refunds list|get`
+- `agent-stripe transfers list|get`
+- `agent-stripe payouts list|get`
+- `agent-stripe balance-transactions list|get`
+- `agent-stripe application-fees list|get`
+- `agent-stripe payment-links list|get`
+- `agent-stripe early-fraud-warnings list|get`
+- `agent-stripe accounts self|list|get`
+
+Most list commands accept `--limit`, `--created-gte`, `--created-lte`, `--starting-after`, and `--ending-before`. Search commands accept `--query`, `--limit`, and `--page`.
+
+## Investigations
+
+- `agent-stripe investigate resolve <stripe-id-or-invoice-number>` - identify object type and suggest next commands.
+- `agent-stripe investigate customer-context --customer cus_... [--limit N]` - gather customer, payment methods, subscriptions, invoices, PaymentIntents, charges, disputes, and refunds.
+- `agent-stripe investigate customer-card-payment --customer cus_... --last4 4242 [--limit N]` - find the most recent matching customer payment by card last4.
+- `agent-stripe investigate webhook-event evt_...` - fetch event and underlying object.
+- `agent-stripe investigate dispute-response dp_...` - summarize dispute status, due date, reason, charge, customer, and PaymentIntent.
+- `agent-stripe investigate invoice-payment in_...` - walk Invoice -> PaymentIntent -> latest Charge.
+- `agent-stripe investigate invoice-metadata in_...` or `--number ABC-0001` - find PaymentIntent metadata for internal product/order IDs.
+- `agent-stripe investigate subscription-renewal --subscription sub_...|--customer cus_...|--metadata key=value` - latest and next payment summary.
+- `agent-stripe investigate subscription-items --subscription sub_...` - subscription items, prices, products, and metadata.
+- `agent-stripe investigate subscription-amount-change --subscription sub_...` - latest invoice, invoice lines, preview, and current item subtotal.
+- `agent-stripe investigate collection-risk --days 30 [--limit N]` - upcoming subscriptions needing payment detail outreach.
+- `agent-stripe investigate subscription-cancel-risk --days 30 [--limit N]` - subscriptions ending soon or set to cancel.
+- `agent-stripe investigate incoming-payment <pi_id|ch_id|in_id>` - failed or successful customer payment explanation.
+- `agent-stripe investigate outgoing-payment <tr_id|po_id|acct_id>` - Connect transfer, payout, or account readiness issue.
+- `agent-stripe investigate refund-status <re_id>` - refund state and related movement.
+- `agent-stripe investigate payout-failure po_...` - payout failure plus balance transaction.
+- `agent-stripe investigate refund-recovery <re_id|trr_id|ch_id|pi_id> [--transfer tr_...]` - refund and transfer reversal recovery.
+
+## Raw Read-Only API
+
+Use when a needed read endpoint has no first-class command yet:
+
+```bash
+agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
+```
+
+Only GET is exposed.
+
+## Global Flags
+
+- `-p, --profile <alias>` - Stripe profile alias.
+- `--context <Stripe-Context>` - organization or related-account request context.
+- `--api-version <version>` - Stripe API version override.
+- `--format json|yaml|jsonl` - output format.
+- `--expose <path,key>` - reveal redacted Stripe response fields by path or key; comma-separated/repeatable.
+- `--timeout <ms>` - request timeout.
+- `--max-retries <N>` - automatic retries for transient Stripe 429 responses. Default: 2.
+- `--debug` - structured debug records to stderr.

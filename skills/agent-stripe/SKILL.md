@@ -21,78 +21,50 @@ Use `agent-stripe` when investigating Stripe payment incidents, invoice question
 - Never accept pasted Stripe API keys in chat. Ask the user to run `agent-stripe auth add <profile> --form` locally so the key goes directly into an OS dialog.
 - Prefer read-only commands.
 - Use `--context` when the incident is scoped to a connected account or organization account path.
-- Treat live-mode actions as high stakes; this initial CLI is read-first by design.
+- Treat live-mode actions as high stakes; this CLI is read-first by design.
+- Use `--expose <path,key>` only when the user explicitly needs a redacted Stripe response field. Stored profile API keys are never exposed by this flag.
 
-## Common Commands
+## Start Here
 
 ```bash
-agent-stripe auth list
-agent-stripe auth add prod --form --context acct_...
-agent-stripe auth update prod --context acct_...
-agent-stripe auth check
-agent-stripe config show
 agent-stripe usage
 agent-stripe investigate usage
+agent-stripe auth list
+agent-stripe auth check
+agent-stripe config show
 agent-stripe balance get
-agent-stripe checkout-sessions list --customer cus_...
-agent-stripe checkout-sessions line-items cs_...
-agent-stripe events list --type charge.failed --limit 20
-agent-stripe events get evt_...
-agent-stripe customers list --email buyer@example.com
-agent-stripe products list --active true
-agent-stripe prices list --product prod_...
-agent-stripe invoices get in_... --expand payment_intent
-agent-stripe invoices line-items in_...
-agent-stripe payment-intents get pi_... --expand latest_charge
-agent-stripe payment-intents search --query "metadata['order_id']:'123'"
-agent-stripe setup-intents list --customer cus_...
-agent-stripe charges get ch_... --expand payment_intent --expand balance_transaction
-agent-stripe payment-methods list --customer cus_... --type card
-agent-stripe subscriptions get sub_... --expand latest_invoice --expand latest_invoice.payment_intent
-agent-stripe subscriptions invoices sub_... --status open
-agent-stripe subscriptions usage
-agent-stripe payments usage
-agent-stripe connect usage
-agent-stripe disputes list --payment-intent pi_...
-agent-stripe refunds list --payment-intent pi_...
-agent-stripe transfers list --destination acct_...
-agent-stripe payouts get po_...
-agent-stripe balance-transactions get txn_...
-agent-stripe payment-links list --active true
-agent-stripe early-fraud-warnings list --charge ch_...
-agent-stripe accounts self
-agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
 ```
 
-## Investigation Workflows
-
-Prefer `investigate` commands when the user asks a question in incident language rather than asking for a specific Stripe object.
+Prefer `investigate` commands when the user asks a question in incident language rather than asking for a specific Stripe object:
 
 ```bash
-agent-stripe investigate resolve in_...
-agent-stripe investigate resolve MOCK-0001
+agent-stripe investigate resolve <stripe-id-or-invoice-number>
 agent-stripe investigate customer-context --customer cus_...
 agent-stripe investigate customer-card-payment --customer cus_... --last4 4242
-agent-stripe investigate webhook-event evt_...
-agent-stripe investigate dispute-response dp_...
 agent-stripe investigate invoice-payment in_...
 agent-stripe investigate invoice-metadata in_...
-agent-stripe investigate invoice-metadata --number ABC-0001
 agent-stripe investigate subscription-renewal --subscription sub_...
-agent-stripe investigate subscription-renewal --metadata tenant_id=acme
-agent-stripe investigate subscription-items --subscription sub_...
-agent-stripe investigate subscription-amount-change --subscription sub_...
 agent-stripe investigate collection-risk --days 30
-agent-stripe investigate subscription-cancel-risk --days 30
-agent-stripe investigate incoming-payment pi_...
-agent-stripe investigate incoming-payment ch_...
-agent-stripe investigate outgoing-payment tr_...
-agent-stripe investigate outgoing-payment po_...
-agent-stripe investigate outgoing-payment acct_...
+agent-stripe investigate incoming-payment <pi_id|ch_id|in_id>
+agent-stripe investigate outgoing-payment <tr_id|po_id|acct_id>
 agent-stripe investigate refund-status re_...
 agent-stripe investigate payout-failure po_...
-agent-stripe investigate refund-recovery re_...
-agent-stripe investigate refund-recovery trr_... --transfer tr_...
+agent-stripe investigate refund-recovery <re_id|trr_id|ch_id|pi_id> [--transfer tr_...]
+```
+
+For direct exploration, use resource commands:
+
+```bash
+agent-stripe customers list --email buyer@example.com
+agent-stripe payment-intents get pi_... --expand latest_charge
+agent-stripe charges get ch_... --expand payment_intent --expand balance_transaction
+agent-stripe invoices get in_... --expand payment_intent
+agent-stripe subscriptions get sub_... --expand latest_invoice --expand latest_invoice.payment_intent
+agent-stripe payment-methods list --customer cus_... --type card
+agent-stripe accounts self
+agent-stripe accounts list
+agent-stripe accounts get acct_...
+agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
 ```
 
 For local testing, run `mockstripe` and set `AGENT_STRIPE_BASE_URL` to its base URL.
@@ -101,7 +73,7 @@ For local testing, run `mockstripe` and set `AGENT_STRIPE_BASE_URL` to its base 
 
 Lists and investigation output default to NDJSON. Single resources default to JSON. Errors include `fixable_by` and usually a `hint`.
 
-Sensitive Stripe fields are redacted by default with `{"@redacted":true,...}` placeholders and `@redacted` path notes. Use `--expose <path,key>` only when the user explicitly needs that field for the investigation; `--expose` can be comma-separated or repeated. Stored profile API keys are never exposed by this flag.
+Sensitive Stripe fields are redacted by default with `{"@redacted":true,...}` placeholders and `@redacted` path notes. Use `--expose <path,key>` only when the user explicitly needs that field for the investigation; `--expose` can be comma-separated or repeated.
 
 Investigation output uses evidence records:
 
@@ -110,8 +82,16 @@ Investigation output uses evidence records:
 {"type":"finding","severity":"warning","summary":"...","data":{}}
 ```
 
-Expanded nested Stripe objects are emitted as separate `entity` records and replaced by ID in the parent `data`, so navigation IDs stay visible and downstream commands can use the same Stripe-shaped fields. Long strings may be truncated with `truncated_fields`; rerun with `--expand-field <path>` or `--full`. Truncation controls do not override redaction; use `--expose` for redacted fields.
+Expanded nested Stripe objects are emitted as separate `entity` records and replaced by ID in the parent `data`, so navigation IDs stay visible and downstream commands can use the same Stripe-shaped fields. Long strings may be truncated with `truncated_fields`; rerun with `--expand-field <path>` or `--full`. Truncation controls do not override redaction.
 
 Stripe `429` responses retry automatically with bounded exponential backoff and jitter. Use `--max-retries 0` for one-shot behavior or `--debug` to see retry records on stderr.
 
 Non-secret profile/config metadata lives in XDG config. API keys live in Keychain. Use `agent-stripe config show` or `agent-stripe config path` for config inspection; use `auth update` rather than editing JSON by hand.
+
+## Incremental References
+
+Load these only when you need more detail:
+
+- [references/commands.md](references/commands.md): command map, domain usage commands, and flags.
+- [references/output.md](references/output.md): output, redaction, truncation, pagination, errors, and debug records.
+- [references/scenarios.md](references/scenarios.md): common incident questions and recommended command sequences.

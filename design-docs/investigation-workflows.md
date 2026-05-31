@@ -189,5 +189,5 @@ Potential output improvements:
 
 - `--summary-only` for high-level finding records without entity payloads.
 - `--include-object <type>` / `--exclude-object <type>` for large investigations.
-- `--redact-field <path>` for customer PII-heavy contexts.
+- Redaction policy presets for stricter customer PII contexts, building on default `@redacted` and `--expose`.
 - `--limit-related N` to cap fan-out per related collection.

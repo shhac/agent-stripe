@@ -61,6 +61,7 @@ TRIAGE STARTERS
   agent-stripe balance-transactions get <txn_id>
   agent-stripe payment-links list [--active true]
   agent-stripe early-fraud-warnings list [--charge <ch_id>] [--payment-intent <pi_id>]
+  agent-stripe accounts self
   agent-stripe accounts list
   agent-stripe accounts get <acct_id>
 
@@ -87,6 +88,7 @@ INVESTIGATIONS
   Investigation output is evidence NDJSON: entity records plus finding records.
   Nested expanded Stripe objects are emitted as separate entity records and replaced by ID in the parent.
   Use --max-string N, --expand-field <path>, or --full for verbose fields.
+  Redaction still applies; use --expose <path,key> only when the hidden value is required.
 
 RAW READ-ONLY API
   agent-stripe api get /v1/payment_intents/pi_... [--query expand[]=latest_charge]

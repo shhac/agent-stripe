@@ -72,5 +72,6 @@ Fixtures should be intentionally small but incident-shaped:
 - subscription renewal, past-due, cancellation, missing payment method, and expiring-card cases
 - invoice line items, subscription items, prices, and products with metadata
 - refunds, transfer reversals, payouts, balance transactions, application fees, payment links, Checkout Sessions, SetupIntents, and early fraud warnings
+- fake sensitive fields such as client secrets, customer contact fields, receipt/invoice URLs, card fingerprints, and token-like metadata so redaction can be tested safely
 
 Prefer adding focused fixture fields that support a real triage workflow over copying full Stripe objects.

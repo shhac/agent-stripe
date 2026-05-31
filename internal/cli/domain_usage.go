@@ -56,6 +56,7 @@ WHEN A CUSTOMER SENDS AN INVOICE COPY
 OUTPUT NOTES
   Invoice, PaymentIntent, Charge, and line-item IDs are preserved in compact output.
   Use --expand payment_intent on direct invoice reads when you need raw expanded fields.
+  Sensitive URLs and customer contact fields are redacted by default; use --expose only when needed.
 `
 
 const subscriptionsUsageText = `subscriptions — renewal, collection, and item triage
@@ -81,6 +82,7 @@ QUESTIONS THIS ANSWERS
 OUTPUT NOTES
   Investigation output emits subscription, invoice, payment, item, price, and product evidence records.
   Use --full or --expand-field for verbose item/product metadata.
+  Redaction is independent from truncation; use --expose for redacted fields.
 `
 
 const paymentsUsageText = `payments — PaymentIntent, Charge, card, and failure triage
@@ -103,6 +105,7 @@ PAYMENT FAILURE FLOW
 CARD LAST4 FLOW
   Last4 is not unique, so include --customer.
   Use customer-card-payment for the most recent matching charge.
+  Card last4 stays visible for triage; fingerprints, receipts, tokens, and client secrets are redacted by default.
 `
 
 const connectUsageText = `connect — connected-account and money movement triage
@@ -128,4 +131,5 @@ CONTEXT
 
 OUTPUT NOTES
   Findings summarize failed/canceled/reversed movement and include failure_code, failure_message, failure_reason, or failure balance transaction when present.
+  Connected account IDs and ledger IDs stay visible; sensitive URLs/contact fields remain redacted unless exposed.
 `

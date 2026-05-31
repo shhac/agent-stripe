@@ -99,6 +99,10 @@ agent-stripe balance-transactions get txn_...
 agent-stripe application-fees list --charge ch_...
 agent-stripe payment-links list --active true
 agent-stripe early-fraud-warnings list --charge ch_...
+agent-stripe accounts self
+agent-stripe accounts list
+agent-stripe accounts get acct_...
+agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
 agent-stripe payments usage
 agent-stripe connect usage
 agent-stripe auth update prod --context acct_...
@@ -136,6 +140,10 @@ make mock
 make mock-dev ARGS="events list --type charge.failed"
 make dev ARGS="usage"
 ```
+
+## LLM Skill
+
+The bundled skill lives at `skills/agent-stripe/SKILL.md`. It keeps the core safety and workflow guidance short, with deeper command, output, and scenario references in `skills/agent-stripe/references/`.
 
 ## Mock Stripe
 
