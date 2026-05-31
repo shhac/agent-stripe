@@ -101,6 +101,8 @@ For local testing, run `mockstripe` and set `AGENT_STRIPE_BASE_URL` to its base 
 
 Lists and investigation output default to NDJSON. Single resources default to JSON. Errors include `fixable_by` and usually a `hint`.
 
+Sensitive Stripe fields are redacted by default with `{"@redacted":true,...}` placeholders and `@redacted` path notes. Use `--expose <path,key>` only when the user explicitly needs that field for the investigation; `--expose` can be comma-separated or repeated. Stored profile API keys are never exposed by this flag.
+
 Investigation output uses evidence records:
 
 ```json
@@ -108,7 +110,7 @@ Investigation output uses evidence records:
 {"type":"finding","severity":"warning","summary":"...","data":{}}
 ```
 
-Expanded nested Stripe objects are emitted as separate `entity` records and replaced by ID in the parent `data`, so navigation IDs stay visible and downstream commands can use the same Stripe-shaped fields. Long strings may be truncated with `truncated_fields`; rerun with `--expand-field <path>` or `--full`.
+Expanded nested Stripe objects are emitted as separate `entity` records and replaced by ID in the parent `data`, so navigation IDs stay visible and downstream commands can use the same Stripe-shaped fields. Long strings may be truncated with `truncated_fields`; rerun with `--expand-field <path>` or `--full`. Truncation controls do not override redaction; use `--expose` for redacted fields.
 
 Stripe `429` responses retry automatically with bounded exponential backoff and jitter. Use `--max-retries 0` for one-shot behavior or `--debug` to see retry records on stderr.
 

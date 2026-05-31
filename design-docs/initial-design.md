@@ -65,7 +65,9 @@ Lists default to NDJSON so an LLM can stream, truncate, and resume investigation
 
 Stripe errors often include request IDs, request-log URLs, error codes, and decline codes. The API client should surface those in messages or hints when present.
 
-`--debug` is the global diagnostic switch. It prints structured JSON records to stderr for client setup and HTTP responses. Debug output may include Stripe response bodies and request URLs, but must not include raw API keys.
+Sensitive Stripe response fields are redacted by default in resource output, investigation evidence, and debug response bodies. Redacted values use an inline `{"@redacted":true,...}` placeholder, and the containing object carries an `@redacted` path list so an LLM can tell which field exists without seeing the value. `--expose <field-or-path>` is the explicit opt-in escape hatch; it accepts comma-separated values and repeated flags. It must never expose stored profile API keys.
+
+`--debug` is the global diagnostic switch. It prints structured JSON records to stderr for client setup and HTTP responses. Debug output may include redacted Stripe response bodies and request URLs, but must not include raw API keys.
 
 Stripe rate limits and lock timeouts use HTTP 429. The CLI retries those responses with bounded exponential backoff and jitter, then emits a `fixable_by=retry` error with Stripe's rate-limit reason header when present. `--max-retries 0` disables automatic retries for callers that need one-shot behavior.
 

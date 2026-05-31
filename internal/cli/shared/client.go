@@ -130,6 +130,7 @@ func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error)
 		MaxRetries: flags.MaxRetries,
 	})
 	client.SetDebug(flags.Debug)
+	client.SetDebugRedaction(RedactionOptions(flags))
 	if err := fn(ctx, client); err != nil {
 		output.WriteError(output.Stderr(), err)
 		return nil
@@ -143,7 +144,7 @@ func GetRawItem(flags *GlobalFlags, path string, params url.Values) error {
 		if err != nil {
 			return err
 		}
-		WriteRawItem(raw, flags.Format)
+		WriteRawItem(raw, flags.Format, RedactionOptions(flags))
 		return nil
 	})
 }
@@ -154,7 +155,7 @@ func GetRawList(flags *GlobalFlags, path string, params url.Values) error {
 		if err != nil {
 			return err
 		}
-		return WriteRawList(raw, flags.Format)
+		return WriteRawList(raw, flags.Format, RedactionOptions(flags))
 	})
 }
 
@@ -164,7 +165,7 @@ func PostFormRawItem(flags *GlobalFlags, path string, params url.Values) error {
 		if err != nil {
 			return err
 		}
-		WriteRawItem(raw, flags.Format)
+		WriteRawItem(raw, flags.Format, RedactionOptions(flags))
 		return nil
 	})
 }

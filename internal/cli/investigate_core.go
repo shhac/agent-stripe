@@ -27,7 +27,7 @@ func runInvestigation(flags *shared.GlobalFlags, outputOpts *investigationOutput
 		if err != nil {
 			return err
 		}
-		writeEvidence(records, flags.Format, outputOpts.evidenceOptions())
+		writeEvidence(records, flags.Format, outputOpts.evidenceOptions(flags))
 		return nil
 	})
 }
@@ -38,14 +38,18 @@ func runWithInvestigator(flags *shared.GlobalFlags, outputOpts *investigationOut
 	})
 }
 
-func (opts *investigationOutputOptions) evidenceOptions() evidenceOptions {
+func (opts *investigationOutputOptions) evidenceOptions(flags *shared.GlobalFlags) evidenceOptions {
+	redaction := shared.RedactionOptions(flags)
 	if opts == nil {
-		return defaultEvidenceOptions()
+		evidenceOpts := defaultEvidenceOptions()
+		evidenceOpts.redaction = redaction
+		return evidenceOpts
 	}
 	evidenceOpts := evidenceOptions{
 		full:         opts.full,
 		expandFields: opts.expandFields,
 		maxString:    opts.maxString,
+		redaction:    redaction,
 	}
 	if evidenceOpts.maxString <= 0 {
 		evidenceOpts.maxString = defaultMaxString

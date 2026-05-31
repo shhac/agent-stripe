@@ -49,6 +49,15 @@ func assertContains(t *testing.T, out string, wants ...string) {
 	}
 }
 
+func assertNotContains(t *testing.T, out string, blocked ...string) {
+	t.Helper()
+	for _, value := range blocked {
+		if strings.Contains(out, value) {
+			t.Fatalf("output unexpectedly contained %s:\n%s", value, out)
+		}
+	}
+}
+
 func runMockCLI(t *testing.T, args ...string) string {
 	t.Helper()
 	return newMockCLIRunner(t).Run(args...)

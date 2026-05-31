@@ -17,6 +17,7 @@ type GlobalFlags struct {
 	APIKey     string
 	BaseURL    string
 	Format     string
+	Expose     []string
 	Timeout    int
 	MaxRetries int
 	Debug      bool
@@ -57,12 +58,24 @@ func WriteItem(data any, format string) {
 	output.Print(data, f, true)
 }
 
-func WriteRawItem(raw json.RawMessage, format string) {
-	f := output.ResolveFormat(format, output.FormatJSON)
-	output.WriteRawJSON(raw, f, true)
+func RedactionOptions(flags *GlobalFlags) output.RedactionOptions {
+	if flags == nil {
+		return output.RedactionOptions{}
+	}
+	return output.RedactionOptions{Expose: flags.Expose}
 }
 
-func WriteRawList(raw json.RawMessage, format string) error {
+func WriteRawItem(raw json.RawMessage, format string, redaction output.RedactionOptions) {
+	f := output.ResolveFormat(format, output.FormatJSON)
+	var data any
+	if err := json.Unmarshal(raw, &data); err != nil {
+		output.WriteRawJSON(raw, f, true)
+		return
+	}
+	output.Print(output.Redact(data, redaction), f, true)
+}
+
+func WriteRawList(raw json.RawMessage, format string, redaction output.RedactionOptions) error {
 	list, err := api.DecodeList(raw)
 	if err != nil {
 		return err
@@ -73,7 +86,7 @@ func WriteRawList(raw json.RawMessage, format string) error {
 		if err := json.Unmarshal(item, &decoded); err != nil {
 			return agenterrors.Wrap(err, agenterrors.FixableByAgent)
 		}
-		items = append(items, decoded)
+		items = append(items, output.Redact(decoded, redaction))
 	}
 	var pagination *output.Pagination
 	if list.HasMore || list.NextPage != "" {

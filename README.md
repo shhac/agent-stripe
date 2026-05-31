@@ -7,7 +7,7 @@ Stripe incident triage CLI for AI agents. It is designed for read-heavy investig
 - **Keychain-first credentials**: API keys are stored in macOS Keychain and are never printed back to the caller.
 - **Multi-profile support**: configure aliases for sandbox, live, organization, or holding-account workflows.
 - **Stripe context aware**: supports `Stripe-Context` for organization keys and related-account requests.
-- **LLM-shaped output**: lists default to NDJSON, single resources default to JSON, and errors include `fixable_by` plus hints.
+- **LLM-shaped output**: lists default to NDJSON, single resources default to JSON, sensitive Stripe fields are redacted by default, and errors include `fixable_by` plus hints.
 - **Bounded Stripe retries**: transient Stripe `429` responses retry with exponential backoff and jitter before returning a retryable error.
 - **Read-first triage**: balance, events, PaymentIntents, charges, disputes, accounts, and a GET-only raw API escape hatch.
 - **Subscription investigation**: inspect subscriptions, subscription items, invoices, and payment failures from one command group.
@@ -62,7 +62,16 @@ Errors are written to stderr as JSON:
 {"error":"Permission denied: ...","fixable_by":"human","hint":"The key may need read permissions for this Stripe resource..."}
 ```
 
-Use `--debug` to emit extra JSON records to stderr while commands run. Debug output includes client setup details, credential source labels, request URLs, status codes, request IDs, and response bodies, but not raw API keys.
+Sensitive Stripe response fields are redacted by default. Redacted values are replaced with `{"@redacted":true,...}` and the containing object includes an `@redacted` note with the field path and expose hint. Use `--expose <field-or-path>` when a human has decided the field is safe for the current investigation:
+
+```bash
+agent-stripe payment-intents get pi_... --expose client_secret
+agent-stripe payment-intents get pi_... --expose metadata.internal_order_token,receipt_url
+```
+
+`--expose` accepts comma-separated values and can be repeated. It applies to Stripe response output and debug response bodies, but never exposes stored profile API keys.
+
+Use `--debug` to emit extra JSON records to stderr while commands run. Debug output includes client setup details, credential source labels, request URLs, status codes, request IDs, and redacted response bodies, but not raw API keys.
 
 Stripe `429` responses are retried automatically up to `--max-retries` times, which defaults to 2. After retries are exhausted, the CLI returns a JSON error with `fixable_by:"retry"` and includes Stripe's rate-limit reason header when present.
 
@@ -115,7 +124,7 @@ agent-stripe investigate payout-failure po_...
 agent-stripe investigate refund-recovery trr_... --transfer tr_...
 ```
 
-Investigation output keeps Stripe-shaped `data` while emitting nested expanded Stripe objects as their own `entity` records. Long strings are truncated by default with `truncated_fields`; use `--expand-field <path>` or `--full` when the hidden content matters.
+Investigation output keeps Stripe-shaped `data` while emitting nested expanded Stripe objects as their own `entity` records. Long strings are truncated by default with `truncated_fields`; use `--expand-field <path>` or `--full` when the hidden content matters. Sensitive fields are still redacted unless explicitly exposed with `--expose`.
 
 ## Development
 

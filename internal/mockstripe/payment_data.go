@@ -11,8 +11,10 @@ func paymentIntents() []map[string]any {
 			"customer":       "cus_mock_123",
 			"payment_method": "pm_mock_visa",
 			"latest_charge":  "ch_mock_succeeded",
+			"client_secret":  "pi_mock_succeeded_secret_fake",
 			"metadata": map[string]string{
-				"order_id": "order_123",
+				"order_id":  "order_123",
+				"api_token": "tok_fake_order",
 			},
 		},
 		{
@@ -24,6 +26,7 @@ func paymentIntents() []map[string]any {
 			"customer":       "cus_mock_456",
 			"payment_method": "pm_mock_declined",
 			"latest_charge":  "ch_mock_failed",
+			"client_secret":  "pi_mock_failed_secret_fake",
 			"last_payment_error": map[string]any{
 				"code":         "card_declined",
 				"decline_code": "insufficient_funds",
@@ -42,6 +45,7 @@ func paymentIntents() []map[string]any {
 			"customer":       "cus_mock_expiring",
 			"payment_method": "pm_mock_expiring",
 			"latest_charge":  "ch_mock_requires_action",
+			"client_secret":  "pi_mock_requires_action_secret_fake",
 			"metadata": map[string]string{
 				"order_id": "order_action",
 			},
@@ -62,13 +66,15 @@ func charges() []map[string]any {
 			"payment_method":      "pm_mock_visa",
 			"payment_intent":      "pi_mock_succeeded",
 			"balance_transaction": "txn_mock_succeeded",
+			"receipt_url":         "https://receipts.stripe.example.test/fake/ch_mock_succeeded",
 			"payment_method_details": map[string]any{
 				"type": "card",
 				"card": map[string]any{
-					"brand":     "visa",
-					"last4":     "4242",
-					"exp_month": 12,
-					"exp_year":  2030,
+					"brand":       "visa",
+					"last4":       "4242",
+					"exp_month":   12,
+					"exp_year":    2030,
+					"fingerprint": "fp_mock_visa",
 				},
 			},
 			"outcome": map[string]any{
@@ -87,6 +93,7 @@ func charges() []map[string]any {
 			"customer":        "cus_mock_456",
 			"payment_method":  "pm_mock_declined",
 			"payment_intent":  "pi_mock_failed",
+			"receipt_url":     "https://receipts.stripe.example.test/fake/ch_mock_failed",
 			"failure_code":    "card_declined",
 			"failure_message": "Your card has insufficient funds.",
 			"outcome": map[string]any{
@@ -97,10 +104,11 @@ func charges() []map[string]any {
 			"payment_method_details": map[string]any{
 				"type": "card",
 				"card": map[string]any{
-					"brand":     "visa",
-					"last4":     "0002",
-					"exp_month": 1,
-					"exp_year":  2025,
+					"brand":       "visa",
+					"last4":       "0002",
+					"exp_month":   1,
+					"exp_year":    2025,
+					"fingerprint": "fp_mock_declined",
 				},
 			},
 		},
@@ -114,6 +122,7 @@ func charges() []map[string]any {
 			"customer":       "cus_mock_expiring",
 			"payment_method": "pm_mock_expiring",
 			"payment_intent": "pi_mock_requires_action",
+			"receipt_url":    "https://receipts.stripe.example.test/fake/ch_mock_requires_action",
 			"outcome": map[string]any{
 				"type":           "issuer_declined",
 				"network_status": "requires_action",
@@ -121,10 +130,11 @@ func charges() []map[string]any {
 			"payment_method_details": map[string]any{
 				"type": "card",
 				"card": map[string]any{
-					"brand":     "visa",
-					"last4":     "0341",
-					"exp_month": 1,
-					"exp_year":  2026,
+					"brand":       "visa",
+					"last4":       "0341",
+					"exp_month":   1,
+					"exp_year":    2026,
+					"fingerprint": "fp_mock_expiring",
 				},
 			},
 		},

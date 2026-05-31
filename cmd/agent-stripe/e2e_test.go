@@ -21,6 +21,28 @@ func TestCLIDebugAgainstMockStripe(t *testing.T) {
 	}
 }
 
+func TestCLIRedactsSensitiveStripeFieldsByDefault(t *testing.T) {
+	out := runMockCLI(t, "payment-intents", "get", "pi_mock_succeeded")
+	assertContains(t, out, `"@redacted"`, `"path": "client_secret"`, `"path": "metadata.api_token"`, `"order_id": "order_123"`)
+	assertNotContains(t, out, "pi_mock_succeeded_secret_fake", "tok_fake_order")
+
+	out = runMockCLI(t, "customers", "get", "cus_mock_123")
+	assertContains(t, out, `"path": "email"`, `"path": "name"`, `"path": "phone"`)
+	assertNotContains(t, out, "buyer@example.com", "Mock Buyer", "+15550101001")
+}
+
+func TestCLIExposeRevealsRequestedStripeFields(t *testing.T) {
+	out := runMockCLI(t, "--expose", "client_secret,metadata.api_token", "payment-intents", "get", "pi_mock_succeeded")
+	assertContains(t, out, `"client_secret": "pi_mock_succeeded_secret_fake"`, `"api_token": "tok_fake_order"`, `"order_id": "order_123"`)
+	assertNotContains(t, out, `"@redacted"`)
+}
+
+func TestCLIDebugRedactsStripeResponseBodies(t *testing.T) {
+	out := runMockCLI(t, "--debug", "payment-intents", "get", "pi_mock_succeeded")
+	assertContains(t, out, `"@debug":"http"`, `"path":"client_secret"`)
+	assertNotContains(t, out, "pi_mock_succeeded_secret_fake", "tok_fake_order")
+}
+
 func TestCLISubscriptionsAgainstMockStripe(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("subscriptions", "invoices", "sub_mock_past_due", "--status", "open")

@@ -95,6 +95,7 @@ RAW READ-ONLY API
 OUTPUT
   Lists default to NDJSON/jsonl, one object per line, with @pagination when there is another page.
   Single-object reads default to pretty JSON.
+  Sensitive Stripe fields are replaced by {"@redacted":true,...}; use --expose <path,key> to opt in.
   Errors are JSON on stderr with fixable_by: agent|human|retry and a hint where possible.
   Stripe 429s retry automatically with backoff and jitter before returning fixable_by=retry.
 
@@ -103,6 +104,7 @@ GLOBAL FLAGS
   --context <Stripe-Context>
   --api-version <version>
   --format json|yaml|jsonl
+  --expose <path,key>  Reveal redacted Stripe response fields by path or key; comma-separated/repeatable
   --timeout <ms>
   --max-retries <N>  Maximum automatic retries for transient Stripe 429 responses (default 2)
   --debug   Emit structured debug records to stderr (client setup + HTTP)

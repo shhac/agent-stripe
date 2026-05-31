@@ -37,3 +37,47 @@ func TestParseFormatAcceptsNDJSONAlias(t *testing.T) {
 		t.Fatalf("ParseFormat() = %q", got)
 	}
 }
+
+func TestRedactSensitiveFieldsByDefault(t *testing.T) {
+	input := map[string]any{
+		"id":            "pi_mock_123",
+		"object":        "payment_intent",
+		"client_secret": "pi_mock_123_secret_fake",
+		"metadata": map[string]any{
+			"internal_product_id": "prod_internal_basic",
+			"support_email":       "support@example.test",
+			"api_token":           "tok_fake",
+		},
+	}
+
+	redacted := Redact(input, RedactionOptions{}).(map[string]any)
+	if redacted["client_secret"] == "pi_mock_123_secret_fake" {
+		t.Fatalf("client_secret was not redacted: %#v", redacted)
+	}
+	if redacted["metadata"].(map[string]any)["internal_product_id"] != "prod_internal_basic" {
+		t.Fatalf("non-sensitive metadata was redacted: %#v", redacted)
+	}
+	if _, ok := redacted["@redacted"].([]any); !ok {
+		t.Fatalf("@redacted note missing: %#v", redacted)
+	}
+}
+
+func TestRedactHonorsExposeByPathOrKey(t *testing.T) {
+	input := map[string]any{
+		"client_secret": "pi_mock_123_secret_fake",
+		"metadata": map[string]any{
+			"api_token": "tok_fake",
+		},
+	}
+
+	redacted := Redact(input, RedactionOptions{Expose: []string{"client_secret,metadata.api_token"}}).(map[string]any)
+	if redacted["client_secret"] != "pi_mock_123_secret_fake" {
+		t.Fatalf("client_secret = %#v", redacted["client_secret"])
+	}
+	if redacted["metadata"].(map[string]any)["api_token"] != "tok_fake" {
+		t.Fatalf("metadata.api_token = %#v", redacted["metadata"])
+	}
+	if _, ok := redacted["@redacted"]; ok {
+		t.Fatalf("@redacted notes present despite exposed fields: %#v", redacted)
+	}
+}

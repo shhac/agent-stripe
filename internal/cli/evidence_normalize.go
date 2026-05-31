@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"strings"
+
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 func normalizeEvidence(records []evidenceRecord, opts evidenceOptions) []evidenceRecord {
@@ -23,6 +25,7 @@ type evidenceOptions struct {
 	full         bool
 	expandFields []string
 	maxString    int
+	redaction    output.RedactionOptions
 }
 
 func defaultEvidenceOptions() evidenceOptions {
@@ -31,11 +34,20 @@ func defaultEvidenceOptions() evidenceOptions {
 
 func normalizeRecord(record evidenceRecord, opts evidenceOptions, seen map[string]bool) (evidenceRecord, []evidenceRecord) {
 	if record.Type != "entity" || record.Data == nil {
+		if record.Data != nil {
+			if redacted, ok := output.Redact(record.Data, opts.redaction).(map[string]any); ok {
+				record.Data = redacted
+			}
+		}
 		return record, nil
 	}
 	result := normalizeValue(record.Data, "", opts, seen)
 	if normalized, ok := result.value.(map[string]any); ok {
-		record.Data = normalized
+		if redacted, ok := output.Redact(normalized, opts.redaction).(map[string]any); ok {
+			record.Data = redacted
+		} else {
+			record.Data = normalized
+		}
 	}
 	record.ExtractedEntities = append(record.ExtractedEntities, result.notes...)
 	record.TruncatedFields = append(record.TruncatedFields, result.truncated...)

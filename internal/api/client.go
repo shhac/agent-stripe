@@ -16,6 +16,7 @@ import (
 	"time"
 
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 const defaultBaseURL = "https://api.stripe.com"
@@ -30,6 +31,7 @@ type Client struct {
 	maxRetries int
 	http       *http.Client
 	debug      bool
+	redaction  output.RedactionOptions
 }
 
 type Options struct {
@@ -57,6 +59,10 @@ func NewClient(opts Options) *Client {
 
 func (c *Client) SetDebug(enabled bool) {
 	c.debug = enabled
+}
+
+func (c *Client) SetDebugRedaction(opts output.RedactionOptions) {
+	c.redaction = opts
 }
 
 func (c *Client) Get(ctx context.Context, path string, params url.Values) (json.RawMessage, error) {
@@ -347,7 +353,7 @@ func (c *Client) logDebug(method, requestURL string, status int, requestID strin
 	}
 	var parsed any
 	if json.Unmarshal(body, &parsed) == nil {
-		entry["body"] = parsed
+		entry["body"] = output.Redact(parsed, c.redaction)
 	} else {
 		entry["body_raw"] = string(body)
 	}
