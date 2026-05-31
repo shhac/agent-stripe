@@ -53,19 +53,32 @@ Most list commands accept `--limit`, `--created-gte`, `--created-lte`, `--starti
 - `agent-stripe investigate customer-context --customer cus_... [--limit N]` - gather customer, payment methods, subscriptions, invoices, PaymentIntents, charges, disputes, and refunds.
 - `agent-stripe investigate customer-card-payment --customer cus_... --last4 4242 [--limit N]` - find the most recent matching customer payment by card last4.
 - `agent-stripe investigate webhook-event evt_...` - fetch event and underlying object.
+- `agent-stripe investigate webhook-delivery evt_... [--endpoint we_...]|we_...` - inspect event pending webhooks and endpoint config.
 - `agent-stripe investigate dispute-response dp_...` - summarize dispute status, due date, reason, charge, customer, and PaymentIntent.
+- `agent-stripe investigate dispute-impact dp_...|ch_...|cus_...` - dispute exposure and related payment/refund evidence.
 - `agent-stripe investigate invoice-payment in_...` - walk Invoice -> PaymentIntent -> latest Charge.
+- `agent-stripe investigate invoice-collection in_...|cus_...|sub_...` - invoice retry, attempt count, next payment attempt, and collection state.
 - `agent-stripe investigate invoice-metadata in_...` or `--number ABC-0001` - find PaymentIntent metadata for internal product/order IDs.
 - `agent-stripe investigate subscription-renewal --subscription sub_...|--customer cus_...|--metadata key=value` - latest and next payment summary.
 - `agent-stripe investigate subscription-items --subscription sub_...` - subscription items, prices, products, and metadata.
 - `agent-stripe investigate subscription-amount-change --subscription sub_...` - latest invoice, invoice lines, preview, and current item subtotal.
+- `agent-stripe investigate entitlement --subscription sub_...|--customer cus_...|--metadata key=value|--invoice in_...|--checkout-session cs_...` - product/price metadata for entitlement mismatches.
 - `agent-stripe investigate collection-risk --days 30 [--limit N]` - upcoming subscriptions needing payment detail outreach.
 - `agent-stripe investigate subscription-cancel-risk --days 30 [--limit N]` - subscriptions ending soon or set to cancel.
 - `agent-stripe investigate incoming-payment <pi_id|ch_id|in_id>` - failed or successful customer payment explanation.
+- `agent-stripe investigate checkout-session cs_...` - Checkout completion, line items, and resulting payment/subscription.
+- `agent-stripe investigate payment-method-readiness cus_...|pm_...` - saved payment method attachment and card readiness.
+- `agent-stripe investigate setup seti_...|pm_...|cus_...` - SetupIntent status and reusable payment method evidence.
+- `agent-stripe investigate timeline cus_...` - chronological customer activity context.
 - `agent-stripe investigate outgoing-payment <tr_id|po_id|acct_id>` - Connect transfer, payout, or account readiness issue.
-- `agent-stripe investigate refund-status <re_id>` - refund state and related movement.
+- `agent-stripe investigate account-health acct_...` - connected account requirements/capability blockers.
+- `agent-stripe investigate ledger ch_...|pi_...|re_...|tr_...|po_...|txn_...|fee_...` - balance transaction and reconciliation evidence.
+- `agent-stripe investigate refund <re_id|ch_id|pi_id>` - refund state and related movement.
 - `agent-stripe investigate payout-failure po_...` - payout failure plus balance transaction.
 - `agent-stripe investigate refund-recovery <re_id|trr_id|ch_id|pi_id> [--transfer tr_...]` - refund and transfer reversal recovery.
+- `agent-stripe investigate fraud-review issfr_...|ch_...|pi_...` - Radar early fraud warning and charge risk evidence.
+
+For a chooser table and per-investigation details, see [investigations.md](investigations.md).
 
 ## Raw Read-Only API
 

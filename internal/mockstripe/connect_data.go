@@ -67,6 +67,24 @@ func balanceTransactions() []map[string]any {
 			"type":     "payout_failure",
 			"payout":   "po_mock_failed",
 		},
+		{
+			"id":       "txn_mock_refund",
+			"object":   "balance_transaction",
+			"amount":   -4200,
+			"currency": "usd",
+			"type":     "refund",
+			"net":      -4200,
+			"fee":      0,
+		},
+		{
+			"id":       "txn_mock_transfer_failed",
+			"object":   "balance_transaction",
+			"amount":   0,
+			"currency": "usd",
+			"type":     "transfer_failure",
+			"net":      0,
+			"fee":      0,
+		},
 	}
 }
 

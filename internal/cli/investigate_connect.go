@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"net/url"
 	"strings"
 
@@ -40,19 +39,6 @@ func newInvestigateRefundRecovery(globals shared.GlobalsFunc, outputOpts *invest
 	return cmd
 }
 
-func newInvestigateRefundStatus(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "refund-status <refund-id>",
-		Short: "Explain refund state, related payment, and Connect reversal details",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
-				return inv.refundStatus(args[0])
-			})
-		},
-	}
-}
-
 func newInvestigatePayoutFailure(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "payout-failure <payout-id>",
@@ -84,26 +70,7 @@ func (i investigator) outgoingPayment(id string) ([]evidenceRecord, error) {
 		}
 		return []evidenceRecord{entityRecord("payout", payout), moneyMovementFinding("payout", payout)}, nil
 	default:
-		account, err := i.get("/v1/accounts/"+url.PathEscape(id), url.Values{})
-		if err != nil {
-			return nil, err
-		}
-		records := []evidenceRecord{entityRecord("account", account)}
-		if !mapBool(account, "payouts_enabled") || !mapBool(account, "charges_enabled") {
-			records = append(records, evidenceRecord{
-				Type:     "finding",
-				Severity: "warning",
-				Summary:  fmt.Sprintf("Connected account %s is not fully enabled for charges/payouts; inspect account requirements.", mapString(account, "id")),
-				Data: map[string]any{
-					"requirements": mapAnyMap(account, "requirements"),
-				},
-			})
-		}
-		transfers, _ := i.list("/v1/transfers", url.Values{"destination": []string{id}, "limit": []string{"5"}})
-		for _, transfer := range transfers {
-			records = append(records, entityRecord("transfer", transfer))
-		}
-		return records, nil
+		return i.accountHealth(id)
 	}
 }
 

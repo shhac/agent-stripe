@@ -42,18 +42,39 @@ Current workflow families:
 - `customer-context`: gather recent objects around a customer.
 - `customer-card-payment`: bounded last4 lookup for a customer.
 - `webhook-event`: fetch event and underlying object.
+- `webhook-delivery`: event `pending_webhooks` plus endpoint config.
 - `dispute-response`: summarize dispute response status and related payment.
+- `dispute-impact`: dispute exposure from dispute, charge, or customer.
 - `invoice-payment`: invoice to PaymentIntent to latest Charge.
+- `invoice-collection`: invoice retry/collection state from invoice, customer, or subscription.
 - `invoice-metadata`: invoice to PaymentIntent metadata.
 - `subscription-renewal`: latest and next invoice/payment.
 - `subscription-items`: subscription items, prices, products, and product metadata.
 - `subscription-amount-change`: latest invoice, invoice lines, preview, and current item subtotal.
+- `entitlement`: product/price metadata across subscriptions, invoices, and Checkout.
 - `collection-risk`: payment-method outreach candidates.
 - `subscription-cancel-risk`: cancellations and trial/period end risk.
 - `incoming-payment`: failed/successful customer payment explanation.
+- `checkout-session`: Checkout Session, line items, and resulting payment/subscription.
+- `payment-method-readiness`: saved payment method attachment/readiness.
+- `setup`: SetupIntent/payment method setup status.
+- `timeline`: chronological customer context from recent Stripe objects.
 - `outgoing-payment`: transfers, payouts, and connected account readiness.
-- `refund-status` and `refund-recovery`: refund and transfer reversal state.
+- `account-health`: connected account requirements and blockers.
+- `ledger`: balance transaction and reconciliation evidence.
+- `refund` and `refund-recovery`: refund state and transfer reversal recovery.
 - `payout-failure`: payout failure plus ledger movement.
+- `fraud-review`: Radar early fraud warnings, charge outcome, disputes, and refunds.
+
+## Command Shape Decisions
+
+Keep commands separate when the user's question implies a different starting object, vocabulary, or answer shape. Combine internally when the graph traversal is the same.
+
+- `refund` is the broad public command for refund state from `re_`, `ch_`, or `pi_`; pre-major releases do not keep old alias names.
+- `account-health` owns connected account requirement/capability checks. `outgoing-payment acct_...` delegates to it, while `outgoing-payment tr_...|po_...` remains money-movement focused.
+- `dispute-response` stays narrow for evidence deadline/response state. `dispute-impact` is broader and can start from a dispute, charge, or customer.
+- `subscription-items` stays direct and compact. `entitlement` is the broader "what internal product should they have?" workflow across subscription, invoice, and Checkout evidence.
+- `webhook-event` answers "what event was this?" while `webhook-delivery` answers "did our webhook receive it?"
 
 ## Customer Card Last4
 
@@ -81,6 +102,24 @@ Invoice -> PaymentIntent -> latest Charge
 
 The finding includes invoice amount paid and card last4 when a card charge is present.
 
+## Invoice Collection
+
+Command:
+
+```bash
+agent-stripe investigate invoice-collection in_...
+agent-stripe investigate invoice-collection cus_...
+agent-stripe investigate invoice-collection sub_...
+```
+
+Path:
+
+```text
+Invoice(s) -> PaymentIntent -> latest Charge
+```
+
+This answers open/past-due invoice questions with status, paid flag, amount due, attempt count, next payment attempt, and hosted invoice URL.
+
 ## Subscription Renewal
 
 Command:
@@ -105,6 +144,7 @@ Subscription -> latest Invoice lines and preview amount
 This is aimed at support questions such as "when did they last pay, how much, when will they next pay, and how much?"
 Use `subscription-items` when the important question is "which internal product IDs or prices are attached?"
 Use `subscription-amount-change` when the important question is "why is this invoice amount different?"
+Use `entitlement` when the user asks whether the customer has the right internal product/plan across subscription items, invoice lines, or Checkout line items.
 
 ## Invoice Metadata
 
@@ -133,6 +173,19 @@ agent-stripe investigate collection-risk --days 30
 
 This scans upcoming subscription renewals and flags subscriptions that are already `past_due`, `unpaid`, `incomplete`, have no visible default payment method, have a default card expiring soon, require customer action, or have an open unpaid latest invoice. Future versions should add deeper checks for invoice retry policy.
 
+## Checkout, Setup, And Timeline
+
+Commands:
+
+```bash
+agent-stripe investigate checkout-session cs_...
+agent-stripe investigate payment-method-readiness cus_...|pm_...
+agent-stripe investigate setup seti_...|pm_...|cus_...
+agent-stripe investigate timeline cus_...
+```
+
+Checkout follows the session to line items, prices/products, PaymentIntent, Charge, Subscription, Invoice, Customer, and Payment Link when present. Payment method readiness checks visible saved cards and related SetupIntents. Setup focuses on SetupIntent status and saved payment method usability. Timeline reuses customer context and emits ordered finding records for timestamped customer objects.
+
 ## Failed Customer Payment
 
 Command:
@@ -156,30 +209,42 @@ The finding summarizes charge failure messages, PaymentIntent `last_payment_erro
 Commands:
 
 ```bash
+agent-stripe investigate account-health acct_...
 agent-stripe investigate outgoing-payment tr_...
 agent-stripe investigate outgoing-payment po_...
 agent-stripe investigate outgoing-payment acct_...
+agent-stripe investigate ledger ch_...|pi_...|re_...|tr_...|po_...|txn_...|fee_...
+agent-stripe investigate refund re_...|ch_...|pi_...
 agent-stripe investigate refund-recovery re_...
 agent-stripe investigate refund-recovery trr_... --transfer tr_...
 ```
 
 These distinguish Transfers, Payouts, connected Accounts, Refunds, and Transfer Reversals. For transfer reversals, Stripe nests the reversal under its parent transfer, so the command requires `--transfer` when given only a `trr_` ID.
+Use `ledger` when finance/support needs amount, fee, net, and balance transaction evidence.
+
+## Webhooks, Disputes, And Fraud
+
+Commands:
+
+```bash
+agent-stripe investigate webhook-event evt_...
+agent-stripe investigate webhook-delivery evt_... [--endpoint we_...]
+agent-stripe investigate webhook-delivery we_...
+agent-stripe investigate dispute-response dp_...
+agent-stripe investigate dispute-impact dp_...|ch_...|cus_...
+agent-stripe investigate fraud-review issfr_...|ch_...|pi_...
+```
+
+Webhook delivery uses event `pending_webhooks` and webhook endpoint configuration. It does not claim per-endpoint delivery-attempt logs when Stripe has not returned them. Fraud review follows Early Fraud Warning or Charge/PaymentIntent to charge outcome, disputes, and refunds.
 
 ## Improvements To Prioritize
 
 The next likely common triage scenarios:
 
-- Checkout conversion: `Checkout Session -> PaymentIntent/Subscription -> line items -> product/price metadata`.
 - Duplicate charge: customer, amount, card last4, and time window to identify repeated PaymentIntents/Charges.
 - Unknown statement descriptor: descriptor to Charge/PaymentIntent/Customer candidates.
 - Refund missing from bank: Refund -> BalanceTransaction -> Charge -> bank/card network status.
-- Failed setup for future billing: SetupIntent -> PaymentMethod -> mandate/last setup error.
 - SCA required: PaymentIntent or Invoice requiring customer action, with hosted invoice/payment links when available.
-- Product entitlement mismatch: invoice/checkout line items -> Price -> Product metadata/internal IDs.
-- Account onboarding blocker: connected Account requirements and recent failed payouts/transfers.
-- Balance discrepancy: BalanceTransaction ledger around a charge/refund/transfer/payout.
-- Fraud triage: Early Fraud Warning -> Charge -> Customer -> Refund/Dispute state.
-- Webhook delivery confusion: Event type, request ID/idempotency key, underlying object, and likely handler action.
 - Subscription quantity/price drift: Subscription items -> Price/Product metadata over time.
 - Tax or total mismatch: Invoice line items, discounts, tax amounts, customer tax IDs, and final amount paid.
 - Payment Link issue: Payment Link -> Checkout Sessions -> line items -> resulting PaymentIntent/Subscription.

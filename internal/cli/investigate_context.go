@@ -83,6 +83,17 @@ func appendListRecords(records []evidenceRecord, object string, items []map[stri
 	return records
 }
 
+func relatedWarning(name string, err error) evidenceRecord {
+	return evidenceRecord{
+		Type:     "finding",
+		Severity: "warning",
+		Summary:  "Could not gather " + name + "; continuing with available evidence.",
+		Data: map[string]any{
+			"error": err.Error(),
+		},
+	}
+}
+
 func valuesWithLimit(limit int, pairs ...string) url.Values {
 	params := url.Values{}
 	shared.AddLimit(params, limit)

@@ -65,6 +65,18 @@ agent-stripe investigate collection-risk --days 30 --limit 25
 
 This flags missing default payment methods, expiring cards, open unpaid latest invoices, action-required states, and past-due/unpaid subscriptions.
 
+## Invoice Collection Or Dunning
+
+Question: "This invoice is open or past due. When will Stripe retry and why did collection fail?"
+
+```bash
+agent-stripe investigate invoice-collection in_...
+agent-stripe investigate invoice-collection cus_...
+agent-stripe investigate invoice-collection sub_...
+```
+
+Use this instead of `invoice-payment` when the invoice was not successfully paid.
+
 ## Failed Customer Payment
 
 Question: "A payment to me went wrong. What happened?"
@@ -77,6 +89,26 @@ agent-stripe investigate incoming-payment in_...
 
 This pulls PaymentIntent, Charge, Invoice, refunds, and disputes when related.
 
+## Checkout Or Setup Did Not Complete
+
+```bash
+agent-stripe investigate checkout-session cs_...
+agent-stripe investigate setup seti_...
+agent-stripe investigate payment-method-readiness cus_...
+```
+
+Use Checkout for hosted checkout completion and line-item/product metadata. Use Setup for saved-payment setup status. Use payment-method-readiness when the question is whether future billing can use a customer's saved card.
+
+## Entitlements Or Product IDs
+
+```bash
+agent-stripe investigate entitlement --subscription sub_...
+agent-stripe investigate entitlement --invoice in_...
+agent-stripe investigate entitlement --checkout-session cs_...
+```
+
+This gathers subscription items, invoice lines, Checkout line items, prices, products, and metadata.
+
 ## Failed Connect Money Movement
 
 Question: "A payment from me to a business I work with went wrong."
@@ -85,6 +117,8 @@ Question: "A payment from me to a business I work with went wrong."
 agent-stripe investigate outgoing-payment tr_...
 agent-stripe investigate outgoing-payment po_...
 agent-stripe investigate outgoing-payment acct_...
+agent-stripe investigate account-health acct_...
+agent-stripe investigate ledger tr_...
 ```
 
 Question: "A business lets us draw money from their Stripe account for refunds, but it went wrong."
@@ -96,14 +130,41 @@ agent-stripe investigate refund-recovery trr_... --transfer tr_...
 
 Use `--context` when the incident is scoped to a connected account or organization related-account path.
 
+For customer-visible refund state:
+
+```bash
+agent-stripe investigate refund re_...
+agent-stripe investigate refund ch_...
+```
+
+For finance reconciliation:
+
+```bash
+agent-stripe investigate ledger ch_...
+agent-stripe investigate ledger txn_...
+```
+
 ## Webhook Or Dispute
 
 ```bash
 agent-stripe investigate webhook-event evt_...
+agent-stripe investigate webhook-delivery evt_...
 agent-stripe investigate dispute-response dp_...
+agent-stripe investigate dispute-impact dp_...
+agent-stripe investigate fraud-review issfr_...
 ```
 
-Webhook event investigation fetches the event and the underlying object. Dispute investigation summarizes reason, status, due date, charge, customer, and PaymentIntent.
+Webhook event investigation fetches the event and the underlying object. Webhook delivery checks event pending webhooks and endpoint configuration. Dispute response summarizes reason, status, due date, charge, customer, and PaymentIntent. Dispute impact and fraud review are broader risk/exposure workflows.
+
+## Customer Timeline
+
+Question: "Give me a concise timeline of what happened to this customer."
+
+```bash
+agent-stripe investigate timeline cus_...
+```
+
+This is a good first command when the user has a broad or confusing support narrative.
 
 ## Unknown ID Or Invoice Number
 

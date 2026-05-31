@@ -116,7 +116,7 @@ func TestCLIInvestigateNewWorkflowScenariosAgainstMockStripe(t *testing.T) {
 		},
 		{
 			name:  "refund status",
-			args:  []string{"investigate", "refund-status", "re_mock_pending"},
+			args:  []string{"investigate", "refund", "re_mock_pending"},
 			wants: []string{`"id":"re_mock_pending"`, `"object":"transfer_reversal"`, `Failure detail`},
 		},
 		{
@@ -138,6 +138,66 @@ func TestCLIInvestigateNewWorkflowScenariosAgainstMockStripe(t *testing.T) {
 			name:  "subscription amount change",
 			args:  []string{"investigate", "subscription-amount-change", "--subscription", "sub_mock_past_due"},
 			wants: []string{`"id":"sub_mock_past_due"`, `"id":"in_mock_open_failed"`, `"object":"invoice_preview"`, `current item subtotal is 29700 USD minor units`},
+		},
+		{
+			name:  "checkout session completion",
+			args:  []string{"investigate", "checkout-session", "cs_mock_paid"},
+			wants: []string{`"object":"checkout.session"`, `"id":"cs_mock_paid"`, `"object":"line_item"`, `"id":"pi_mock_succeeded"`, `payment_status=paid`},
+		},
+		{
+			name:  "webhook delivery",
+			args:  []string{"investigate", "webhook-delivery", "evt_mock_charge_failed"},
+			wants: []string{`"object":"event"`, `"object":"webhook_endpoint"`, `"pending_webhooks":1`, `Some configured endpoints may not have successfully acknowledged it yet`},
+		},
+		{
+			name:  "invoice collection",
+			args:  []string{"investigate", "invoice-collection", "in_mock_open_failed"},
+			wants: []string{`"id":"in_mock_open_failed"`, `"id":"pi_mock_failed"`, `"id":"ch_mock_failed"`, `Next payment attempt is at Unix time`},
+		},
+		{
+			name:  "payment method readiness",
+			args:  []string{"investigate", "payment-method-readiness", "cus_mock_123"},
+			wants: []string{`"object":"payment_method"`, `"id":"pm_mock_visa"`, `card last4=4242`},
+		},
+		{
+			name:  "ledger",
+			args:  []string{"investigate", "ledger", "ch_mock_succeeded"},
+			wants: []string{`"object":"balance_transaction"`, `"id":"txn_mock_succeeded"`, `"object":"application_fee"`, `ledger evidence gathered`},
+		},
+		{
+			name:  "account health",
+			args:  []string{"investigate", "account-health", "acct_mock_connected"},
+			wants: []string{`"object":"account"`, `"payouts_enabled":false`, `Blockers: payouts disabled`},
+		},
+		{
+			name:  "refund",
+			args:  []string{"investigate", "refund", "ch_mock_succeeded"},
+			wants: []string{`"object":"refund"`, `"id":"re_mock_pending"`, `Refund evidence gathered`},
+		},
+		{
+			name:  "dispute impact",
+			args:  []string{"investigate", "dispute-impact", "dp_mock_needs_response"},
+			wants: []string{`"object":"dispute"`, `"id":"dp_mock_needs_response"`, `Dispute dp_mock_needs_response status=needs_response`},
+		},
+		{
+			name:  "entitlement",
+			args:  []string{"investigate", "entitlement", "--subscription", "sub_mock_active"},
+			wants: []string{`"object":"subscription_item"`, `"object":"product"`, `"internal_product_id":"prod_internal_basic"`, `Entitlement evidence gathered`},
+		},
+		{
+			name:  "timeline",
+			args:  []string{"investigate", "timeline", "cus_mock_123", "--limit", "3"},
+			wants: []string{`Timeline gathered`, `payment_intent pi_mock_succeeded`, `invoice in_mock_paid`, `charge ch_mock_succeeded`},
+		},
+		{
+			name:  "fraud review",
+			args:  []string{"investigate", "fraud-review", "issfr_mock_123"},
+			wants: []string{`"object":"early_fraud_warning"`, `"id":"issfr_mock_123"`, `"object":"dispute"`, `Fraud review evidence gathered`},
+		},
+		{
+			name:  "setup",
+			args:  []string{"investigate", "setup", "seti_mock_succeeded"},
+			wants: []string{`"object":"setup_intent"`, `"id":"seti_mock_succeeded"`, `"object":"payment_method"`, `SetupIntent seti_mock_succeeded status=succeeded`},
 		},
 		{
 			name:  "truncation controls",

@@ -72,20 +72,31 @@ INVESTIGATIONS
   agent-stripe investigate customer-context --customer <cus_id> [--limit N]
   agent-stripe investigate customer-card-payment --customer <cus_id> --last4 4242
   agent-stripe investigate webhook-event <evt_id>
+  agent-stripe investigate webhook-delivery <evt_id|we_id>
   agent-stripe investigate dispute-response <dp_id>
+  agent-stripe investigate dispute-impact <dp_id|ch_id|cus_id>
   agent-stripe investigate invoice-payment <in_id>
+  agent-stripe investigate invoice-collection <in_id|cus_id|sub_id>
   agent-stripe investigate invoice-metadata <in_id>
   agent-stripe investigate subscription-renewal --subscription <sub_id>
   agent-stripe investigate subscription-renewal --metadata tenant_id=acme
   agent-stripe investigate subscription-items --subscription <sub_id>
   agent-stripe investigate subscription-amount-change --subscription <sub_id>
+  agent-stripe investigate entitlement --subscription <sub_id>
   agent-stripe investigate collection-risk --days 30
   agent-stripe investigate subscription-cancel-risk --days 30
   agent-stripe investigate incoming-payment <pi_id|ch_id|in_id>
+  agent-stripe investigate checkout-session <cs_id>
+  agent-stripe investigate payment-method-readiness <cus_id|pm_id>
+  agent-stripe investigate setup <seti_id|pm_id|cus_id>
+  agent-stripe investigate timeline <cus_id>
   agent-stripe investigate outgoing-payment <tr_id|po_id|acct_id>
-  agent-stripe investigate refund-status <re_id>
+  agent-stripe investigate account-health <acct_id>
+  agent-stripe investigate ledger <ch_id|pi_id|re_id|tr_id|po_id|txn_id|fee_id>
+  agent-stripe investigate refund <re_id|ch_id|pi_id>
   agent-stripe investigate payout-failure <po_id>
   agent-stripe investigate refund-recovery <re_id|trr_id|ch_id|pi_id> [--transfer <tr_id>]
+  agent-stripe investigate fraud-review <issfr_id|ch_id|pi_id>
   Investigation output is evidence NDJSON: entity records plus finding records.
   Nested expanded Stripe objects are emitted as separate entity records and replaced by ID in the parent.
   Use --max-string N, --expand-field <path>, or --full for verbose fields.

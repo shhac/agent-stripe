@@ -43,7 +43,7 @@ func TestOutgoingPaymentFlagsDisabledConnectedAccount(t *testing.T) {
 		t.Fatalf("outgoingPayment() error = %v", err)
 	}
 	assertRecordObject(t, records, "account", "acct_disabled")
-	finding := findFinding(records, "Connected account acct_disabled is not fully enabled")
+	finding := findFinding(records, "Account acct_disabled charges_enabled=false payouts_enabled=false")
 	if finding == nil || finding.Severity != "warning" {
 		t.Fatalf("finding = %#v, want disabled account warning", finding)
 	}

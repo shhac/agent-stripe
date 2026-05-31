@@ -5,6 +5,7 @@ func paymentIntents() []map[string]any {
 		{
 			"id":             "pi_mock_succeeded",
 			"object":         "payment_intent",
+			"created":        1760000100,
 			"amount":         4200,
 			"currency":       "usd",
 			"status":         "succeeded",
@@ -20,6 +21,7 @@ func paymentIntents() []map[string]any {
 		{
 			"id":             "pi_mock_failed",
 			"object":         "payment_intent",
+			"created":        1760000400,
 			"amount":         9900,
 			"currency":       "usd",
 			"status":         "requires_payment_method",
@@ -39,6 +41,7 @@ func paymentIntents() []map[string]any {
 		{
 			"id":             "pi_mock_requires_action",
 			"object":         "payment_intent",
+			"created":        1760000600,
 			"amount":         5500,
 			"currency":       "usd",
 			"status":         "requires_action",
@@ -58,6 +61,7 @@ func charges() []map[string]any {
 		{
 			"id":                  "ch_mock_succeeded",
 			"object":              "charge",
+			"created":             1760000200,
 			"amount":              4200,
 			"currency":            "usd",
 			"status":              "succeeded",
@@ -86,6 +90,7 @@ func charges() []map[string]any {
 		{
 			"id":              "ch_mock_failed",
 			"object":          "charge",
+			"created":         1760000500,
 			"amount":          9900,
 			"currency":        "usd",
 			"status":          "failed",
@@ -115,6 +120,7 @@ func charges() []map[string]any {
 		{
 			"id":             "ch_mock_requires_action",
 			"object":         "charge",
+			"created":        1760000700,
 			"amount":         5500,
 			"currency":       "usd",
 			"status":         "failed",
@@ -146,6 +152,7 @@ func disputes() []map[string]any {
 		{
 			"id":             "dp_mock_needs_response",
 			"object":         "dispute",
+			"created":        1760000800,
 			"charge":         "ch_mock_succeeded",
 			"payment_intent": "pi_mock_succeeded",
 			"amount":         4200,
@@ -165,6 +172,7 @@ func refunds() []map[string]any {
 		{
 			"id":                  "re_mock_pending",
 			"object":              "refund",
+			"created":             1760000900,
 			"charge":              "ch_mock_succeeded",
 			"payment_intent":      "pi_mock_succeeded",
 			"amount":              4200,
@@ -183,6 +191,7 @@ func setupIntents() []map[string]any {
 		{
 			"id":             "seti_mock_succeeded",
 			"object":         "setup_intent",
+			"created":        1760000050,
 			"customer":       "cus_mock_123",
 			"payment_method": "pm_mock_visa",
 			"status":         "succeeded",

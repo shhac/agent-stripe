@@ -98,6 +98,11 @@ func mockResources() []mockResource {
 			},
 		},
 		{
+			path:       "/v1/webhook_endpoints",
+			objectName: "webhook_endpoint",
+			items:      webhookEndpoints,
+		},
+		{
 			path:       "/v1/products",
 			objectName: "product",
 			items:      products,

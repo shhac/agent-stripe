@@ -123,6 +123,7 @@ func invoices() []map[string]any {
 		{
 			"id":                 "in_mock_paid",
 			"object":             "invoice",
+			"created":            1760000150,
 			"subscription":       "sub_mock_active",
 			"customer":           "cus_mock_123",
 			"status":             "paid",
@@ -139,6 +140,7 @@ func invoices() []map[string]any {
 		{
 			"id":                   "in_mock_open_failed",
 			"object":               "invoice",
+			"created":              1760000550,
 			"subscription":         "sub_mock_past_due",
 			"customer":             "cus_mock_456",
 			"status":               "open",
@@ -156,6 +158,7 @@ func invoices() []map[string]any {
 		{
 			"id":                   "in_mock_requires_action",
 			"object":               "invoice",
+			"created":              1760000650,
 			"subscription":         "sub_mock_expiring_card",
 			"customer":             "cus_mock_expiring",
 			"status":               "open",
@@ -173,6 +176,7 @@ func invoices() []map[string]any {
 		{
 			"id":                 "in_mock_missing_pm",
 			"object":             "invoice",
+			"created":            1760000750,
 			"subscription":       "sub_mock_missing_pm",
 			"customer":           "cus_mock_missing_pm",
 			"status":             "draft",
