@@ -265,29 +265,43 @@ func (i investigator) subscriptionAmountChange(subscriptionID string) ([]evidenc
 	records := append([]evidenceRecord{}, bundle.records...)
 	records = append(records, subscriptionItemsFinding(subscriptionID, len(bundle.items)))
 
-	var latestInvoice map[string]any
-	if latestInvoiceID := idFromValue(bundle.sub["latest_invoice"]); latestInvoiceID != "" {
-		invoice, invoiceErr := i.get("/v1/invoices/"+url.PathEscape(latestInvoiceID), url.Values{})
-		if invoiceErr != nil {
-			records = append(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not retrieve latest invoice " + latestInvoiceID + ": " + invoiceErr.Error()})
-		} else {
-			latestInvoice = invoice
-			records = append(records, entityRecord("invoice", invoice))
-			lines, lineErr := i.list("/v1/invoices/"+url.PathEscape(latestInvoiceID)+"/lines", url.Values{"limit": []string{"100"}})
-			if lineErr == nil {
-				records = appendListRecords(records, "line_item", lines)
-			}
-		}
-	}
+	latestInvoice, latestInvoiceRecords := i.latestInvoiceEvidence(bundle.sub)
+	records = append(records, latestInvoiceRecords...)
 
-	var preview map[string]any
-	if next, previewErr := i.postForm("/v1/invoices/create_preview", url.Values{"subscription": []string{subscriptionID}}); previewErr == nil {
-		preview = next
-		records = append(records, entityRecord("invoice_preview", next))
-	}
+	preview, previewRecords := i.invoicePreviewEvidence(subscriptionID)
+	records = append(records, previewRecords...)
 
 	records = append(records, subscriptionAmountFinding(subscriptionID, latestInvoice, preview, bundle.items))
 	return records, nil
+}
+
+func (i investigator) latestInvoiceEvidence(sub map[string]any) (map[string]any, []evidenceRecord) {
+	latestInvoiceID := idFromValue(sub["latest_invoice"])
+	if latestInvoiceID == "" {
+		return nil, nil
+	}
+	invoice, err := i.get("/v1/invoices/"+url.PathEscape(latestInvoiceID), url.Values{})
+	if err != nil {
+		return nil, []evidenceRecord{{
+			Type:     "finding",
+			Severity: "warning",
+			Summary:  "Could not retrieve latest invoice " + latestInvoiceID + ": " + err.Error(),
+		}}
+	}
+	records := []evidenceRecord{entityRecord("invoice", invoice)}
+	lines, err := i.list("/v1/invoices/"+url.PathEscape(latestInvoiceID)+"/lines", url.Values{"limit": []string{"100"}})
+	if err == nil {
+		records = appendListRecords(records, "line_item", lines)
+	}
+	return invoice, records
+}
+
+func (i investigator) invoicePreviewEvidence(subscriptionID string) (map[string]any, []evidenceRecord) {
+	preview, err := i.postForm("/v1/invoices/create_preview", url.Values{"subscription": []string{subscriptionID}})
+	if err != nil {
+		return nil, nil
+	}
+	return preview, []evidenceRecord{entityRecord("invoice_preview", preview)}
 }
 
 func subscriptionAmountFinding(subscriptionID string, latestInvoice, preview map[string]any, items []map[string]any) evidenceRecord {
@@ -376,32 +390,54 @@ func (i investigator) collectionRiskAt(sub map[string]any, now time.Time) string
 	if risk := statusCollectionRisk(sub, ctx); risk != "" {
 		return risk
 	}
-	pmID := idFromValue(sub["default_payment_method"])
+	pmID := i.subscriptionDefaultPaymentMethodID(sub, ctx.customerID)
 	if pmID == "" {
-		if customer, err := i.get("/v1/customers/"+url.PathEscape(ctx.customerID), url.Values{}); err == nil {
-			settings := mapAnyMap(customer, "invoice_settings")
-			pmID = idFromValue(settings["default_payment_method"])
-		}
-		if pmID == "" {
-			return missingPaymentMethodRisk(ctx)
-		}
+		return missingPaymentMethodRisk(ctx)
 	}
-	if pmID != "" {
-		if pm, err := i.get("/v1/payment_methods/"+url.PathEscape(pmID), url.Values{}); err == nil && cardExpiresSoon(pm, now) {
-			return expiringPaymentMethodRisk(ctx, pmID)
-		}
+	if i.paymentMethodExpiresSoon(pmID, now) {
+		return expiringPaymentMethodRisk(ctx, pmID)
 	}
-	if invoiceID := idFromValue(sub["latest_invoice"]); invoiceID != "" {
-		invoice, err := i.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{})
-		if err == nil && !mapBool(invoice, "paid") && mapString(invoice, "status") == "open" {
-			return openInvoiceRisk(ctx, invoiceID)
-		}
-		if err == nil && idFromValue(invoice["payment_intent"]) != "" {
-			pi, piErr := i.paymentIntentForInvoice(invoice)
-			if piErr == nil && mapString(pi, "status") == "requires_action" {
-				return latestInvoiceActionRisk(ctx)
-			}
-		}
+	if risk := i.latestInvoiceCollectionRisk(sub, ctx); risk != "" {
+		return risk
+	}
+	return ""
+}
+
+func (i investigator) subscriptionDefaultPaymentMethodID(sub map[string]any, customerID string) string {
+	if pmID := idFromValue(sub["default_payment_method"]); pmID != "" {
+		return pmID
+	}
+	customer, err := i.get("/v1/customers/"+url.PathEscape(customerID), url.Values{})
+	if err != nil {
+		return ""
+	}
+	settings := mapAnyMap(customer, "invoice_settings")
+	return idFromValue(settings["default_payment_method"])
+}
+
+func (i investigator) paymentMethodExpiresSoon(paymentMethodID string, now time.Time) bool {
+	pm, err := i.get("/v1/payment_methods/"+url.PathEscape(paymentMethodID), url.Values{})
+	return err == nil && cardExpiresSoon(pm, now)
+}
+
+func (i investigator) latestInvoiceCollectionRisk(sub map[string]any, ctx collectionRiskContext) string {
+	invoiceID := idFromValue(sub["latest_invoice"])
+	if invoiceID == "" {
+		return ""
+	}
+	invoice, err := i.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{})
+	if err != nil {
+		return ""
+	}
+	if !mapBool(invoice, "paid") && mapString(invoice, "status") == "open" {
+		return openInvoiceRisk(ctx, invoiceID)
+	}
+	if idFromValue(invoice["payment_intent"]) == "" {
+		return ""
+	}
+	pi, err := i.paymentIntentForInvoice(invoice)
+	if err == nil && mapString(pi, "status") == "requires_action" {
+		return latestInvoiceActionRisk(ctx)
 	}
 	return ""
 }

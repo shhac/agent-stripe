@@ -2,7 +2,6 @@ package cli
 
 import (
 	"net/url"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -57,50 +56,9 @@ func (i investigator) resolve(value string) ([]evidenceRecord, error) {
 }
 
 func resolvePath(id string) (object, path, commandPrefix string) {
-	switch {
-	case strings.HasPrefix(id, "cus_"):
-		return "customer", "/v1/customers", "agent-stripe investigate customer-context --customer "
-	case strings.HasPrefix(id, "in_"):
-		return "invoice", "/v1/invoices", "agent-stripe investigate invoice-payment "
-	case strings.HasPrefix(id, "pi_"):
-		return "payment_intent", "/v1/payment_intents", "agent-stripe investigate incoming-payment "
-	case strings.HasPrefix(id, "ch_"):
-		return "charge", "/v1/charges", "agent-stripe investigate incoming-payment "
-	case strings.HasPrefix(id, "sub_"):
-		return "subscription", "/v1/subscriptions", "agent-stripe investigate subscription-renewal --subscription "
-	case strings.HasPrefix(id, "dp_"):
-		return "dispute", "/v1/disputes", "agent-stripe investigate dispute-response "
-	case strings.HasPrefix(id, "re_"):
-		return "refund", "/v1/refunds", "agent-stripe investigate refund-status "
-	case strings.HasPrefix(id, "trr_"):
-		return "transfer_reversal", "", "agent-stripe investigate refund-recovery --transfer <transfer-id> "
-	case strings.HasPrefix(id, "tr_"):
-		return "transfer", "/v1/transfers", "agent-stripe investigate outgoing-payment "
-	case strings.HasPrefix(id, "po_"):
-		return "payout", "/v1/payouts", "agent-stripe investigate payout-failure "
-	case strings.HasPrefix(id, "acct_"):
-		return "account", "/v1/accounts", "agent-stripe investigate outgoing-payment "
-	case strings.HasPrefix(id, "evt_"):
-		return "event", "/v1/events", "agent-stripe investigate webhook-event "
-	case strings.HasPrefix(id, "pm_"):
-		return "payment_method", "/v1/payment_methods", "agent-stripe payment-methods get "
-	case strings.HasPrefix(id, "seti_"):
-		return "setup_intent", "/v1/setup_intents", "agent-stripe setup-intents get "
-	case strings.HasPrefix(id, "txn_"):
-		return "balance_transaction", "/v1/balance_transactions", "agent-stripe balance-transactions get "
-	case strings.HasPrefix(id, "fee_"):
-		return "application_fee", "/v1/application_fees", "agent-stripe application-fees get "
-	case strings.HasPrefix(id, "plink_"):
-		return "payment_link", "/v1/payment_links", "agent-stripe payment-links get "
-	case strings.HasPrefix(id, "issfr_"):
-		return "early_fraud_warning", "/v1/radar/early_fraud_warnings", "agent-stripe early-fraud-warnings get "
-	case strings.HasPrefix(id, "cs_"):
-		return "checkout.session", "/v1/checkout/sessions", "agent-stripe checkout-sessions get "
-	case strings.HasPrefix(id, "price_"):
-		return "price", "/v1/prices", "agent-stripe prices get "
-	case strings.HasPrefix(id, "prod_"):
-		return "product", "/v1/products", "agent-stripe products get "
-	default:
+	kind, ok := classifyStripeID(id)
+	if !ok {
 		return "", "", ""
 	}
+	return kind.resolvedObject(), kind.APIPath, kind.resolveCommandPrefix()
 }

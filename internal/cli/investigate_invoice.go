@@ -37,46 +37,56 @@ func newInvestigateInvoiceMetadata(globals shared.GlobalsFunc, outputOpts *inves
 					if !shared.RequireFlag("number", number, "Use --number when the customer sent an invoice number instead of an invoice ID") {
 						return nil, nil
 					}
-					found, err := inv.list("/v1/invoices/search", url.Values{"query": []string{stripeSearchEquals("number", number)}, "limit": []string{"1"}})
-					if err != nil {
-						return nil, err
-					}
-					if len(found) == 0 {
-						return []evidenceRecord{{Type: "finding", Severity: "warning", Summary: "No invoice matched number " + number + "."}}, nil
-					}
-					invoiceID = mapString(found[0], "id")
 				}
-				if err := validateExpectedStripeID(invoiceID, "invoice"); err != nil {
-					return nil, err
-				}
-				invoice, err := inv.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{})
-				if err != nil {
-					return nil, err
-				}
-				records := []evidenceRecord{entityRecord("invoice", invoice)}
-				pi, err := inv.paymentIntentForInvoice(invoice)
-				if err != nil {
-					return nil, err
-				}
-				if pi == nil {
-					return append(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Invoice has no PaymentIntent."}), nil
-				}
-				records = append(records, entityRecord("payment_intent", pi))
-				records = append(records, evidenceRecord{
-					Type:     "finding",
-					Severity: "info",
-					Summary:  "PaymentIntent metadata is available for internal product lookup.",
-					Data: map[string]any{
-						"payment_intent": mapString(pi, "id"),
-						"metadata":       mapAnyMap(pi, "metadata"),
-					},
-				})
-				return records, nil
+				return inv.invoiceMetadata(invoiceID, number)
 			})
 		},
 	}
 	cmd.Flags().StringVar(&number, "number", "", "Invoice number from a customer copy")
 	return cmd
+}
+
+func (i investigator) invoiceMetadata(invoiceID, number string) ([]evidenceRecord, error) {
+	if invoiceID == "" {
+		found, err := i.list("/v1/invoices/search", url.Values{"query": []string{stripeSearchEquals("number", number)}, "limit": []string{"1"}})
+		if err != nil {
+			return nil, err
+		}
+		if len(found) == 0 {
+			return []evidenceRecord{{Type: "finding", Severity: "warning", Summary: "No invoice matched number " + number + "."}}, nil
+		}
+		invoiceID = mapString(found[0], "id")
+	}
+	if err := validateExpectedStripeID(invoiceID, "invoice"); err != nil {
+		return nil, err
+	}
+	invoice, err := i.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{})
+	if err != nil {
+		return nil, err
+	}
+	records := []evidenceRecord{entityRecord("invoice", invoice)}
+	pi, err := i.paymentIntentForInvoice(invoice)
+	if err != nil {
+		return nil, err
+	}
+	if pi == nil {
+		return append(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Invoice has no PaymentIntent."}), nil
+	}
+	records = append(records, entityRecord("payment_intent", pi))
+	records = append(records, paymentIntentMetadataFinding(pi))
+	return records, nil
+}
+
+func paymentIntentMetadataFinding(pi map[string]any) evidenceRecord {
+	return evidenceRecord{
+		Type:     "finding",
+		Severity: "info",
+		Summary:  "PaymentIntent metadata is available for internal product lookup.",
+		Data: map[string]any{
+			"payment_intent": mapString(pi, "id"),
+			"metadata":       mapAnyMap(pi, "metadata"),
+		},
+	}
 }
 
 func (i investigator) invoicePayment(invoiceID string) ([]evidenceRecord, error) {

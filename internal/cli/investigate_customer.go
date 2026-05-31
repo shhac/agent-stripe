@@ -24,33 +24,7 @@ func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *i
 				return nil
 			}
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
-				if err := validateExpectedStripeID(customer, "customer"); err != nil {
-					return nil, err
-				}
-				params := url.Values{"customer": []string{customer}}
-				shared.AddLimit(params, limit)
-				charges, err := inv.list("/v1/charges", params)
-				if err != nil {
-					return nil, err
-				}
-				for _, charge := range charges {
-					if cardLast4(charge) != last4 {
-						continue
-					}
-					return []evidenceRecord{
-						entityRecord("charge", charge),
-						{
-							Type:     "finding",
-							Severity: "info",
-							Summary:  fmt.Sprintf("Most recent payment for customer %s using card ending %s is charge %s for %s.", customer, last4, mapString(charge, "id"), formatAmount(charge)),
-						},
-					}, nil
-				}
-				return []evidenceRecord{{
-					Type:     "finding",
-					Severity: "warning",
-					Summary:  fmt.Sprintf("No recent charge for customer %s matched card ending %s in the first %d charges.", customer, last4, limit),
-				}}, nil
+				return inv.customerCardPayment(customer, last4, limit)
 			})
 		},
 	}
@@ -58,4 +32,42 @@ func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *i
 	cmd.Flags().StringVar(&last4, "last4", "", "Card last4")
 	cmd.Flags().IntVar(&limit, "limit", 25, "Maximum recent charges to inspect")
 	return cmd
+}
+
+func (i investigator) customerCardPayment(customer, last4 string, limit int) ([]evidenceRecord, error) {
+	if err := validateExpectedStripeID(customer, "customer"); err != nil {
+		return nil, err
+	}
+	params := url.Values{"customer": []string{customer}}
+	shared.AddLimit(params, limit)
+	charges, err := i.list("/v1/charges", params)
+	if err != nil {
+		return nil, err
+	}
+	for _, charge := range charges {
+		if cardLast4(charge) != last4 {
+			continue
+		}
+		return []evidenceRecord{
+			entityRecord("charge", charge),
+			customerCardPaymentFinding(customer, last4, charge),
+		}, nil
+	}
+	return []evidenceRecord{customerCardPaymentNotFound(customer, last4, limit)}, nil
+}
+
+func customerCardPaymentFinding(customer, last4 string, charge map[string]any) evidenceRecord {
+	return evidenceRecord{
+		Type:     "finding",
+		Severity: "info",
+		Summary:  fmt.Sprintf("Most recent payment for customer %s using card ending %s is charge %s for %s.", customer, last4, mapString(charge, "id"), formatAmount(charge)),
+	}
+}
+
+func customerCardPaymentNotFound(customer, last4 string, limit int) evidenceRecord {
+	return evidenceRecord{
+		Type:     "finding",
+		Severity: "warning",
+		Summary:  fmt.Sprintf("No recent charge for customer %s matched card ending %s in the first %d charges.", customer, last4, limit),
+	}
 }

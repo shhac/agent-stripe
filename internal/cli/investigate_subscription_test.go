@@ -51,6 +51,26 @@ func TestSubscriptionItemsSubtotal(t *testing.T) {
 			wantCurrency: "usd",
 			wantOK:       true,
 		},
+		{
+			name: "large quantity total",
+			items: []map[string]any{{
+				"quantity": float64(1_000_000),
+				"price":    map[string]any{"unit_amount": float64(2_500), "currency": "usd"},
+			}},
+			wantTotal:    2_500_000_000,
+			wantCurrency: "usd",
+			wantOK:       true,
+		},
+		{
+			name: "mixed currencies keep first visible currency",
+			items: []map[string]any{
+				{"price": map[string]any{"unit_amount": float64(500), "currency": "usd"}},
+				{"price": map[string]any{"unit_amount": float64(700), "currency": "gbp"}},
+			},
+			wantTotal:    1200,
+			wantCurrency: "usd",
+			wantOK:       true,
+		},
 	}
 
 	for _, tt := range tests {

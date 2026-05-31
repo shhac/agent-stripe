@@ -139,6 +139,29 @@ func TestPostFormRetriesPreviewBody(t *testing.T) {
 	}
 }
 
+func TestRetryAfterDelay(t *testing.T) {
+	future := time.Now().Add(1500 * time.Millisecond).UTC().Format(http.TimeFormat)
+	tests := []struct {
+		name string
+		in   string
+		want func(time.Duration) bool
+	}{
+		{name: "seconds", in: "2", want: func(got time.Duration) bool { return got == 2*time.Second }},
+		{name: "zero seconds ignored", in: "0", want: func(got time.Duration) bool { return got == 0 }},
+		{name: "negative seconds ignored", in: "-1", want: func(got time.Duration) bool { return got == 0 }},
+		{name: "invalid ignored", in: "soon", want: func(got time.Duration) bool { return got == 0 }},
+		{name: "future http date", in: future, want: func(got time.Duration) bool { return got > 0 && got <= 2*time.Second }},
+		{name: "past http date ignored", in: time.Now().Add(-time.Hour).UTC().Format(http.TimeFormat), want: func(got time.Duration) bool { return got == 0 }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := retryAfterDelay(tt.in); !tt.want(got) {
+				t.Fatalf("retryAfterDelay(%q) = %s", tt.in, got)
+			}
+		})
+	}
+}
+
 func withFastRetry(t *testing.T) {
 	t.Helper()
 	previous := retryBaseDelay
