@@ -84,7 +84,7 @@ func applyConfiguredDefaults(cmd *cobra.Command, globals *shared.GlobalFlags) {
 func Execute(version string) error {
 	err := newRootCmd(version).Execute()
 	if err != nil {
-		fmt.Fprintln(output.Stderr(), err)
+		_, _ = fmt.Fprintln(output.Stderr(), err)
 	}
 	return err
 }

@@ -26,7 +26,7 @@ lint:
 
 fmt:
 	gofmt -w .
-	goimports -w .
+	@command -v goimports >/dev/null && goimports -w . || echo "goimports not installed (optional; install: go install golang.org/x/tools/cmd/goimports@latest)"
 
 clean:
 	rm -f $(BINARY)

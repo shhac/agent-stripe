@@ -330,7 +330,7 @@ func withHint(err *agenterrors.APIError, hints ...string) *agenterrors.APIError 
 		}
 	}
 	if len(parts) > 0 {
-		err.WithHint(strings.Join(parts, "; "))
+		err = err.WithHint(strings.Join(parts, "; "))
 	}
 	return err
 }

@@ -41,6 +41,7 @@ func TestCustomerContextReportsRelatedListErrors(t *testing.T) {
 	warning := findFinding(records, "Could not gather payment_method context")
 	if warning == nil {
 		t.Fatalf("expected warning for failed payment_methods list, got %#v", records)
+		return
 	}
 	if warning.Severity != "warning" {
 		t.Fatalf("warning severity = %q, want warning", warning.Severity)

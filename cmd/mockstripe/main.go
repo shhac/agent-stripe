@@ -22,7 +22,9 @@ func main() {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if routes {
 				for _, line := range mockstripe.Routes() {
-					fmt.Fprintln(cmd.OutOrStdout(), line)
+					if _, err := fmt.Fprintln(cmd.OutOrStdout(), line); err != nil {
+						return err
+					}
 				}
 				return nil
 			}
@@ -41,7 +43,7 @@ func main() {
 	cmd.Flags().BoolVar(&routes, "routes", false, "Print mock route map and exit")
 
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
