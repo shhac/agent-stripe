@@ -63,7 +63,7 @@ TRIAGE STARTERS
   agent-stripe payment-links list [--active true]
   agent-stripe early-fraud-warnings list [--charge <ch_id>] [--payment-intent <pi_id>]
   agent-stripe accounts self
-  agent-stripe accounts list
+  agent-stripe accounts list [--full]
   agent-stripe accounts get <acct_id>
 
 INVESTIGATIONS

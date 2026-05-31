@@ -103,7 +103,8 @@ agent-stripe application-fees list --charge ch_...
 agent-stripe payment-links list --active true
 agent-stripe early-fraud-warnings list --charge ch_...
 agent-stripe accounts self
-agent-stripe accounts list
+agent-stripe accounts list        # compact connected-account status summaries
+agent-stripe accounts list --full # full Stripe account objects, redacted
 agent-stripe accounts get acct_...
 agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
 agent-stripe payments usage

@@ -64,6 +64,7 @@ agent-stripe subscriptions get sub_... --expand latest_invoice --expand latest_i
 agent-stripe payment-methods list --customer cus_... --type card
 agent-stripe accounts self
 agent-stripe accounts list
+agent-stripe accounts list --full
 agent-stripe accounts get acct_...
 agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
 ```
@@ -84,6 +85,8 @@ Investigation output uses evidence records:
 ```
 
 Expanded nested Stripe objects are emitted as separate `entity` records and replaced by ID in the parent `data`, so navigation IDs stay visible and downstream commands can use the same Stripe-shaped fields. Long strings may be truncated with `truncated_fields`; rerun with `--expand-field <path>` or `--full`. Truncation controls do not override redaction.
+
+`accounts list` is compact by default and omits full Account KYC/profile/settings/external-account data. Use `accounts get acct_...` for one account or `accounts list --full` only when raw list objects are needed.
 
 Stripe `429` responses retry automatically with bounded exponential backoff and jitter. Use `--max-retries 0` for one-shot behavior or `--debug` to see retry records on stderr.
 

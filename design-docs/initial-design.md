@@ -133,6 +133,8 @@ agent-stripe usage
 agent-stripe api get <path>
 ```
 
+`accounts list` is intentionally a compact summary command rather than a raw Account-object dump. It preserves navigation IDs and operational enablement/requirements/capability counts, while leaving KYC/profile/settings/external-account details to `accounts get <acct_id>` or the explicit `accounts list --full` escape hatch.
+
 ## Stripe docs checked
 
 - API keys: sandbox/live modes, restricted keys, organization keys, key protection, and request logs.

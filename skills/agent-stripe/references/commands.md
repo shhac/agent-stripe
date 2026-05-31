@@ -43,7 +43,7 @@ agent-stripe investigate usage
 - `agent-stripe application-fees list|get`
 - `agent-stripe payment-links list|get`
 - `agent-stripe early-fraud-warnings list|get`
-- `agent-stripe accounts self|list|get`
+- `agent-stripe accounts self|list|get` - `accounts list` returns compact status summaries by default; use `accounts list --full` for full redacted Account objects.
 
 Most list commands accept `--limit`, `--created-gte`, `--created-lte`, `--starting-after`, and `--ending-before`. Search commands accept `--query`, `--limit`, and `--page`.
 
