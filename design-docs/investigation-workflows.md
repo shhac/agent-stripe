@@ -7,7 +7,7 @@
 
 The resource commands remain available for direct exploration, but investigation commands should encode common incident paths.
 
-Investigation output preserves Stripe-shaped `data` as much as possible. When Stripe returns an expanded nested object in a field that can also be an ID string, the parent field is replaced by the nested object's ID and the nested object is emitted as its own `entity` record. Long strings are truncated by default, with `truncated_fields` pointing at `--expand-field <path>` or `--full`. Sensitive Stripe fields are redacted by default with inline `@redacted` placeholders; `--expose <field-or-path>` is required to reveal them.
+Investigation output preserves Stripe-shaped `data` as much as possible. When Stripe returns an expanded nested object in a field that can also be an ID string, the parent field is replaced by the nested object's ID and the nested object is emitted as its own `entity` record. Long strings are truncated by default, with `truncated_fields` pointing at `--expand-field <path>` or `--full`. Sensitive Stripe fields are redacted by default with `"[REDACTED]"` leaf values and a top-level `@redacted` path list; `--expose <field-or-path>` is required to reveal them.
 
 ## Adding A Workflow
 

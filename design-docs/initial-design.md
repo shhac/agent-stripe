@@ -65,7 +65,7 @@ Lists default to NDJSON so an LLM can stream, truncate, and resume investigation
 
 Stripe errors often include request IDs, request-log URLs, error codes, and decline codes. The API client should surface those in messages or hints when present.
 
-Sensitive Stripe response fields are redacted by default in resource output, investigation evidence, and debug response bodies. Redacted values use an inline `{"@redacted":true,...}` placeholder, and the containing object carries an `@redacted` path list so an LLM can tell which field exists without seeing the value. `--expose <field-or-path>` is the explicit opt-in escape hatch; it accepts comma-separated values and repeated flags. It must never expose stored profile API keys.
+Sensitive Stripe response fields are redacted by default in resource output, investigation evidence, and debug response bodies. Redacted string values use a `"[REDACTED]"` marker so common Stripe scalar field shapes stay scalar, and the containing top-level object carries an `@redacted` path list so an LLM can tell which fields exist without seeing their values. `--expose <field-or-path>` is the explicit opt-in escape hatch; it accepts comma-separated values and repeated flags. It must never expose stored profile API keys.
 
 `--debug` is the global diagnostic switch. It prints structured JSON records to stderr for client setup and HTTP responses. Debug output may include redacted Stripe response bodies and request URLs, but must not include raw API keys.
 

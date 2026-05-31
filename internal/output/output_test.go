@@ -51,15 +51,28 @@ func TestRedactSensitiveFieldsByDefault(t *testing.T) {
 	}
 
 	redacted := Redact(input, RedactionOptions{}).(map[string]any)
-	if redacted["client_secret"] == "pi_mock_123_secret_fake" {
-		t.Fatalf("client_secret was not redacted: %#v", redacted)
+	if redacted["client_secret"] != RedactedString {
+		t.Fatalf("client_secret = %#v, want redacted marker", redacted["client_secret"])
 	}
-	if redacted["metadata"].(map[string]any)["internal_product_id"] != "prod_internal_basic" {
+	metadata := redacted["metadata"].(map[string]any)
+	if metadata["api_token"] != RedactedString {
+		t.Fatalf("metadata.api_token = %#v, want redacted marker", metadata["api_token"])
+	}
+	if metadata["internal_product_id"] != "prod_internal_basic" {
 		t.Fatalf("non-sensitive metadata was redacted: %#v", redacted)
 	}
-	if _, ok := redacted["@redacted"].([]any); !ok {
+	if _, ok := metadata["@redacted"]; ok {
+		t.Fatalf("nested @redacted note present: %#v", metadata)
+	}
+	notes, ok := redacted["@redacted"].([]any)
+	if !ok {
 		t.Fatalf("@redacted note missing: %#v", redacted)
 	}
+	if len(notes) != 2 {
+		t.Fatalf("@redacted note count = %d, want 2: %#v", len(notes), notes)
+	}
+	assertRedactionPath(t, notes, "client_secret")
+	assertRedactionPath(t, notes, "metadata.api_token")
 }
 
 func TestRedactHonorsExposeByPathOrKey(t *testing.T) {
@@ -80,4 +93,15 @@ func TestRedactHonorsExposeByPathOrKey(t *testing.T) {
 	if _, ok := redacted["@redacted"]; ok {
 		t.Fatalf("@redacted notes present despite exposed fields: %#v", redacted)
 	}
+}
+
+func assertRedactionPath(t *testing.T, notes []any, path string) {
+	t.Helper()
+	for _, note := range notes {
+		item, ok := note.(map[string]any)
+		if ok && item["path"] == path {
+			return
+		}
+	}
+	t.Fatalf("@redacted missing path %q in %#v", path, notes)
 }

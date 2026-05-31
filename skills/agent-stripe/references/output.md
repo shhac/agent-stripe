@@ -22,20 +22,21 @@ When Stripe returns an expanded nested object in a field that can also be an ID 
 
 Sensitive Stripe fields are redacted by default in direct resource output, investigation evidence, and debug response bodies.
 
-Redacted values are replaced inline:
+Redacted string values are replaced in place with `"[REDACTED]"` so scalar Stripe fields stay scalar:
 
 ```json
 {
-  "client_secret": {
-    "@redacted": true,
-    "path": "client_secret",
-    "reason": "sensitive_field",
-    "expose_hint": "--expose client_secret"
+  "id": "pi_...",
+  "object": "payment_intent",
+  "client_secret": "[REDACTED]",
+  "metadata": {
+    "order_id": "order_123",
+    "api_token": "[REDACTED]"
   }
 }
 ```
 
-The containing object also gets an `@redacted` path list:
+The containing top-level object gets a single `@redacted` path list:
 
 ```json
 {
@@ -44,6 +45,11 @@ The containing object also gets an `@redacted` path list:
       "path": "client_secret",
       "reason": "sensitive_field",
       "expose_hint": "--expose client_secret"
+    },
+    {
+      "path": "metadata.api_token",
+      "reason": "sensitive_field",
+      "expose_hint": "--expose metadata.api_token"
     }
   ]
 }

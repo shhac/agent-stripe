@@ -8,6 +8,8 @@ type RedactionOptions struct {
 	Expose []string
 }
 
+const RedactedString = "[REDACTED]"
+
 type redactionNote struct {
 	Path       string `json:"path"`
 	Reason     string `json:"reason"`
@@ -71,12 +73,7 @@ func redactMap(item map[string]any, path, currentObject string, expose map[strin
 				Reason:     "sensitive_field",
 				ExposeHint: "--expose " + fieldPath,
 			}
-			out[key] = map[string]any{
-				"@redacted":   true,
-				"path":        fieldPath,
-				"reason":      note.Reason,
-				"expose_hint": note.ExposeHint,
-			}
+			out[key] = redactedPlaceholder(value)
 			notes = append(notes, note)
 			continue
 		}
@@ -85,6 +82,13 @@ func redactMap(item map[string]any, path, currentObject string, expose map[strin
 		notes = append(notes, childNotes...)
 	}
 	return out, notes
+}
+
+func redactedPlaceholder(value any) any {
+	if value == nil {
+		return nil
+	}
+	return RedactedString
 }
 
 func redactSlice(items []any, path, currentObject string, expose map[string]bool) ([]any, []redactionNote) {

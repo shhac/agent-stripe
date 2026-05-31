@@ -62,7 +62,7 @@ Errors are written to stderr as JSON:
 {"error":"Permission denied: ...","fixable_by":"human","hint":"The key may need read permissions for this Stripe resource..."}
 ```
 
-Sensitive Stripe response fields are redacted by default. Redacted values are replaced with `{"@redacted":true,...}` and the containing object includes an `@redacted` note with the field path and expose hint. Use `--expose <field-or-path>` when a human has decided the field is safe for the current investigation:
+Sensitive Stripe response fields are redacted by default. Redacted string values are replaced with `"[REDACTED]"`, and the containing top-level object includes an `@redacted` list with the field path and expose hint. Use `--expose <field-or-path>` when a human has decided the field is safe for the current investigation:
 
 ```bash
 agent-stripe payment-intents get pi_... --expose client_secret

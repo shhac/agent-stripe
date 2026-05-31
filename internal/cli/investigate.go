@@ -61,7 +61,7 @@ OUTPUT
     {"type":"finding","severity":"info|warning","summary":"...","data":{...}}
   Expanded nested Stripe objects are emitted as their own entity records and replaced by ID in the parent.
   Use --full or --expand-field <path> for long fields that were truncated.
-  Sensitive Stripe fields are redacted with @redacted placeholders unless exposed with --expose <path,key>.
+  Sensitive Stripe fields are replaced by "[REDACTED]" and indexed in @redacted unless exposed with --expose <path,key>.
 
 RESOLUTION AND CONTEXT
   agent-stripe investigate resolve <stripe-id-or-invoice-number>

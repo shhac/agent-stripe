@@ -23,10 +23,12 @@ func TestCLIDebugAgainstMockStripe(t *testing.T) {
 
 func TestCLIRedactsSensitiveStripeFieldsByDefault(t *testing.T) {
 	out := runMockCLI(t, "payment-intents", "get", "pi_mock_succeeded")
-	assertContains(t, out, `"@redacted"`, `"path": "client_secret"`, `"path": "metadata.api_token"`, `"order_id": "order_123"`)
+	assertContains(t, out, `"@redacted"`, `"client_secret": "[REDACTED]"`, `"api_token": "[REDACTED]"`, `"path": "client_secret"`, `"path": "metadata.api_token"`, `"order_id": "order_123"`)
 	assertNotContains(t, out, "pi_mock_succeeded_secret_fake", "tok_fake_order")
+	assertNotContains(t, out, `"@redacted": true`)
 
 	out = runMockCLI(t, "customers", "get", "cus_mock_123")
+	assertContains(t, out, `"email": "[REDACTED]"`, `"name": "[REDACTED]"`, `"phone": "[REDACTED]"`)
 	assertContains(t, out, `"path": "email"`, `"path": "name"`, `"path": "phone"`)
 	assertNotContains(t, out, "buyer@example.com", "Mock Buyer", "+15550101001")
 }
