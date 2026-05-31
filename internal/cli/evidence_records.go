@@ -49,6 +49,65 @@ func writeEvidence(records []evidenceRecord, format string, opts evidenceOptions
 	shared.WritePaginatedList(items, nil, format)
 }
 
+type evidenceStreamer struct {
+	writer  *output.NDJSONWriter
+	opts    evidenceOptions
+	seen    map[string]bool
+	emitted map[string]bool
+}
+
+func newEvidenceStreamer(format string, opts evidenceOptions) *evidenceStreamer {
+	if output.ResolveFormat(format, output.FormatNDJSON) != output.FormatNDJSON {
+		return nil
+	}
+	if opts.maxString <= 0 {
+		opts.maxString = defaultMaxString
+	}
+	return &evidenceStreamer{
+		writer:  output.NewNDJSONWriter(output.Stdout()),
+		opts:    opts,
+		seen:    map[string]bool{},
+		emitted: map[string]bool{},
+	}
+}
+
+func (s *evidenceStreamer) emit(record evidenceRecord) {
+	if s == nil {
+		return
+	}
+	normalized, extracted := normalizeRecord(record, s.opts, s.seen)
+	s.write(normalized)
+	for _, child := range extracted {
+		s.write(child)
+	}
+}
+
+func (s *evidenceStreamer) writeRemaining(records []evidenceRecord) {
+	if s == nil {
+		return
+	}
+	for _, record := range records {
+		s.emit(record)
+	}
+}
+
+func (s *evidenceStreamer) write(record evidenceRecord) {
+	if key := evidenceRecordKey(record); key != "" {
+		if s.emitted[key] {
+			return
+		}
+		s.emitted[key] = true
+	}
+	_ = s.writer.WriteItem(record)
+}
+
+func evidenceRecordKey(record evidenceRecord) string {
+	if record.Type != "entity" || record.Object == "" || record.ID == "" {
+		return ""
+	}
+	return record.Type + ":" + record.Object + ":" + record.ID
+}
+
 func entityRecord(object string, data map[string]any) evidenceRecord {
 	return evidenceRecord{
 		Type:   "entity",

@@ -13,6 +13,7 @@ import (
 type investigator struct {
 	ctx    context.Context
 	client *api.Client
+	stream *evidenceStreamer
 }
 
 type investigationOutputOptions struct {
@@ -21,20 +22,26 @@ type investigationOutputOptions struct {
 	maxString    int
 }
 
-func runInvestigation(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(context.Context, *api.Client) ([]evidenceRecord, error)) error {
+func runInvestigation(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(context.Context, *api.Client, *evidenceStreamer) ([]evidenceRecord, error)) error {
 	return shared.WithClient(flags, func(ctx context.Context, client *api.Client) error {
-		records, err := fn(ctx, client)
+		evidenceOpts := outputOpts.evidenceOptions(flags)
+		stream := newEvidenceStreamer(flags.Format, evidenceOpts)
+		records, err := fn(ctx, client, stream)
 		if err != nil {
 			return err
 		}
-		writeEvidence(records, flags.Format, outputOpts.evidenceOptions(flags))
+		if stream != nil {
+			stream.writeRemaining(records)
+			return nil
+		}
+		writeEvidence(records, flags.Format, evidenceOpts)
 		return nil
 	})
 }
 
 func runWithInvestigator(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(investigator) ([]evidenceRecord, error)) error {
-	return runInvestigation(flags, outputOpts, func(ctx context.Context, client *api.Client) ([]evidenceRecord, error) {
-		return fn(investigator{ctx: ctx, client: client})
+	return runInvestigation(flags, outputOpts, func(ctx context.Context, client *api.Client, stream *evidenceStreamer) ([]evidenceRecord, error) {
+		return fn(investigator{ctx: ctx, client: client, stream: stream})
 	})
 }
 
@@ -62,7 +69,12 @@ func (i investigator) get(path string, params url.Values) (map[string]any, error
 	if err != nil {
 		return nil, err
 	}
-	return decodeObject(raw)
+	item, err := decodeObject(raw)
+	if err != nil {
+		return nil, err
+	}
+	i.emitEntity(item)
+	return item, nil
 }
 
 func (i investigator) postForm(path string, params url.Values) (map[string]any, error) {
@@ -70,7 +82,12 @@ func (i investigator) postForm(path string, params url.Values) (map[string]any, 
 	if err != nil {
 		return nil, err
 	}
-	return decodeObject(raw)
+	item, err := decodeObject(raw)
+	if err != nil {
+		return nil, err
+	}
+	i.emitEntity(item)
+	return item, nil
 }
 
 func (i investigator) list(path string, params url.Values) ([]map[string]any, error) {
@@ -88,9 +105,17 @@ func (i investigator) list(path string, params url.Values) ([]map[string]any, er
 		if err != nil {
 			return nil, err
 		}
+		i.emitEntity(item)
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func (i investigator) emitEntity(item map[string]any) {
+	if i.stream == nil || !isStripeEntity(item) {
+		return
+	}
+	i.stream.emit(entityRecord(mapString(item, "object"), item))
 }
 
 func decodeObject(raw json.RawMessage) (map[string]any, error) {
