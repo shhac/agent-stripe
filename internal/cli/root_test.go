@@ -147,6 +147,21 @@ func TestGlobalFlagsOverrideConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestAuthCheckIncludesCredentialType(t *testing.T) {
+	h := newCLITestHarness(t)
+	server := newAccountServer(t)
+	defer server.Close()
+
+	stdout, stderr := h.run("--api-key", "rk_test_123", "--base-url", server.URL, "auth", "check")
+
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	assertJSONField(t, stdout, "status", "ok")
+	assertJSONField(t, stdout, "credential_type", "rk_test")
+	assertJSONField(t, stdout, "credential_metadata_status", "not_stored")
+}
+
 func newBalanceServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +170,17 @@ func newBalanceServer(t *testing.T) *httptest.Server {
 		}
 		w.Header().Set("Request-Id", "req_test")
 		_, _ = w.Write([]byte(`{"object":"balance","available":[],"pending":[]}`))
+	}))
+}
+
+func newAccountServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/account" {
+			t.Fatalf("path = %s, want /v1/account", r.URL.Path)
+		}
+		w.Header().Set("Request-Id", "req_test")
+		_, _ = w.Write([]byte(`{"object":"account","id":"acct_test"}`))
 	}))
 }
 

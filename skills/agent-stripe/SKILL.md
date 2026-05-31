@@ -19,6 +19,7 @@ Use `agent-stripe` when investigating Stripe payment incidents, invoice question
 
 - Never ask the tool to reveal an API key.
 - Never accept pasted Stripe API keys in chat. Ask the user to run `agent-stripe auth add <profile> --form` locally so the key goes directly into an OS dialog.
+- Use `agent-stripe auth update <profile> --form` when a stored key needs to be replaced.
 - Prefer read-only commands.
 - Use `--context` when the incident is scoped to a connected account or organization account path.
 - Treat live-mode actions as high stakes; this CLI is read-first by design.
@@ -86,7 +87,7 @@ Expanded nested Stripe objects are emitted as separate `entity` records and repl
 
 Stripe `429` responses retry automatically with bounded exponential backoff and jitter. Use `--max-retries 0` for one-shot behavior or `--debug` to see retry records on stderr.
 
-Non-secret profile/config metadata lives in XDG config. API keys live in Keychain. Use `agent-stripe config show` or `agent-stripe config path` for config inspection; use `auth update` rather than editing JSON by hand.
+Non-secret profile/config metadata lives in XDG config. API keys live in Keychain. `auth list` and `auth check` may show `credential_type` (`rk_live`, `rk_test`, `sk_live`, `sk_test`, `pk_live`, `pk_test`, or `unknown`) but never the key. Use `agent-stripe config show` or `agent-stripe config path` for config inspection; use `auth update` rather than editing JSON by hand.
 
 ## Incremental References
 

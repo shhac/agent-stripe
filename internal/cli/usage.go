@@ -14,7 +14,7 @@ PROFILE SETUP
   agent-stripe auth check [profile]
   agent-stripe auth list
   agent-stripe auth default <profile>
-  agent-stripe auth update <profile> [--context <ctx>|--clear-context] [--api-version <version>] [--default]
+  agent-stripe auth update <profile> [--api-key <rk_or_sk>|--form] [--context <ctx>|--clear-context] [--api-version <version>] [--default]
   agent-stripe auth remove <profile>
   agent-stripe config path
   agent-stripe config show
@@ -29,6 +29,7 @@ CONTEXT
   For a platform connected account, use the connected account ID.
   For organization key access to a platform-connected account, use <platform_acct>/<connected_acct>.
   The API key is stored in macOS Keychain; this CLI never prints it back.
+  auth list/check show credential_type only: rk_live|rk_test|sk_live|sk_test|pk_live|pk_test|unknown.
   Non-secret config is stored in XDG config, usually ~/.config/agent-stripe/config.json.
   Prefer --form when an LLM is guiding setup so the user types the key into an OS popup.
 

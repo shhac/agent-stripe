@@ -20,6 +20,7 @@ make build
 ./agent-stripe auth add sandbox --form --context acct_...
 ./agent-stripe auth check sandbox
 ./agent-stripe auth update sandbox --context acct_...
+./agent-stripe auth update sandbox --form
 ./agent-stripe config show
 ./agent-stripe events list --type charge.failed --limit 20
 ./agent-stripe investigate resolve MOCK-0001
@@ -77,7 +78,9 @@ Stripe `429` responses are retried automatically up to `--max-retries` times, wh
 
 Profile metadata is stored at `${XDG_CONFIG_HOME}/agent-stripe/config.json`, or `~/.config/agent-stripe/config.json` when `XDG_CONFIG_HOME` is not set. A non-secret `credentials.json` index in the same directory records which profiles are Keychain-managed. API keys are stored separately in macOS Keychain and are not written to either file.
 
-Use `agent-stripe auth update <profile>` to change non-secret profile metadata, and `agent-stripe config set max_retries|timeout_ms <value>` to persist global defaults. Command-line flags still override persisted defaults.
+`auth add` and `auth update` store only the credential type, such as `rk_test` or `sk_live`, as non-secret metadata. `auth list` and `auth check` show `credential_type`; legacy profiles without stored metadata render as `unknown` with a hint to run `auth check`, while genuinely unrecognized saved formats also render as `unknown` with a test-it hint. Use `agent-stripe auth update <profile> --form` to replace a stored key without exposing it to the LLM.
+
+Use `agent-stripe auth update <profile>` to change profile key or non-secret metadata, and `agent-stripe config set max_retries|timeout_ms <value>` to persist global defaults. Command-line flags still override persisted defaults.
 
 ## Commands
 
@@ -106,6 +109,7 @@ agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
 agent-stripe payments usage
 agent-stripe connect usage
 agent-stripe auth update prod --context acct_...
+agent-stripe auth update prod --form
 agent-stripe config path
 agent-stripe config show
 agent-stripe config set max_retries 2

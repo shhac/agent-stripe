@@ -31,6 +31,7 @@ Profiles store non-secret metadata in `${XDG_CONFIG_HOME}/agent-stripe/config.js
 - default `Stripe-Context`
 - default Stripe API version
 - optional global defaults such as `timeout_ms` and `max_retries`
+- non-secret credential classification: `rk_live`, `rk_test`, `sk_live`, `sk_test`, `pk_live`, `pk_test`, or `unknown`
 
 The API key itself is stored in macOS Keychain under the profile alias. A non-secret `credentials.json` index in the config directory records which profiles are Keychain-managed, but never stores the API key. The credential package deliberately has no method for listing or printing secret values. The `--api-key` flag is accepted as a non-persisted override for automation and tests, but output must never echo it.
 
@@ -38,11 +39,13 @@ The CLI should edit this file through validated commands, not by encouraging man
 
 - `agent-stripe auth add <profile> --api-key <key> [--context <context>] [--api-version <version>]`
 - `agent-stripe auth add <profile> --form [--context <context>] [--api-version <version>]`
-- `agent-stripe auth update <profile>` for profile metadata
+- `agent-stripe auth update <profile> [--api-key <key>|--form]` for key replacement or profile metadata
 - `agent-stripe auth check|list|default|remove`
 - `agent-stripe config show|path|get|set|unset` for non-secret global defaults
 
-When an LLM is guiding a human through setup, use `agent-stripe auth add <profile> --form`. The native OS dialog asks for the API key outside the agent's terminal/chat context, then the CLI stores it in Keychain and prints only a redacted receipt.
+When an LLM is guiding a human through setup, use `agent-stripe auth add <profile> --form` or `agent-stripe auth update <profile> --form`. The native OS dialog asks for the API key outside the agent's terminal/chat context, then the CLI stores it in Keychain and prints only a redacted receipt.
+
+`auth add` and key-changing `auth update` classify the key prefix into non-secret `credential_type` metadata. `auth check` refreshes that value after reading the key internally. An omitted value means a legacy profile has not been classified yet; a saved `unknown` value means the stored key format was inspected but not recognized, so the profile should be tested rather than assumed invalid.
 
 ## Stripe context
 
@@ -78,6 +81,7 @@ Known Stripe ID prefixes are preflighted before direct retrieval commands and be
 ```text
 agent-stripe auth add <profile> --api-key <key> [--context <context>] [--api-version <version>]
 agent-stripe auth add <profile> --form [--context <context>] [--api-version <version>]
+agent-stripe auth update <profile> [--api-key <key>|--form] [--context <context>|--clear-context] [--api-version <version>] [--default]
 agent-stripe auth check|list|default|remove|update
 
 agent-stripe config show|path|get|set|unset

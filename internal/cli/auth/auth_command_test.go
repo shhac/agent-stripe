@@ -74,6 +74,40 @@ func TestAuthAddStoresSecretOutOfBandAndDoesNotPrintIt(t *testing.T) {
 	if cfg.DefaultProfile != "prod" || profile.Context != "acct_123" || profile.APIVersion != "2025-06-30.basil" {
 		t.Fatalf("config = %+v, profile = %+v", cfg, profile)
 	}
+	if profile.CredentialType != "sk_test" {
+		t.Fatalf("CredentialType = %q, want sk_test", profile.CredentialType)
+	}
+}
+
+func TestAuthUpdateCanReplaceKeyAndCredentialType(t *testing.T) {
+	h := newAuthCommandHarness(t)
+	if err := config.StoreProfile("prod", config.Profile{CredentialType: "sk_test"}); err != nil {
+		t.Fatalf("StoreProfile() error = %v", err)
+	}
+	var storedAlias string
+	var storedSecret string
+	credentialStore = func(name, apiKey string) (string, error) {
+		storedAlias = name
+		storedSecret = apiKey
+		return "keychain", nil
+	}
+
+	stdout, stderr := h.run("auth", "update", "prod", "--api-key", "rk_test_replacement")
+
+	if stderr != "" {
+		t.Fatalf("stderr = %q, want empty", stderr)
+	}
+	if storedAlias != "prod" || storedSecret != "rk_test_replacement" {
+		t.Fatalf("credentialStore(%q, %q), want prod and replacement key", storedAlias, storedSecret)
+	}
+	if strings.Contains(stdout, storedSecret) {
+		t.Fatalf("auth update leaked replacement key: %s", stdout)
+	}
+	assertAuthJSONField(t, stdout, "status", "updated")
+	assertAuthJSONField(t, stdout, "credential_type", "rk_test")
+	if got := config.Read().Profiles["prod"].CredentialType; got != "rk_test" {
+		t.Fatalf("CredentialType = %q, want rk_test", got)
+	}
 }
 
 func TestAuthAddStorageFailureDoesNotWriteProfile(t *testing.T) {
@@ -139,6 +173,61 @@ func TestAuthRemoveCredentialFailureLeavesProfile(t *testing.T) {
 	}
 }
 
+func TestAuthListCredentialTypeHints(t *testing.T) {
+	h := newAuthCommandHarness(t)
+	if err := config.StoreProfile("good", config.Profile{CredentialType: "rk_live"}); err != nil {
+		t.Fatalf("StoreProfile(good) error = %v", err)
+	}
+	if err := config.StoreProfile("legacy", config.Profile{}); err != nil {
+		t.Fatalf("StoreProfile(legacy) error = %v", err)
+	}
+	if err := config.StoreProfile("publishable", config.Profile{CredentialType: "pk_test"}); err != nil {
+		t.Fatalf("StoreProfile(publishable) error = %v", err)
+	}
+	if err := config.StoreProfile("weird", config.Profile{CredentialType: "unknown"}); err != nil {
+		t.Fatalf("StoreProfile(weird) error = %v", err)
+	}
+
+	stdout, _ := h.run("auth", "list")
+	items := parseAuthNDJSON(t, stdout)
+
+	if got := items["good"]["credential_type"]; got != "rk_live" {
+		t.Fatalf("good credential_type = %#v, want rk_live", got)
+	}
+	if _, ok := items["good"]["hint"]; ok {
+		t.Fatalf("good profile should not have a hint: %#v", items["good"])
+	}
+	if got := items["legacy"]["hint"]; got != "Credential type is not stored for this profile yet. Run 'agent-stripe auth check legacy' to refresh profile metadata." {
+		t.Fatalf("legacy hint = %#v", got)
+	}
+	if got := items["weird"]["hint"]; got != "Stored credential format is not recognized by agent-stripe. It may still work; run 'agent-stripe auth check weird' to test it." {
+		t.Fatalf("weird hint = %#v", got)
+	}
+	if got := items["publishable"]["hint"]; got != "Publishable keys cannot authenticate agent-stripe API requests. Run 'agent-stripe auth update publishable --form' with a restricted or secret key." {
+		t.Fatalf("publishable hint = %#v", got)
+	}
+}
+
+func TestRefreshStoredCredentialTypeUpdatesProfileMetadata(t *testing.T) {
+	h := newAuthCommandHarness(t)
+	_ = h
+	if err := config.StoreProfile("legacy", config.Profile{}); err != nil {
+		t.Fatalf("StoreProfile() error = %v", err)
+	}
+
+	status := refreshStoredCredentialType(&shared.ResolvedProfile{
+		Alias:            "legacy",
+		CredentialSource: "keychain",
+	}, "rk_test")
+
+	if status != "updated" {
+		t.Fatalf("status = %q, want updated", status)
+	}
+	if got := config.Read().Profiles["legacy"].CredentialType; got != "rk_test" {
+		t.Fatalf("CredentialType = %q, want rk_test", got)
+	}
+}
+
 func assertAuthJSONField(t *testing.T, raw, key string, want any) {
 	t.Helper()
 	var got map[string]any
@@ -148,4 +237,23 @@ func assertAuthJSONField(t *testing.T, raw, key string, want any) {
 	if got[key] != want {
 		t.Fatalf("%s = %#v, want %#v in %s", key, got[key], want, raw)
 	}
+}
+
+func parseAuthNDJSON(t *testing.T, raw string) map[string]map[string]any {
+	t.Helper()
+	items := map[string]map[string]any{}
+	for _, line := range strings.Split(strings.TrimSpace(raw), "\n") {
+		if line == "" {
+			continue
+		}
+		var item map[string]any
+		if err := json.Unmarshal([]byte(line), &item); err != nil {
+			t.Fatalf("output line is not JSON: %v\n%s", err, line)
+		}
+		profile, _ := item["profile"].(string)
+		if profile != "" {
+			items[profile] = item
+		}
+	}
+	return items
 }

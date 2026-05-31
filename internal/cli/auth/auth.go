@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"sort"
 
 	"github.com/spf13/cobra"
 
@@ -37,19 +38,22 @@ func Register(root *cobra.Command, globals shared.GlobalsFunc) {
 }
 
 func registerUpdate(parent *cobra.Command) {
+	var apiKey string
 	var contextValue string
 	var apiVersion string
 	var clearContext bool
 	var setDefault bool
+	var form bool
 
 	cmd := &cobra.Command{
 		Use:   "update <profile>",
-		Short: "Update non-secret profile metadata",
+		Short: "Update a profile key or non-secret metadata",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Changed("context") && !cmd.Flags().Changed("api-version") && !clearContext && !setDefault {
+			keyRequested := cmd.Flags().Changed("api-key") || form
+			if !cmd.Flags().Changed("context") && !cmd.Flags().Changed("api-version") && !clearContext && !setDefault && !keyRequested {
 				output.WriteError(output.Stderr(), agenterrors.New("no profile updates requested", agenterrors.FixableByAgent).
-					WithHint("Use --context, --clear-context, --api-version, or --default"))
+					WithHint("Use --api-key, --form, --context, --clear-context, --api-version, or --default"))
 				return nil
 			}
 			if clearContext && cmd.Flags().Changed("context") {
@@ -58,6 +62,33 @@ func registerUpdate(parent *cobra.Command) {
 			}
 
 			alias := args[0]
+			if _, ok := config.Read().Profiles[alias]; !ok {
+				output.WriteError(output.Stderr(), agenterrors.Newf(agenterrors.FixableByHuman, "Profile %q is not configured", alias).
+					WithHint("Run 'agent-stripe auth list' to see configured profiles"))
+				return nil
+			}
+			var credentialType string
+			var storage string
+			if keyRequested {
+				if form {
+					filledKey, err := promptAPIKeyViaDialog(cmd.Context(), alias, apiKey)
+					if err != nil {
+						output.WriteError(output.Stderr(), err)
+						return nil
+					}
+					apiKey = filledKey
+				}
+				if !shared.RequireFlag("api-key", apiKey, "Provide --api-key <rk_live...|rk_test...|sk_live...|sk_test...> or use --form") {
+					return nil
+				}
+				var err error
+				storage, err = credentialStore(alias, apiKey)
+				if err != nil {
+					output.WriteError(output.Stderr(), err)
+					return nil
+				}
+				credentialType = credential.Type(apiKey)
+			}
 			if err := config.UpdateProfile(alias, func(profile config.Profile) config.Profile {
 				if cmd.Flags().Changed("context") {
 					profile.Context = contextValue
@@ -67,6 +98,9 @@ func registerUpdate(parent *cobra.Command) {
 				}
 				if cmd.Flags().Changed("api-version") {
 					profile.APIVersion = apiVersion
+				}
+				if keyRequested {
+					profile.CredentialType = credentialType
 				}
 				return profile
 			}); err != nil {
@@ -82,20 +116,28 @@ func registerUpdate(parent *cobra.Command) {
 			}
 			cfg := config.Read()
 			profile := cfg.Profiles[alias]
-			shared.WriteItem(map[string]any{
+			fields := map[string]any{
 				"status":      "updated",
 				"profile":     alias,
 				"default":     cfg.DefaultProfile == alias,
 				"context":     profile.Context,
 				"api_version": profile.APIVersion,
-			}, "")
+				"credential":  "keychain",
+			}
+			addCredentialType(fields, profile)
+			if keyRequested {
+				fields["storage"] = storage
+			}
+			shared.WriteItem(fields, "")
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "Replacement Stripe restricted or secret API key")
 	cmd.Flags().StringVar(&contextValue, "context", "", "Default Stripe-Context for this profile")
 	cmd.Flags().BoolVar(&clearContext, "clear-context", false, "Clear this profile's default Stripe-Context")
 	cmd.Flags().StringVar(&apiVersion, "api-version", "", "Default Stripe API version")
 	cmd.Flags().BoolVar(&setDefault, "default", false, "Make this the default profile")
+	cmd.Flags().BoolVar(&form, "form", false, "Prompt for the replacement API key via a native OS dialog")
 	parent.AddCommand(cmd)
 }
 
@@ -132,17 +174,19 @@ func registerAdd(parent *cobra.Command) {
 			if apiVersion == "" {
 				apiVersion = config.DefaultAPIVersion
 			}
-			if err := config.StoreProfile(alias, config.Profile{Context: contextValue, APIVersion: apiVersion}); err != nil {
+			credentialType := credential.Type(apiKey)
+			if err := config.StoreProfile(alias, config.Profile{Context: contextValue, APIVersion: apiVersion, CredentialType: credentialType}); err != nil {
 				output.WriteError(output.Stderr(), err)
 				return nil
 			}
 
 			shared.WriteItem(map[string]any{
-				"status":      "added",
-				"profile":     alias,
-				"storage":     storage,
-				"context":     contextValue,
-				"api_version": apiVersion,
+				"status":          "added",
+				"profile":         alias,
+				"storage":         storage,
+				"context":         contextValue,
+				"api_version":     apiVersion,
+				"credential_type": credentialType,
 			}, "")
 			return nil
 		},
@@ -165,7 +209,14 @@ func registerCheck(parent *cobra.Command, globals shared.GlobalsFunc) {
 				flags.Profile = args[0]
 			}
 
-			return shared.WithClient(flags, func(ctx context.Context, client *api.Client) error {
+			resolved, err := shared.ResolveProfile(flags)
+			if err != nil {
+				output.WriteError(output.Stderr(), err)
+				return nil
+			}
+			credentialType := credential.Type(resolved.APIKey)
+			metadataStatus := refreshStoredCredentialType(resolved, credentialType)
+			return shared.WithResolvedClient(flags, resolved, func(ctx context.Context, client *api.Client) error {
 				raw, err := client.Get(ctx, "/v1/account", url.Values{})
 				if err != nil {
 					return err
@@ -174,10 +225,15 @@ func registerCheck(parent *cobra.Command, globals shared.GlobalsFunc) {
 				if err := json.Unmarshal(raw, &account); err != nil {
 					return err
 				}
-				shared.WriteItem(map[string]any{
-					"status":  "ok",
-					"account": account,
-				}, "")
+				item := map[string]any{
+					"status":                     "ok",
+					"profile":                    resolved.Alias,
+					"credential_type":            credentialType,
+					"credential_metadata_status": metadataStatus,
+					"account":                    account,
+				}
+				addCredentialTypeHint(item, credentialType, false, resolved.Alias)
+				shared.WriteItem(item, "")
 				return nil
 			})
 		},
@@ -214,14 +270,20 @@ func registerList(parent *cobra.Command) {
 			cfg := config.Read()
 			profiles := make([]map[string]any, 0, len(cfg.Profiles))
 			for alias, profile := range cfg.Profiles {
-				profiles = append(profiles, map[string]any{
+				item := map[string]any{
 					"profile":     alias,
 					"default":     alias == cfg.DefaultProfile,
 					"context":     profile.Context,
 					"api_version": profile.APIVersion,
 					"credential":  "keychain",
-				})
+				}
+				addCredentialType(item, profile)
+				addCredentialTypeHint(item, item["credential_type"].(string), profile.CredentialType == "", alias)
+				profiles = append(profiles, item)
 			}
+			sort.Slice(profiles, func(i, j int) bool {
+				return profiles[i]["profile"].(string) < profiles[j]["profile"].(string)
+			})
 			shared.WritePaginatedList(shared.ToAnySlice(profiles), nil, "")
 			return nil
 		},

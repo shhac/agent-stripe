@@ -107,6 +107,10 @@ func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error)
 		output.WriteError(output.Stderr(), err)
 		return nil
 	}
+	return WithResolvedClient(flags, resolved, fn)
+}
+
+func WithResolvedClient(flags *GlobalFlags, resolved *ResolvedProfile, fn func(context.Context, *api.Client) error) error {
 	if flags.Debug {
 		WriteDebug(map[string]any{
 			"@debug":            "client",

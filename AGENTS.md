@@ -11,6 +11,7 @@ This repository contains a Go CLI for LLM-driven Stripe incident triage.
 - Use `make mock-dev ARGS="events list --type charge.failed"` to run the CLI against the mock server.
 - Use `mockstripe --routes` or `GET /` on the mock server to inspect the supported mock API surface.
 - Prefer `agent-stripe auth add <profile> --form` when guiding a user through credential setup; do not ask the user to paste API keys into chat.
+- Prefer `agent-stripe auth update <profile> --form` when guiding a user through replacing a stored key.
 - Prefer read-only Stripe commands unless a future design document explicitly approves mutation workflows.
 - Do not print, log, or persist raw API keys outside the credential backend.
 - Keep list outputs compact and NDJSON-friendly.

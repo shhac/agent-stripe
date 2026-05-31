@@ -22,8 +22,9 @@ type Defaults struct {
 }
 
 type Profile struct {
-	Context    string `json:"context,omitempty"`
-	APIVersion string `json:"api_version,omitempty"`
+	Context        string `json:"context,omitempty"`
+	APIVersion     string `json:"api_version,omitempty"`
+	CredentialType string `json:"credential_type,omitempty"`
 }
 
 var (

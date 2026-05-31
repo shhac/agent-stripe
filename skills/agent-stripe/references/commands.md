@@ -14,10 +14,10 @@ agent-stripe investigate usage
 
 - `agent-stripe auth add <profile> --form [--context <ctx>] [--api-version <version>]` - LLM-safe setup. The user types the API key into a native OS dialog.
 - `agent-stripe auth add <profile> --api-key <key> [--context <ctx>] [--api-version <version>]` - direct setup when the key is already in the user's shell, not chat.
-- `agent-stripe auth check [profile]` - verify the active or named profile.
-- `agent-stripe auth list` - list profile metadata without secrets.
+- `agent-stripe auth check [profile]` - verify the active or named profile and refresh stored `credential_type` metadata when possible.
+- `agent-stripe auth list` - list profile metadata without secrets, including `credential_type` and hints for missing, unrecognized, or publishable keys.
 - `agent-stripe auth default <profile>` - set the default profile.
-- `agent-stripe auth update <profile> [--context <ctx>|--clear-context] [--api-version <version>] [--default]` - edit non-secret profile metadata.
+- `agent-stripe auth update <profile> [--api-key <key>|--form] [--context <ctx>|--clear-context] [--api-version <version>] [--default]` - replace a stored key or edit non-secret profile metadata.
 - `agent-stripe auth remove <profile>` - remove a stored profile.
 - `agent-stripe config path|show|get|set|unset` - inspect or edit non-secret config.
 

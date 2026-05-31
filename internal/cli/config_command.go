@@ -126,10 +126,15 @@ func newConfigUnsetCommand() *cobra.Command {
 func configView(cfg *appconfig.Config) map[string]any {
 	profiles := map[string]any{}
 	for alias, profile := range cfg.Profiles {
+		credentialType := profile.CredentialType
+		if credentialType == "" {
+			credentialType = "unknown"
+		}
 		profiles[alias] = map[string]any{
-			"context":     profile.Context,
-			"api_version": profile.APIVersion,
-			"credential":  "keychain",
+			"context":         profile.Context,
+			"api_version":     profile.APIVersion,
+			"credential":      "keychain",
+			"credential_type": credentialType,
 		}
 	}
 	defaults := map[string]any{}
