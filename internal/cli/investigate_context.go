@@ -37,7 +37,7 @@ func (i investigator) customerContext(customer string, limit int) ([]evidenceRec
 	if err != nil {
 		return nil, err
 	}
-	records = append(records, entityRecord("customer", customerObj))
+	records = i.appendEvidence(records, entityRecord("customer", customerObj))
 
 	records, _ = i.appendRelatedList(records, "payment_method", "/v1/payment_methods", valuesWithLimit(limit, "customer", customer, "type", "card"))
 	records, _ = i.appendRelatedList(records, "subscription", "/v1/subscriptions", valuesWithLimit(limit, "customer", customer, "status", "all"))
@@ -48,7 +48,7 @@ func (i investigator) customerContext(customer string, limit int) ([]evidenceRec
 		records, _ = i.appendRelatedList(records, "dispute", "/v1/disputes", valuesWithLimit(limit, "charge", mapString(charge, "id")))
 		records, _ = i.appendRelatedList(records, "refund", "/v1/refunds", valuesWithLimit(limit, "charge", mapString(charge, "id")))
 	}
-	records = append(records, evidenceRecord{
+	records = i.appendEvidence(records, evidenceRecord{
 		Type:     "finding",
 		Severity: "info",
 		Summary:  "Customer context gathered. Use entity records for recent payment methods, subscriptions, invoices, payment intents, charges, disputes, and refunds.",
@@ -62,7 +62,7 @@ func (i investigator) customerContext(customer string, limit int) ([]evidenceRec
 func (i investigator) appendRelatedList(records []evidenceRecord, object, path string, params url.Values) ([]evidenceRecord, []map[string]any) {
 	items, err := i.list(path, params)
 	if err != nil {
-		return append(records, evidenceRecord{
+		return i.appendEvidence(records, evidenceRecord{
 			Type:     "finding",
 			Severity: "warning",
 			Summary:  "Could not gather " + object + " context from " + path + "; continuing with available evidence.",
@@ -73,12 +73,12 @@ func (i investigator) appendRelatedList(records []evidenceRecord, object, path s
 			},
 		}), nil
 	}
-	return appendListRecords(records, object, items), items
+	return i.appendListRecords(records, object, items), items
 }
 
-func appendListRecords(records []evidenceRecord, object string, items []map[string]any) []evidenceRecord {
+func (i investigator) appendListRecords(records []evidenceRecord, object string, items []map[string]any) []evidenceRecord {
 	for _, item := range items {
-		records = append(records, entityRecord(object, item))
+		records = i.appendEvidence(records, entityRecord(object, item))
 	}
 	return records
 }

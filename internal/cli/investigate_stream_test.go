@@ -33,7 +33,7 @@ func TestInvestigatorGetStreamsDecodedEntity(t *testing.T) {
 			APIKey:  "sk_test_123",
 			BaseURL: server.URL,
 		}),
-		stream: newEvidenceStreamer("jsonl", defaultEvidenceOptions()),
+		evidence: newEvidenceCollector(newEvidenceStreamer("jsonl", defaultEvidenceOptions())),
 	}
 
 	item, err := inv.get("/v1/payment_intents/pi_stream", nil)
@@ -68,10 +68,12 @@ func TestEvidenceStreamerDeduplicatesFinalEntity(t *testing.T) {
 		"object": "payment_intent",
 		"status": "succeeded",
 	})
+	finding := evidenceRecord{Type: "finding", Severity: "info", Summary: "investigation complete"}
 	stream.emit(entity)
+	stream.emit(finding)
 	stream.writeRemaining([]evidenceRecord{
 		entity,
-		{Type: "finding", Severity: "info", Summary: "investigation complete"},
+		finding,
 	})
 
 	lines := ndjsonLines(stdout.String())
@@ -94,6 +96,42 @@ func TestEvidenceStreamerDeduplicatesFinalEntity(t *testing.T) {
 	}
 	if entityLines != 1 || findingLines != 1 {
 		t.Fatalf("entity lines = %d, finding lines = %d, want 1 each\n%s", entityLines, findingLines, stdout.String())
+	}
+}
+
+func TestWorkflowFindingsStreamThroughCollector(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	restore := output.SetWritersForTest(&stdout, &stderr)
+	defer restore()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/invoices/in_stream":
+			fmt.Fprint(w, `{"id":"in_stream","object":"invoice","status":"paid","paid":true,"amount_paid":4200,"currency":"usd","payment_intent":"pi_stream"}`)
+		case "/v1/payment_intents/pi_stream":
+			fmt.Fprint(w, `{"id":"pi_stream","object":"payment_intent","status":"succeeded","latest_charge":"ch_stream"}`)
+		case "/v1/charges/ch_stream":
+			fmt.Fprint(w, `{"id":"ch_stream","object":"charge","status":"succeeded","paid":true,"amount":4200,"currency":"usd","payment_intent":"pi_stream","payment_method_details":{"card":{"last4":"4242"}}}`)
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	inv := investigator{
+		ctx: context.Background(),
+		client: api.NewClient(api.Options{
+			APIKey:  "sk_test_123",
+			BaseURL: server.URL,
+		}),
+		evidence: newEvidenceCollector(newEvidenceStreamer("jsonl", defaultEvidenceOptions())),
+	}
+
+	if _, err := inv.invoicePayment("in_stream"); err != nil {
+		t.Fatalf("invoicePayment() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"summary":"Invoice in_stream paid 4200 USD minor units with card ending 4242 through PaymentIntent pi_stream."`) {
+		t.Fatalf("stdout missing streamed workflow finding:\n%s", stdout.String())
 	}
 }
 

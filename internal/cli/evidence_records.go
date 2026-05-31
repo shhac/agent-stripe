@@ -1,6 +1,10 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	"github.com/shhac/agent-stripe/internal/output"
 )
@@ -56,6 +60,36 @@ type evidenceStreamer struct {
 	emitted map[string]bool
 }
 
+type evidenceCollector struct {
+	stream *evidenceStreamer
+}
+
+func newEvidenceCollector(stream *evidenceStreamer) *evidenceCollector {
+	return &evidenceCollector{stream: stream}
+}
+
+func (c *evidenceCollector) append(records []evidenceRecord, newRecords ...evidenceRecord) []evidenceRecord {
+	for _, record := range newRecords {
+		c.emit(record)
+		records = append(records, record)
+	}
+	return records
+}
+
+func (c *evidenceCollector) appendAll(records []evidenceRecord, newRecords []evidenceRecord) []evidenceRecord {
+	for _, record := range newRecords {
+		c.emit(record)
+	}
+	return append(records, newRecords...)
+}
+
+func (c *evidenceCollector) emit(record evidenceRecord) {
+	if c == nil || c.stream == nil {
+		return
+	}
+	c.stream.emit(record)
+}
+
 func newEvidenceStreamer(format string, opts evidenceOptions) *evidenceStreamer {
 	if output.ResolveFormat(format, output.FormatNDJSON) != output.FormatNDJSON {
 		return nil
@@ -102,10 +136,14 @@ func (s *evidenceStreamer) write(record evidenceRecord) {
 }
 
 func evidenceRecordKey(record evidenceRecord) string {
-	if record.Type != "entity" || record.Object == "" || record.ID == "" {
+	if record.Type == "entity" && record.Object != "" && record.ID != "" {
+		return record.Type + ":" + record.Object + ":" + record.ID
+	}
+	raw, err := json.Marshal(record)
+	if err != nil {
 		return ""
 	}
-	return record.Type + ":" + record.Object + ":" + record.ID
+	return fmt.Sprintf("record:%x", sha256.Sum256(raw))
 }
 
 func entityRecord(object string, data map[string]any) evidenceRecord {

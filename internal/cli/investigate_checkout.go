@@ -30,10 +30,10 @@ func (i investigator) checkoutSession(sessionID string) ([]evidenceRecord, error
 	if err != nil {
 		return nil, err
 	}
-	records := []evidenceRecord{entityRecord("checkout.session", session)}
-	records = append(records, i.checkoutLineItems(sessionID)...)
-	records = append(records, i.relatedCheckoutObjects(session)...)
-	records = append(records, checkoutSessionFinding(session))
+	records := i.appendEvidence(nil, entityRecord("checkout.session", session))
+	records = i.appendEvidenceAll(records, i.checkoutLineItems(sessionID))
+	records = i.appendEvidenceAll(records, i.relatedCheckoutObjects(session))
+	records = i.appendEvidence(records, checkoutSessionFinding(session))
 	return records, nil
 }
 
@@ -44,12 +44,12 @@ func (i investigator) checkoutLineItems(sessionID string) []evidenceRecord {
 	}
 	records := []evidenceRecord{}
 	for _, item := range items {
-		records = append(records, entityRecord("line_item", item))
+		records = i.appendEvidence(records, entityRecord("line_item", item))
 		if price := mapAnyMap(item, "price"); len(price) > 0 {
-			records = append(records, entityRecord("price", price))
+			records = i.appendEvidence(records, entityRecord("price", price))
 			if productID := idFromValue(price["product"]); productID != "" {
 				if product, err := i.get("/v1/products/"+url.PathEscape(productID), url.Values{}); err == nil {
-					records = append(records, entityRecord("product", product))
+					records = i.appendEvidence(records, entityRecord("product", product))
 				}
 			}
 		}
@@ -61,31 +61,31 @@ func (i investigator) relatedCheckoutObjects(session map[string]any) []evidenceR
 	records := []evidenceRecord{}
 	if customerID := idFromValue(session["customer"]); customerID != "" {
 		if customer, err := i.get("/v1/customers/"+url.PathEscape(customerID), url.Values{}); err == nil {
-			records = append(records, entityRecord("customer", customer))
+			records = i.appendEvidence(records, entityRecord("customer", customer))
 		}
 	}
 	if piID := idFromValue(session["payment_intent"]); piID != "" {
 		if pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{}); err == nil {
-			records = append(records, entityRecord("payment_intent", pi))
+			records = i.appendEvidence(records, entityRecord("payment_intent", pi))
 			if charge, err := i.latestChargeForPaymentIntent(pi); err == nil && charge != nil {
-				records = append(records, entityRecord("charge", charge))
+				records = i.appendEvidence(records, entityRecord("charge", charge))
 			}
 		}
 	}
 	if subID := idFromValue(session["subscription"]); subID != "" {
 		if sub, err := i.get("/v1/subscriptions/"+url.PathEscape(subID), url.Values{}); err == nil {
-			records = append(records, entityRecord("subscription", sub))
-			records = append(records, i.subscriptionPaymentSummary(sub)...)
+			records = i.appendEvidence(records, entityRecord("subscription", sub))
+			records = i.appendEvidenceAll(records, i.subscriptionPaymentSummary(sub))
 		}
 	}
 	if invoiceID := idFromValue(session["invoice"]); invoiceID != "" {
 		if invoice, err := i.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{}); err == nil {
-			records = append(records, entityRecord("invoice", invoice))
+			records = i.appendEvidence(records, entityRecord("invoice", invoice))
 		}
 	}
 	if linkID := idFromValue(session["payment_link"]); linkID != "" {
 		if link, err := i.get("/v1/payment_links/"+url.PathEscape(linkID), url.Values{}); err == nil {
-			records = append(records, entityRecord("payment_link", link))
+			records = i.appendEvidence(records, entityRecord("payment_link", link))
 		}
 	}
 	return records

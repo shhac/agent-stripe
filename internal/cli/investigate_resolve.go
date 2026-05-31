@@ -25,34 +25,34 @@ func (i investigator) resolve(value string) ([]evidenceRecord, error) {
 	object, path, next := resolvePath(value)
 	if path == "" {
 		if object != "" {
-			return []evidenceRecord{{
+			return i.appendEvidence(nil, evidenceRecord{
 				Type:     "finding",
 				Severity: "warning",
 				Summary:  "Resolved " + value + " as " + object + ", but it requires a parent object to retrieve directly.",
 				Command:  next + value,
-			}}, nil
+			}), nil
 		}
 		found, err := i.list("/v1/invoices/search", url.Values{"query": []string{stripeSearchEquals("number", value)}, "limit": []string{"1"}})
 		if err != nil {
 			return nil, err
 		}
 		if len(found) == 0 {
-			return []evidenceRecord{{Type: "finding", Severity: "warning", Summary: "Could not resolve value as a known Stripe ID prefix or invoice number."}}, nil
+			return i.appendEvidence(nil, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not resolve value as a known Stripe ID prefix or invoice number."}), nil
 		}
 		invoice := found[0]
-		return []evidenceRecord{
+		return i.appendEvidence(nil,
 			entityRecord("invoice", invoice),
-			{Type: "finding", Severity: "info", Summary: "Resolved invoice number to invoice " + mapString(invoice, "id") + ".", Command: "agent-stripe investigate invoice-payment " + mapString(invoice, "id")},
-		}, nil
+			evidenceRecord{Type: "finding", Severity: "info", Summary: "Resolved invoice number to invoice " + mapString(invoice, "id") + ".", Command: "agent-stripe investigate invoice-payment " + mapString(invoice, "id")},
+		), nil
 	}
 	item, err := i.get(path+"/"+url.PathEscape(value), url.Values{})
 	if err != nil {
 		return nil, err
 	}
-	return []evidenceRecord{
+	return i.appendEvidence(nil,
 		entityRecord(object, item),
-		{Type: "finding", Severity: "info", Summary: "Resolved " + value + " as " + object + ".", Command: next + value},
-	}, nil
+		evidenceRecord{Type: "finding", Severity: "info", Summary: "Resolved " + value + " as " + object + ".", Command: next + value},
+	), nil
 }
 
 func resolvePath(id string) (object, path, commandPrefix string) {

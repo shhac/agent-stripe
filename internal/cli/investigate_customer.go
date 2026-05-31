@@ -48,12 +48,12 @@ func (i investigator) customerCardPayment(customer, last4 string, limit int) ([]
 		if cardLast4(charge) != last4 {
 			continue
 		}
-		return []evidenceRecord{
+		return i.appendEvidence(nil,
 			entityRecord("charge", charge),
 			customerCardPaymentFinding(customer, last4, charge),
-		}, nil
+		), nil
 	}
-	return []evidenceRecord{customerCardPaymentNotFound(customer, last4, limit)}, nil
+	return i.appendEvidence(nil, customerCardPaymentNotFound(customer, last4, limit)), nil
 }
 
 func customerCardPaymentFinding(customer, last4 string, charge map[string]any) evidenceRecord {

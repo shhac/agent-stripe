@@ -11,9 +11,9 @@ import (
 )
 
 type investigator struct {
-	ctx    context.Context
-	client *api.Client
-	stream *evidenceStreamer
+	ctx      context.Context
+	client   *api.Client
+	evidence *evidenceCollector
 }
 
 type investigationOutputOptions struct {
@@ -41,7 +41,7 @@ func runInvestigation(flags *shared.GlobalFlags, outputOpts *investigationOutput
 
 func runWithInvestigator(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(investigator) ([]evidenceRecord, error)) error {
 	return runInvestigation(flags, outputOpts, func(ctx context.Context, client *api.Client, stream *evidenceStreamer) ([]evidenceRecord, error) {
-		return fn(investigator{ctx: ctx, client: client, stream: stream})
+		return fn(investigator{ctx: ctx, client: client, evidence: newEvidenceCollector(stream)})
 	})
 }
 
@@ -112,10 +112,31 @@ func (i investigator) list(path string, params url.Values) ([]map[string]any, er
 }
 
 func (i investigator) emitEntity(item map[string]any) {
-	if i.stream == nil || !isStripeEntity(item) {
+	if !isStripeEntity(item) {
 		return
 	}
-	i.stream.emit(entityRecord(mapString(item, "object"), item))
+	i.emitEvidence(entityRecord(mapString(item, "object"), item))
+}
+
+func (i investigator) appendEvidence(records []evidenceRecord, newRecords ...evidenceRecord) []evidenceRecord {
+	if i.evidence == nil {
+		return append(records, newRecords...)
+	}
+	return i.evidence.append(records, newRecords...)
+}
+
+func (i investigator) appendEvidenceAll(records []evidenceRecord, newRecords []evidenceRecord) []evidenceRecord {
+	if i.evidence == nil {
+		return append(records, newRecords...)
+	}
+	return i.evidence.appendAll(records, newRecords)
+}
+
+func (i investigator) emitEvidence(record evidenceRecord) {
+	if i.evidence == nil {
+		return
+	}
+	i.evidence.emit(record)
 }
 
 func decodeObject(raw json.RawMessage) (map[string]any, error) {

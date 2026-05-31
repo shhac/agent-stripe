@@ -28,12 +28,12 @@ func newInvestigateSubscriptionRenewal(globals shared.GlobalsFunc, outputOpts *i
 					return nil, err
 				}
 				if len(subs) == 0 {
-					return []evidenceRecord{{Type: "finding", Severity: "warning", Summary: "No subscriptions matched the supplied filters."}}, nil
+					return inv.appendEvidence(nil, evidenceRecord{Type: "finding", Severity: "warning", Summary: "No subscriptions matched the supplied filters."}), nil
 				}
 				records := []evidenceRecord{}
 				for _, sub := range subs {
-					records = append(records, entityRecord("subscription", sub))
-					records = append(records, inv.subscriptionPaymentSummary(sub)...)
+					records = inv.appendEvidence(records, entityRecord("subscription", sub))
+					records = inv.appendEvidenceAll(records, inv.subscriptionPaymentSummary(sub))
 				}
 				return records, nil
 			})
@@ -69,8 +69,8 @@ func newInvestigateCollectionRisk(globals shared.GlobalsFunc, outputOpts *invest
 					if risk == "" {
 						continue
 					}
-					records = append(records, entityRecord("subscription", sub))
-					records = append(records, evidenceRecord{
+					records = inv.appendEvidence(records, entityRecord("subscription", sub))
+					records = inv.appendEvidence(records, evidenceRecord{
 						Type:     "finding",
 						Severity: "warning",
 						Summary:  risk,
@@ -81,7 +81,7 @@ func newInvestigateCollectionRisk(globals shared.GlobalsFunc, outputOpts *invest
 					})
 				}
 				if len(records) == 0 {
-					records = append(records, evidenceRecord{Type: "finding", Severity: "info", Summary: "No collection-risk subscriptions found in the inspected window."})
+					records = inv.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "info", Summary: "No collection-risk subscriptions found in the inspected window."})
 				}
 				return records, nil
 			})
@@ -115,8 +115,8 @@ func newInvestigateSubscriptionCancelRisk(globals shared.GlobalsFunc, outputOpts
 					if risk == "" {
 						continue
 					}
-					records = append(records, entityRecord("subscription", sub))
-					records = append(records, evidenceRecord{
+					records = inv.appendEvidence(records, entityRecord("subscription", sub))
+					records = inv.appendEvidence(records, evidenceRecord{
 						Type:     "finding",
 						Severity: "warning",
 						Summary:  risk,
@@ -127,7 +127,7 @@ func newInvestigateSubscriptionCancelRisk(globals shared.GlobalsFunc, outputOpts
 					})
 				}
 				if len(records) == 0 {
-					records = append(records, evidenceRecord{Type: "finding", Severity: "info", Summary: "No subscription cancellation risks found in the inspected window."})
+					records = inv.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "info", Summary: "No subscription cancellation risks found in the inspected window."})
 				}
 				return records, nil
 			})
@@ -207,8 +207,8 @@ func (i investigator) subscriptionItemsEvidence(subscriptionID string) ([]eviden
 	if err != nil {
 		return nil, err
 	}
-	records := append([]evidenceRecord{}, bundle.records...)
-	records = append(records, subscriptionItemsFinding(subscriptionID, len(bundle.items)))
+	records := i.appendEvidenceAll(nil, bundle.records)
+	records = i.appendEvidence(records, subscriptionItemsFinding(subscriptionID, len(bundle.items)))
 	return records, nil
 }
 
@@ -227,18 +227,18 @@ func (i investigator) subscriptionItemsBundle(subscriptionID string) (*subscript
 	if err != nil {
 		return nil, err
 	}
-	records = append(records, entityRecord("subscription", sub))
+	records = i.appendEvidence(records, entityRecord("subscription", sub))
 
 	items, err := i.list("/v1/subscription_items", url.Values{"subscription": []string{subscriptionID}, "limit": []string{"100"}})
 	if err != nil {
 		return nil, err
 	}
 	for _, item := range items {
-		records = append(records, entityRecord("subscription_item", item))
+		records = i.appendEvidence(records, entityRecord("subscription_item", item))
 		price := mapAnyMap(item, "price")
 		if productID := idFromValue(price["product"]); productID != "" {
 			if product, productErr := i.get("/v1/products/"+url.PathEscape(productID), url.Values{}); productErr == nil {
-				records = append(records, entityRecord("product", product))
+				records = i.appendEvidence(records, entityRecord("product", product))
 			}
 		}
 	}
@@ -262,16 +262,16 @@ func (i investigator) subscriptionAmountChange(subscriptionID string) ([]evidenc
 	if err != nil {
 		return nil, err
 	}
-	records := append([]evidenceRecord{}, bundle.records...)
-	records = append(records, subscriptionItemsFinding(subscriptionID, len(bundle.items)))
+	records := i.appendEvidenceAll(nil, bundle.records)
+	records = i.appendEvidence(records, subscriptionItemsFinding(subscriptionID, len(bundle.items)))
 
 	latestInvoice, latestInvoiceRecords := i.latestInvoiceEvidence(bundle.sub)
-	records = append(records, latestInvoiceRecords...)
+	records = i.appendEvidenceAll(records, latestInvoiceRecords)
 
 	preview, previewRecords := i.invoicePreviewEvidence(subscriptionID)
-	records = append(records, previewRecords...)
+	records = i.appendEvidenceAll(records, previewRecords)
 
-	records = append(records, subscriptionAmountFinding(subscriptionID, latestInvoice, preview, bundle.items))
+	records = i.appendEvidence(records, subscriptionAmountFinding(subscriptionID, latestInvoice, preview, bundle.items))
 	return records, nil
 }
 
@@ -288,10 +288,10 @@ func (i investigator) latestInvoiceEvidence(sub map[string]any) (map[string]any,
 			Summary:  "Could not retrieve latest invoice " + latestInvoiceID + ": " + err.Error(),
 		}}
 	}
-	records := []evidenceRecord{entityRecord("invoice", invoice)}
+	records := i.appendEvidence(nil, entityRecord("invoice", invoice))
 	lines, err := i.list("/v1/invoices/"+url.PathEscape(latestInvoiceID)+"/lines", url.Values{"limit": []string{"100"}})
 	if err == nil {
-		records = appendListRecords(records, "line_item", lines)
+		records = i.appendListRecords(records, "line_item", lines)
 	}
 	return invoice, records
 }
@@ -301,7 +301,7 @@ func (i investigator) invoicePreviewEvidence(subscriptionID string) (map[string]
 	if err != nil {
 		return nil, nil
 	}
-	return preview, []evidenceRecord{entityRecord("invoice_preview", preview)}
+	return preview, i.appendEvidence(nil, entityRecord("invoice_preview", preview))
 }
 
 func subscriptionAmountFinding(subscriptionID string, latestInvoice, preview map[string]any, items []map[string]any) evidenceRecord {
@@ -362,17 +362,17 @@ func (i investigator) subscriptionPaymentSummary(sub map[string]any) []evidenceR
 	if latestInvoiceID := idFromValue(sub["latest_invoice"]); latestInvoiceID != "" {
 		invoiceRecords, err := i.invoicePayment(latestInvoiceID)
 		if err == nil {
-			records = append(records, invoiceRecords...)
+			records = i.appendEvidenceAll(records, invoiceRecords)
 		} else {
-			records = append(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not retrieve latest invoice " + latestInvoiceID + ": " + err.Error()})
+			records = i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not retrieve latest invoice " + latestInvoiceID + ": " + err.Error()})
 		}
 	}
 	nextAmount := "unknown"
 	if preview, err := i.postForm("/v1/invoices/create_preview", url.Values{"subscription": []string{mapString(sub, "id")}}); err == nil {
-		records = append(records, entityRecord("invoice_preview", preview))
+		records = i.appendEvidence(records, entityRecord("invoice_preview", preview))
 		nextAmount = formatAmount(preview)
 	}
-	records = append(records, evidenceRecord{
+	records = i.appendEvidence(records, evidenceRecord{
 		Type:     "finding",
 		Severity: "info",
 		Summary: fmt.Sprintf("Subscription %s last invoice is %s; next renewal is at %v and preview amount is %s.",

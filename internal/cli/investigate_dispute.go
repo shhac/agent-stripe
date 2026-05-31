@@ -30,15 +30,15 @@ func (i investigator) disputeResponse(disputeID string) ([]evidenceRecord, error
 	if err != nil {
 		return nil, err
 	}
-	records := []evidenceRecord{entityRecord("dispute", dispute)}
+	records := i.appendEvidence(nil, entityRecord("dispute", dispute))
 	if chargeID := idFromValue(dispute["charge"]); chargeID != "" {
 		charge, err := i.get("/v1/charges/"+url.PathEscape(chargeID), url.Values{})
 		if err == nil {
-			records = append(records, entityRecord("charge", charge))
+			records = i.appendEvidence(records, entityRecord("charge", charge))
 			if customerID := idFromValue(charge["customer"]); customerID != "" {
 				customer, err := i.get("/v1/customers/"+url.PathEscape(customerID), url.Values{})
 				if err == nil {
-					records = append(records, entityRecord("customer", customer))
+					records = i.appendEvidence(records, entityRecord("customer", customer))
 				}
 			}
 		}
@@ -46,11 +46,11 @@ func (i investigator) disputeResponse(disputeID string) ([]evidenceRecord, error
 	if piID := idFromValue(dispute["payment_intent"]); piID != "" {
 		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{})
 		if err == nil {
-			records = append(records, entityRecord("payment_intent", pi))
+			records = i.appendEvidence(records, entityRecord("payment_intent", pi))
 		}
 	}
 	details := mapAnyMap(dispute, "evidence_details")
-	records = append(records, evidenceRecord{
+	records = i.appendEvidence(records, evidenceRecord{
 		Type:     "finding",
 		Severity: disputeSeverity(mapString(dispute, "status")),
 		Summary: fmt.Sprintf("Dispute %s is %s for reason %s; evidence due_by=%v.",

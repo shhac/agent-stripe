@@ -62,13 +62,13 @@ func (i investigator) outgoingPayment(id string) ([]evidenceRecord, error) {
 		if err != nil {
 			return nil, err
 		}
-		return []evidenceRecord{entityRecord("transfer", transfer), moneyMovementFinding("transfer", transfer)}, nil
+		return i.appendEvidence(nil, entityRecord("transfer", transfer), moneyMovementFinding("transfer", transfer)), nil
 	case strings.HasPrefix(id, "po_"):
 		payout, err := i.get("/v1/payouts/"+url.PathEscape(id), url.Values{})
 		if err != nil {
 			return nil, err
 		}
-		return []evidenceRecord{entityRecord("payout", payout), moneyMovementFinding("payout", payout)}, nil
+		return i.appendEvidence(nil, entityRecord("payout", payout), moneyMovementFinding("payout", payout)), nil
 	default:
 		return i.accountHealth(id)
 	}
@@ -84,7 +84,7 @@ func (i investigator) refundRecovery(id, transferID string) ([]evidenceRecord, e
 		if err != nil {
 			return nil, err
 		}
-		return []evidenceRecord{entityRecord("refund", refund), moneyMovementFinding("refund", refund)}, nil
+		return i.appendEvidence(nil, entityRecord("refund", refund), moneyMovementFinding("refund", refund)), nil
 	case strings.HasPrefix(id, "trr_"):
 		if transferID == "" {
 			return nil, agenterrors.New("--transfer is required for transfer reversal IDs", agenterrors.FixableByAgent).
@@ -94,7 +94,7 @@ func (i investigator) refundRecovery(id, transferID string) ([]evidenceRecord, e
 		if err != nil {
 			return nil, err
 		}
-		return []evidenceRecord{entityRecord("transfer_reversal", reversal), moneyMovementFinding("transfer_reversal", reversal)}, nil
+		return i.appendEvidence(nil, entityRecord("transfer_reversal", reversal), moneyMovementFinding("transfer_reversal", reversal)), nil
 	default:
 		return i.incomingPayment(id)
 	}
@@ -108,32 +108,32 @@ func (i investigator) refundStatus(refundID string) ([]evidenceRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	records := []evidenceRecord{entityRecord("refund", refund)}
+	records := i.appendEvidence(nil, entityRecord("refund", refund))
 	if chargeID := idFromValue(refund["charge"]); chargeID != "" {
 		charge, err := i.get("/v1/charges/"+url.PathEscape(chargeID), url.Values{})
 		if err == nil {
-			records = append(records, entityRecord("charge", charge))
+			records = i.appendEvidence(records, entityRecord("charge", charge))
 		}
 	}
 	if piID := idFromValue(refund["payment_intent"]); piID != "" {
 		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{})
 		if err == nil {
-			records = append(records, entityRecord("payment_intent", pi))
+			records = i.appendEvidence(records, entityRecord("payment_intent", pi))
 		}
 	}
 	if transferID := idFromValue(refund["transfer"]); transferID != "" {
 		transfer, err := i.get("/v1/transfers/"+url.PathEscape(transferID), url.Values{})
 		if err == nil {
-			records = append(records, entityRecord("transfer", transfer))
+			records = i.appendEvidence(records, entityRecord("transfer", transfer))
 		}
 		if reversalID := idFromValue(refund["transfer_reversal"]); reversalID != "" {
 			reversal, err := i.get("/v1/transfers/"+url.PathEscape(transferID)+"/reversals/"+url.PathEscape(reversalID), url.Values{})
 			if err == nil {
-				records = append(records, entityRecord("transfer_reversal", reversal))
+				records = i.appendEvidence(records, entityRecord("transfer_reversal", reversal))
 			}
 		}
 	}
-	records = append(records, moneyMovementFinding("refund", refund))
+	records = i.appendEvidence(records, moneyMovementFinding("refund", refund))
 	return records, nil
 }
 
@@ -145,13 +145,13 @@ func (i investigator) payoutFailure(payoutID string) ([]evidenceRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	records := []evidenceRecord{entityRecord("payout", payout)}
+	records := i.appendEvidence(nil, entityRecord("payout", payout))
 	if txnID := idFromValue(payout["balance_transaction"]); txnID != "" {
 		txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(txnID), url.Values{})
 		if err == nil {
-			records = append(records, entityRecord("balance_transaction", txn))
+			records = i.appendEvidence(records, entityRecord("balance_transaction", txn))
 		}
 	}
-	records = append(records, moneyMovementFinding("payout", payout))
+	records = i.appendEvidence(records, moneyMovementFinding("payout", payout))
 	return records, nil
 }

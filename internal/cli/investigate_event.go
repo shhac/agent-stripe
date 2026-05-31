@@ -29,17 +29,17 @@ func (i investigator) webhookEvent(eventID string) ([]evidenceRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	records := []evidenceRecord{entityRecord("event", event)}
+	records := i.appendEvidence(nil, entityRecord("event", event))
 	data := mapAnyMap(event, "data")
 	if underlying, ok := data["object"].(map[string]any); ok {
-		records = append(records, evidenceRecord{
+		records = i.appendEvidence(records, evidenceRecord{
 			Type:     "finding",
 			Severity: eventSeverity(mapString(event, "type")),
 			Summary:  "Event " + eventID + " is " + mapString(event, "type") + " for " + mapString(underlying, "object") + " " + mapString(underlying, "id") + ".",
 		})
 		return records, nil
 	}
-	records = append(records, evidenceRecord{Type: "finding", Severity: eventSeverity(mapString(event, "type")), Summary: "Event " + eventID + " is " + mapString(event, "type") + "."})
+	records = i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: eventSeverity(mapString(event, "type")), Summary: "Event " + eventID + " is " + mapString(event, "type") + "."})
 	return records, nil
 }
 

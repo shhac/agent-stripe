@@ -53,7 +53,7 @@ func (i investigator) invoiceMetadata(invoiceID, number string) ([]evidenceRecor
 			return nil, err
 		}
 		if len(found) == 0 {
-			return []evidenceRecord{{Type: "finding", Severity: "warning", Summary: "No invoice matched number " + number + "."}}, nil
+			return i.appendEvidence(nil, evidenceRecord{Type: "finding", Severity: "warning", Summary: "No invoice matched number " + number + "."}), nil
 		}
 		invoiceID = mapString(found[0], "id")
 	}
@@ -64,16 +64,16 @@ func (i investigator) invoiceMetadata(invoiceID, number string) ([]evidenceRecor
 	if err != nil {
 		return nil, err
 	}
-	records := []evidenceRecord{entityRecord("invoice", invoice)}
+	records := i.appendEvidence(nil, entityRecord("invoice", invoice))
 	pi, err := i.paymentIntentForInvoice(invoice)
 	if err != nil {
 		return nil, err
 	}
 	if pi == nil {
-		return append(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Invoice has no PaymentIntent."}), nil
+		return i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Invoice has no PaymentIntent."}), nil
 	}
-	records = append(records, entityRecord("payment_intent", pi))
-	records = append(records, paymentIntentMetadataFinding(pi))
+	records = i.appendEvidence(records, entityRecord("payment_intent", pi))
+	records = i.appendEvidence(records, paymentIntentMetadataFinding(pi))
 	return records, nil
 }
 
@@ -97,23 +97,23 @@ func (i investigator) invoicePayment(invoiceID string) ([]evidenceRecord, error)
 	if err != nil {
 		return nil, err
 	}
-	records := []evidenceRecord{entityRecord("invoice", invoice)}
+	records := i.appendEvidence(nil, entityRecord("invoice", invoice))
 	pi, err := i.paymentIntentForInvoice(invoice)
 	if err != nil {
 		return nil, err
 	}
 	if pi == nil {
-		return append(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Invoice has no PaymentIntent, so no card details are available from a charge."}), nil
+		return i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Invoice has no PaymentIntent, so no card details are available from a charge."}), nil
 	}
-	records = append(records, entityRecord("payment_intent", pi))
+	records = i.appendEvidence(records, entityRecord("payment_intent", pi))
 	charge, err := i.latestChargeForPaymentIntent(pi)
 	if err != nil {
 		return nil, err
 	}
 	if charge != nil {
-		records = append(records, entityRecord("charge", charge))
+		records = i.appendEvidence(records, entityRecord("charge", charge))
 	}
-	records = append(records, evidenceRecord{
+	records = i.appendEvidence(records, evidenceRecord{
 		Type:     "finding",
 		Severity: severityForPayment(pi, charge),
 		Summary:  invoicePaymentSummary(invoice, pi, charge),

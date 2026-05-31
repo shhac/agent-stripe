@@ -45,16 +45,16 @@ func (i investigator) incomingPayment(id string) ([]evidenceRecord, error) {
 }
 
 func (i investigator) paymentIncidentFromPI(pi map[string]any) ([]evidenceRecord, error) {
-	records := []evidenceRecord{entityRecord("payment_intent", pi)}
+	records := i.appendEvidence(nil, entityRecord("payment_intent", pi))
 	charge, err := i.latestChargeForPaymentIntent(pi)
 	if err != nil {
 		return nil, err
 	}
 	if charge != nil {
-		records = append(records, entityRecord("charge", charge))
+		records = i.appendEvidence(records, entityRecord("charge", charge))
 	}
-	records = append(records, i.relatedDisputesAndRefunds(pi, charge)...)
-	records = append(records, evidenceRecord{
+	records = i.appendEvidenceAll(records, i.relatedDisputesAndRefunds(pi, charge))
+	records = i.appendEvidence(records, evidenceRecord{
 		Type:     "finding",
 		Severity: severityForPayment(pi, charge),
 		Summary:  paymentFailureSummary(pi, charge),
@@ -63,15 +63,15 @@ func (i investigator) paymentIncidentFromPI(pi map[string]any) ([]evidenceRecord
 }
 
 func (i investigator) paymentIncidentFromCharge(charge map[string]any) ([]evidenceRecord, error) {
-	records := []evidenceRecord{entityRecord("charge", charge)}
+	records := i.appendEvidence(nil, entityRecord("charge", charge))
 	if piID := idFromValue(charge["payment_intent"]); piID != "" {
 		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{})
 		if err == nil {
-			records = append(records, entityRecord("payment_intent", pi))
+			records = i.appendEvidence(records, entityRecord("payment_intent", pi))
 		}
 	}
-	records = append(records, i.relatedDisputesAndRefunds(nil, charge)...)
-	records = append(records, evidenceRecord{
+	records = i.appendEvidenceAll(records, i.relatedDisputesAndRefunds(nil, charge))
+	records = i.appendEvidence(records, evidenceRecord{
 		Type:     "finding",
 		Severity: severityForPayment(nil, charge),
 		Summary:  paymentFailureSummary(nil, charge),
@@ -93,12 +93,12 @@ func (i investigator) relatedDisputesAndRefunds(pi, charge map[string]any) []evi
 	}
 	if disputes, err := i.list("/v1/disputes", params); err == nil {
 		for _, dispute := range disputes {
-			records = append(records, entityRecord("dispute", dispute))
+			records = i.appendEvidence(records, entityRecord("dispute", dispute))
 		}
 	}
 	if refunds, err := i.list("/v1/refunds", params); err == nil {
 		for _, refund := range refunds {
-			records = append(records, entityRecord("refund", refund))
+			records = i.appendEvidence(records, entityRecord("refund", refund))
 		}
 	}
 	return records
