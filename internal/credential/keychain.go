@@ -2,46 +2,40 @@ package credential
 
 import (
 	"fmt"
-	"os/exec"
-	"runtime"
-	"strings"
+
+	"github.com/shhac/lib-agent-cli/creds"
 )
 
 const keychainService = "app.paulie.agent-stripe"
 
-type securityKeychain struct{}
-
-func (securityKeychain) Store(name, apiKey string) error {
-	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("keychain not available on %s", runtime.GOOS)
-	}
-
-	_ = exec.Command("security", "delete-generic-password", "-s", keychainService, "-a", name).Run()
-
-	return exec.Command("security", "add-generic-password",
-		"-s", keychainService, "-a", name, "-w", apiKey,
-		"-U",
-	).Run()
+// credsKeychain adapts creds.Keychain to the keychainBackend interface, keeping
+// the error-returning Get/Store/Delete contract the credential index relies on.
+type credsKeychain struct {
+	kc *creds.Keychain
 }
 
-func (securityKeychain) Get(name string) (string, error) {
-	if runtime.GOOS != "darwin" {
-		return "", fmt.Errorf("keychain not available on %s", runtime.GOOS)
-	}
-
-	out, err := exec.Command("security", "find-generic-password",
-		"-s", keychainService, "-a", name, "-w",
-	).Output()
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(string(out)), nil
+func newCredsKeychain() credsKeychain {
+	return credsKeychain{kc: creds.NewKeychain(keychainService)}
 }
 
-func (securityKeychain) Delete(name string) error {
-	if runtime.GOOS != "darwin" {
+func (k credsKeychain) Store(name, apiKey string) error {
+	return k.kc.Set(name, apiKey)
+}
+
+func (k credsKeychain) Get(name string) (string, error) {
+	if !k.kc.Available() {
+		return "", creds.ErrKeychainUnavailable
+	}
+	value, ok := k.kc.Get(name)
+	if !ok {
+		return "", fmt.Errorf("keychain credential %q not found", name)
+	}
+	return value, nil
+}
+
+func (k credsKeychain) Delete(name string) error {
+	if !k.kc.Available() {
 		return nil
 	}
-	return exec.Command("security", "delete-generic-password", "-s", keychainService, "-a", name).Run()
+	return k.kc.Delete(name)
 }

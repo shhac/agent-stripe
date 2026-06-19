@@ -6,7 +6,7 @@ type keychainBackend interface {
 	Delete(name string) error
 }
 
-var keychain keychainBackend = securityKeychain{}
+var keychain keychainBackend = newCredsKeychain()
 
 func setKeychainBackendForTest(backend keychainBackend) func() {
 	previous := keychain
