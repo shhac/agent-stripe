@@ -55,8 +55,7 @@ func SetWritersForTest(o, e io.Writer) func() {
 }
 
 // Format and its values come from the shared contract; the NDJSON value is
-// "jsonl" in both, and ParseFormat is the family's lenient parser (accepts
-// "ndjson"/"yml", case-insensitive).
+// "jsonl" in both.
 type Format = out.Format
 
 const (
@@ -65,10 +64,14 @@ const (
 	FormatNDJSON = out.FormatNDJSON
 )
 
-var (
-	ParseFormat = out.ParseFormat
-	WriteError  = out.WriteError
-)
+// ParseFormat is the family's lenient parser (accepts "ndjson"/"yml",
+// case-insensitive). Thin wrapper over the shared contract.
+func ParseFormat(s string) (Format, error) { return out.ParseFormat(s) }
+
+// WriteError renders err as the shared {error,fixable_by,hint} contract on w,
+// wrapping a bare error as fixable_by:agent. Thin wrapper over the shared
+// contract.
+func WriteError(w io.Writer, err error) { out.WriteError(w, err) }
 
 // ResolveFormat keeps agent-stripe's one-arg, error-swallowing contract (the
 // shared out.ResolveFormat returns an error): an unparseable flag falls back to
@@ -128,7 +131,7 @@ func toCleanAny(data any, prune bool) (any, bool) {
 		return nil, false
 	}
 	if prune {
-		decoded = pruneNulls(decoded)
+		decoded = out.PruneNils(decoded)
 	}
 	return decoded, true
 }
@@ -160,26 +163,4 @@ type Pagination struct {
 
 func (n *NDJSONWriter) WritePagination(p *Pagination) error {
 	return n.enc.Encode(map[string]any{"@pagination": p})
-}
-
-func pruneNulls(v any) any {
-	switch val := v.(type) {
-	case map[string]any:
-		o := make(map[string]any, len(val))
-		for k, v := range val {
-			if v == nil {
-				continue
-			}
-			o[k] = pruneNulls(v)
-		}
-		return o
-	case []any:
-		o := make([]any, len(val))
-		for i, v := range val {
-			o[i] = pruneNulls(v)
-		}
-		return o
-	default:
-		return v
-	}
 }
