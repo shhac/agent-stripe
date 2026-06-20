@@ -9,18 +9,18 @@ import (
 	"github.com/shhac/agent-stripe/internal/api"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 	"github.com/shhac/agent-stripe/internal/output"
+	libcli "github.com/shhac/lib-agent-cli/cli"
 )
 
 type GlobalFlags struct {
+	libcli.Globals // Format, TimeoutMS, Debug
+
 	Profile    string
 	Context    string
 	APIKey     string
 	BaseURL    string
-	Format     string
 	Expose     []string
-	Timeout    int
 	MaxRetries int
-	Debug      bool
 	APIVersion string
 }
 

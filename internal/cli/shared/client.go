@@ -119,11 +119,11 @@ func WithResolvedClient(flags *GlobalFlags, resolved *ResolvedProfile, fn func(c
 			"context":           resolved.Profile.Context,
 			"api_version":       resolved.Profile.APIVersion,
 			"base_url":          resolvedBaseURL(resolved.BaseURL),
-			"timeout_ms":        flags.Timeout,
+			"timeout_ms":        flags.TimeoutMS,
 			"max_retries":       flags.MaxRetries,
 		})
 	}
-	ctx, cancel := ContextWithTimeout(context.Background(), flags.Timeout)
+	ctx, cancel := ContextWithTimeout(context.Background(), flags.TimeoutMS)
 	defer cancel()
 
 	client := api.NewClient(api.Options{

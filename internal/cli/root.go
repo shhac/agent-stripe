@@ -7,6 +7,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	"github.com/shhac/agent-stripe/internal/config"
 	"github.com/shhac/agent-stripe/internal/output"
+	libcli "github.com/shhac/lib-agent-cli/cli"
 )
 
 func newRootCmd(version string) *cobra.Command {
@@ -14,28 +15,30 @@ func newRootCmd(version string) *cobra.Command {
 	globalsFunc := func() *shared.GlobalFlags {
 		return globals
 	}
-	root := &cobra.Command{
+
+	root := libcli.NewRoot(libcli.Options{
 		Use:           "agent-stripe",
 		Short:         "Stripe incident triage CLI for AI agents",
 		Version:       version,
-		SilenceUsage:  true,
-		SilenceErrors: true,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			applyConfiguredDefaults(cmd, globals)
-		},
-	}
+		Globals:       &globals.Globals,
+		DefaultFormat: output.FormatNDJSON,
+		UnknownHint:   "run 'agent-stripe usage' to see the available domains",
+	})
 
-	root.PersistentFlags().StringVarP(&globals.Profile, "profile", "p", "", "Stripe profile alias (or AGENT_STRIPE_PROFILE)")
-	root.PersistentFlags().StringVar(&globals.Context, "context", "", "Stripe-Context value for organization or related-account requests")
-	root.PersistentFlags().StringVar(&globals.APIKey, "api-key", "", "API key override; never printed or persisted")
-	root.PersistentFlags().StringVar(&globals.BaseURL, "base-url", "", "Stripe API base URL override for tests")
-	root.PersistentFlags().StringVarP(&globals.Format, "format", "f", "", "Output format: json, yaml, jsonl")
-	root.PersistentFlags().StringArrayVar(&globals.Expose, "expose", nil, "Expose redacted Stripe response fields by path or key; comma-separated/repeatable")
-	root.PersistentFlags().IntVarP(&globals.Timeout, "timeout", "t", 0, "Request timeout in milliseconds")
-	root.PersistentFlags().IntVar(&globals.MaxRetries, "max-retries", 2, "Maximum automatic retries for transient Stripe 429 responses")
-	root.PersistentFlags().StringVar(&globals.APIVersion, "api-version", "", "Stripe API version header override")
-	root.PersistentFlags().BoolVarP(&globals.Debug, "debug", "d", false, "Log HTTP requests and responses to stderr")
-	_ = root.PersistentFlags().MarkHidden("base-url")
+	// ConfigDefaults needs the root's persistent flag set to honor explicit
+	// flags over persisted config; wrap the libcli pre-run (which validates
+	// --format) so the defaults pass runs first, before validation.
+	root.PersistentPreRunE = wrapConfigDefaults(root, globals, root.PersistentPreRunE)
+
+	pf := root.PersistentFlags()
+	pf.StringVarP(&globals.Profile, "profile", "p", "", "Stripe profile alias (or AGENT_STRIPE_PROFILE)")
+	pf.StringVar(&globals.Context, "context", "", "Stripe-Context value for organization or related-account requests")
+	pf.StringVar(&globals.APIKey, "api-key", "", "API key override; never printed or persisted")
+	pf.StringVar(&globals.BaseURL, "base-url", "", "Stripe API base URL override for tests")
+	pf.StringArrayVar(&globals.Expose, "expose", nil, "Expose redacted Stripe response fields by path or key; comma-separated/repeatable")
+	pf.IntVar(&globals.MaxRetries, "max-retries", 2, "Maximum automatic retries for transient Stripe 429 responses")
+	pf.StringVar(&globals.APIVersion, "api-version", "", "Stripe API version header override")
+	_ = pf.MarkHidden("base-url")
 
 	registerUsageCommand(root)
 	registerConfig(root)
@@ -69,21 +72,33 @@ func newRootCmd(version string) *cobra.Command {
 	return root
 }
 
-func applyConfiguredDefaults(cmd *cobra.Command, globals *shared.GlobalFlags) {
+// wrapConfigDefaults runs the config-defaults pass (explicit flag > config >
+// built-in default) ahead of the libcli PersistentPreRunE that validates
+// --format.
+func wrapConfigDefaults(root *cobra.Command, globals *shared.GlobalFlags, next func(*cobra.Command, []string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		applyConfiguredDefaults(root, globals)
+		if next != nil {
+			return next(cmd, args)
+		}
+		return nil
+	}
+}
+
+func applyConfiguredDefaults(root *cobra.Command, globals *shared.GlobalFlags) {
 	cfg := config.Read()
-	flags := cmd.Root().PersistentFlags()
+	flags := root.PersistentFlags()
 	if cfg.Defaults.TimeoutMS != nil && !flags.Changed("timeout") {
-		globals.Timeout = *cfg.Defaults.TimeoutMS
+		globals.TimeoutMS = *cfg.Defaults.TimeoutMS
 	}
 	if cfg.Defaults.MaxRetries != nil && !flags.Changed("max-retries") {
 		globals.MaxRetries = *cfg.Defaults.MaxRetries
 	}
 }
 
-func Execute(version string) error {
-	err := newRootCmd(version).Execute()
-	if err != nil {
-		output.WriteError(output.Stderr(), err)
-	}
-	return err
+// Execute builds the root command and runs it via the shared sink, which
+// renders any bubbled error as the family's structured JSON on stderr exactly
+// once and exits non-zero.
+func Execute(version string) {
+	libcli.Run(newRootCmd(version))
 }
