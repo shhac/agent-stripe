@@ -1,20 +1,20 @@
 // Package output re-exports the shared output contract from lib-agent-output,
 // keeping the internal/output import path while the wire mechanism (format
-// parsing, JSON/YAML encoding, error rendering) lives in one place. What stays
+// parsing, JSON encoding, error rendering) lives in one place; YAML encoding is
+// supplied by the shared lib-agent-cli/yaml encoder. What stays
 // local is agent-stripe policy: the writer indirection used by tests, the
 // Stripe-shaped pagination trailer, the NDJSON list writer, and the
 // expose-aware redaction in redaction.go. (Migration shim.)
 package output
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"os"
 	"sync"
 
+	_ "github.com/shhac/lib-agent-cli/yaml" // registers the shared YAML encoder
 	out "github.com/shhac/lib-agent-output"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -84,21 +84,9 @@ func ResolveFormat(flagFormat string, defaultFormat Format) Format {
 	return f
 }
 
-// init registers agent-stripe's YAML encoder with lib-agent-output, so YAML
-// support (and its yaml.v3 dependency) stays in this CLI while the core library
-// remains dependency-free.
-func init() {
-	out.RegisterEncoder(out.FormatYAML, func(v any) ([]byte, error) {
-		var buf bytes.Buffer
-		enc := yaml.NewEncoder(&buf)
-		enc.SetIndent(2)
-		if err := enc.Encode(v); err != nil {
-			return nil, err
-		}
-		_ = enc.Close()
-		return buf.Bytes(), nil
-	})
-}
+// YAML support (and its yaml.v3 dependency) comes from the shared
+// lib-agent-cli/yaml package, imported for its registration side effect above,
+// so the core lib-agent-output library remains dependency-free.
 
 // Print prunes nulls (opt-in) then encodes data in the given format via the
 // shared encoder. Pruning is the only clean step here; expose-aware redaction
