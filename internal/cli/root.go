@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-stripe/internal/cli/auth"
@@ -85,7 +83,7 @@ func applyConfiguredDefaults(cmd *cobra.Command, globals *shared.GlobalFlags) {
 func Execute(version string) error {
 	err := newRootCmd(version).Execute()
 	if err != nil {
-		_, _ = fmt.Fprintln(output.Stderr(), err)
+		output.WriteError(output.Stderr(), err)
 	}
 	return err
 }

@@ -96,12 +96,6 @@ func Write(cfg *Config) error {
 	return os.WriteFile(configPath(), append(data, '\n'), 0o644)
 }
 
-func ClearCache() {
-	cacheMu.Lock()
-	defer cacheMu.Unlock()
-	cache = nil
-}
-
 func defaultConfig() *Config {
 	return &Config{
 		Profiles: make(map[string]Profile),
