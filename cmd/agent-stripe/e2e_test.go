@@ -258,24 +258,28 @@ func TestCLINewResourcePrimitivesAgainstMockStripe(t *testing.T) {
 
 func TestCLIWrongIDPrefixHintsAgainstMockStripe(t *testing.T) {
 	checks := []struct {
-		name  string
-		args  []string
-		wants []string
+		name    string
+		args    []string
+		wants   []string
+		wantErr bool // a rejected wrong-prefix ID is a user error → non-zero exit
 	}{
 		{
-			name:  "resource get rejects known wrong prefix",
-			args:  []string{"invoices", "get", "pi_mock_succeeded"},
-			wants: []string{`"fixable_by":"agent"`, `looks like a PaymentIntent ID`, `this command expects invoice ID`, `agent-stripe payment-intents get pi_mock_succeeded`, `agent-stripe investigate incoming-payment pi_mock_succeeded`},
+			name:    "resource get rejects known wrong prefix",
+			args:    []string{"invoices", "get", "pi_mock_succeeded"},
+			wants:   []string{`"fixable_by":"agent"`, `looks like a PaymentIntent ID`, `this command expects invoice ID`, `agent-stripe payment-intents get pi_mock_succeeded`, `agent-stripe investigate incoming-payment pi_mock_succeeded`},
+			wantErr: true,
 		},
 		{
-			name:  "nested resource rejects known wrong prefix",
-			args:  []string{"invoices", "line-items", "pi_mock_succeeded"},
-			wants: []string{`"fixable_by":"agent"`, `looks like a PaymentIntent ID`, `this command expects invoice ID`},
+			name:    "nested resource rejects known wrong prefix",
+			args:    []string{"invoices", "line-items", "pi_mock_succeeded"},
+			wants:   []string{`"fixable_by":"agent"`, `looks like a PaymentIntent ID`, `this command expects invoice ID`},
+			wantErr: true,
 		},
 		{
-			name:  "investigation rejects unrecoverable known prefix",
-			args:  []string{"investigate", "incoming-payment", "sub_mock_active"},
-			wants: []string{`"fixable_by":"agent"`, `looks like a subscription ID`, `this investigation expects invoice ID`, `agent-stripe subscriptions get sub_mock_active`, `agent-stripe investigate subscription-renewal --subscription sub_mock_active`},
+			name:    "investigation rejects unrecoverable known prefix",
+			args:    []string{"investigate", "incoming-payment", "sub_mock_active"},
+			wants:   []string{`"fixable_by":"agent"`, `looks like a subscription ID`, `this investigation expects invoice ID`, `agent-stripe subscriptions get sub_mock_active`, `agent-stripe investigate subscription-renewal --subscription sub_mock_active`},
+			wantErr: true,
 		},
 		{
 			name:  "recoverable investigation still accepts related prefixes",
@@ -285,7 +289,12 @@ func TestCLIWrongIDPrefixHintsAgainstMockStripe(t *testing.T) {
 	}
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) {
-			out := runMockCLI(t, check.args...)
+			var out string
+			if check.wantErr {
+				out = runMockCLIErr(t, check.args...)
+			} else {
+				out = runMockCLI(t, check.args...)
+			}
 			assertContains(t, out, check.wants...)
 		})
 	}

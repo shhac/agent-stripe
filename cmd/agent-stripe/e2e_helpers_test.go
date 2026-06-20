@@ -35,6 +35,28 @@ func (r *mockCLIRunner) Run(args ...string) string {
 	return string(out)
 }
 
+// RunExpectingError runs the CLI for a case that must fail — a structured
+// error on stderr and a non-zero exit (the single-sink contract). It returns
+// the combined output and fatals only if the command unexpectedly succeeded.
+func (r *mockCLIRunner) RunExpectingError(args ...string) string {
+	r.t.Helper()
+	allArgs := []string{"run", "./cmd/agent-stripe", "--api-key", "sk_test_mock", "--base-url", r.server.URL}
+	allArgs = append(allArgs, args...)
+	cmd := exec.Command("go", allArgs...)
+	cmd.Dir = "../.."
+
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		r.t.Fatalf("agent-stripe %v unexpectedly succeeded; expected a non-zero exit\n%s", args, out)
+	}
+	return string(out)
+}
+
+func runMockCLIErr(t *testing.T, args ...string) string {
+	t.Helper()
+	return newMockCLIRunner(t).RunExpectingError(args...)
+}
+
 func (r *mockCLIRunner) AssertContains(out string, wants ...string) {
 	r.t.Helper()
 	assertContains(r.t, out, wants...)
