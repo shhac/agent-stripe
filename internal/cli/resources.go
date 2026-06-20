@@ -17,7 +17,7 @@ func newInvoiceLineItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateExpectedStripeID(args[0], "invoice"); err != nil {
-				return writeCLIError(err)
+				return err
 			}
 			params := url.Values{}
 			shared.AddLimit(params, limit)
@@ -303,7 +303,7 @@ func newCheckoutSessionLineItemsCommand(globals shared.GlobalsFunc) *cobra.Comma
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateExpectedStripeID(args[0], "checkout_session"); err != nil {
-				return writeCLIError(err)
+				return err
 			}
 			params := url.Values{}
 			shared.AddLimit(params, limit)

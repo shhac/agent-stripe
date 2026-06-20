@@ -48,7 +48,7 @@ func newSubscriptionItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateExpectedStripeID(args[0], "subscription"); err != nil {
-				return writeCLIError(err)
+				return err
 			}
 			params := url.Values{"subscription": []string{args[0]}}
 			shared.AddLimit(params, limit)
@@ -73,7 +73,7 @@ func newSubscriptionInvoicesCommand(globals shared.GlobalsFunc) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateExpectedStripeID(args[0], "subscription"); err != nil {
-				return writeCLIError(err)
+				return err
 			}
 			params := url.Values{"subscription": []string{args[0]}}
 			shared.AddLimit(params, limit)

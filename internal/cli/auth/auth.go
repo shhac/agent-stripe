@@ -12,7 +12,6 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	"github.com/shhac/agent-stripe/internal/config"
 	"github.com/shhac/agent-stripe/internal/credential"
-	"github.com/shhac/agent-stripe/internal/output"
 )
 
 var (
@@ -36,14 +35,6 @@ func Register(root *cobra.Command, globals shared.GlobalsFunc) {
 	root.AddCommand(auth)
 }
 
-func writeAuthError(err error) error {
-	if err == nil {
-		return nil
-	}
-	output.WriteError(output.Stderr(), err)
-	return nil
-}
-
 func registerAdd(parent *cobra.Command) {
 	var apiKey string
 	var contextValue string
@@ -59,19 +50,17 @@ func registerAdd(parent *cobra.Command) {
 			if form {
 				filledKey, err := promptAPIKeyViaDialog(cmd.Context(), alias, apiKey)
 				if err != nil {
-					output.WriteError(output.Stderr(), err)
-					return nil
+					return err
 				}
 				apiKey = filledKey
 			}
-			if !shared.RequireFlag("api-key", apiKey, "Provide --api-key <rk_live...|rk_test...|sk_live...|sk_test...|sk_org...>") {
-				return nil
+			if err := shared.RequireFlag("api-key", apiKey, "Provide --api-key <rk_live...|rk_test...|sk_live...|sk_test...|sk_org...>"); err != nil {
+				return err
 			}
 
 			storage, err := credentialStore(alias, apiKey)
 			if err != nil {
-				output.WriteError(output.Stderr(), err)
-				return nil
+				return err
 			}
 
 			if apiVersion == "" {
@@ -79,8 +68,7 @@ func registerAdd(parent *cobra.Command) {
 			}
 			credentialType := credential.Type(apiKey)
 			if err := config.StoreProfile(alias, config.Profile{Context: contextValue, APIVersion: apiVersion, CredentialType: credentialType}); err != nil {
-				output.WriteError(output.Stderr(), err)
-				return nil
+				return err
 			}
 
 			shared.WriteItem(map[string]any{
@@ -114,8 +102,7 @@ func registerCheck(parent *cobra.Command, globals shared.GlobalsFunc) {
 
 			resolved, err := shared.ResolveProfile(flags)
 			if err != nil {
-				output.WriteError(output.Stderr(), err)
-				return nil
+				return err
 			}
 			credentialType := credential.Type(resolved.APIKey)
 			metadataStatus := refreshStoredCredentialType(resolved, credentialType)
@@ -152,8 +139,7 @@ func registerDefault(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			alias := args[0]
 			if err := config.SetDefault(alias); err != nil {
-				output.WriteError(output.Stderr(), err)
-				return nil
+				return err
 			}
 			shared.WriteItem(map[string]any{
 				"status":  "default_set",
@@ -202,12 +188,10 @@ func registerRemove(parent *cobra.Command) {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			alias := args[0]
 			if err := credentialRemove(alias); err != nil {
-				output.WriteError(output.Stderr(), err)
-				return nil
+				return err
 			}
 			if err := config.RemoveProfile(alias); err != nil {
-				output.WriteError(output.Stderr(), err)
-				return nil
+				return err
 			}
 			shared.WriteItem(map[string]any{
 				"status":  "removed",

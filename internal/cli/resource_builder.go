@@ -67,7 +67,7 @@ func newResourceGetCommand(globals shared.GlobalsFunc, opts resourceOptions) *co
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateExpectedStripeID(args[0], opts.idKind); err != nil {
-				return writeCLIError(err)
+				return err
 			}
 			params := url.Values{}
 			shared.AddExpand(params, expand)
@@ -101,9 +101,8 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 				shared.AddString(params, flag.param, *values[flag.name])
 			}
 			if opts.listSummary != nil && len(expand) > 0 && !full {
-				output.WriteError(output.Stderr(), agenterrors.New("--expand requires --full on compact list commands", agenterrors.FixableByAgent).
-					WithHint("Re-run with --full, or use get <id> for focused expanded fields"))
-				return nil
+				return agenterrors.New("--expand requires --full on compact list commands", agenterrors.FixableByAgent).
+					WithHint("Re-run with --full, or use get <id> for focused expanded fields")
 			}
 			if opts.listSummary != nil && !full {
 				return getSummarizedList(globals(), opts.path, params, opts.listSummary)
@@ -192,8 +191,8 @@ func newResourceSearchCommand(globals shared.GlobalsFunc, opts resourceOptions) 
 		Use:   "search",
 		Short: resourceText(opts.searchShort, "Search "+opts.use+" with Stripe Search Query Language"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !shared.RequireFlag("query", query, opts.searchHint) {
-				return nil
+			if err := shared.RequireFlag("query", query, opts.searchHint); err != nil {
+				return err
 			}
 			params := url.Values{"query": []string{query}}
 			shared.AddLimit(params, limit)

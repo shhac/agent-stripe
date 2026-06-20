@@ -34,8 +34,8 @@ func newInvestigateInvoiceMetadata(globals shared.GlobalsFunc, outputOpts *inves
 					invoiceID = args[0]
 				}
 				if invoiceID == "" {
-					if !shared.RequireFlag("number", number, "Use --number when the customer sent an invoice number instead of an invoice ID") {
-						return nil, nil
+					if err := shared.RequireFlag("number", number, "Use --number when the customer sent an invoice number instead of an invoice ID"); err != nil {
+						return nil, err
 					}
 				}
 				return inv.invoiceMetadata(invoiceID, number)

@@ -15,8 +15,8 @@ func newInvestigateSubscriptionItems(globals shared.GlobalsFunc, outputOpts *inv
 		Use:   "subscription-items",
 		Short: "Show subscription items, prices, products, and product metadata",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !shared.RequireFlag("subscription", subscription, "Provide a Subscription ID such as sub_...") {
-				return nil
+			if err := shared.RequireFlag("subscription", subscription, "Provide a Subscription ID such as sub_..."); err != nil {
+				return err
 			}
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.subscriptionItemsEvidence(subscription)

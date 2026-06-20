@@ -10,7 +10,6 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	appconfig "github.com/shhac/agent-stripe/internal/config"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
-	"github.com/shhac/agent-stripe/internal/output"
 )
 
 func registerConfig(root *cobra.Command) {
@@ -61,8 +60,7 @@ func newConfigGetCommand() *cobra.Command {
 			key := normalizeConfigKey(args[0])
 			value, set, err := configValue(appconfig.Read(), key)
 			if err != nil {
-				output.WriteError(output.Stderr(), err)
-				return nil
+				return err
 			}
 			shared.WriteItem(map[string]any{
 				"key":   key,
@@ -83,14 +81,12 @@ func newConfigSetCommand() *cobra.Command {
 			key := normalizeConfigKey(args[0])
 			value, err := strconv.Atoi(args[1])
 			if err != nil || value < 0 {
-				output.WriteError(output.Stderr(), agenterrors.New("config value must be a non-negative integer", agenterrors.FixableByAgent).
-					WithHint("Supported keys: max_retries, timeout_ms"))
-				return nil
+				return agenterrors.New("config value must be a non-negative integer", agenterrors.FixableByAgent).
+					WithHint("Supported keys: max_retries, timeout_ms")
 			}
 			if err := appconfig.SetDefaultValue(key, value); err != nil {
-				output.WriteError(output.Stderr(), agenterrors.Wrap(err, agenterrors.FixableByAgent).
-					WithHint("Supported keys: max_retries, timeout_ms"))
-				return nil
+				return agenterrors.Wrap(err, agenterrors.FixableByAgent).
+					WithHint("Supported keys: max_retries, timeout_ms")
 			}
 			shared.WriteItem(map[string]any{
 				"status": "set",
@@ -110,9 +106,8 @@ func newConfigUnsetCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			key := normalizeConfigKey(args[0])
 			if err := appconfig.UnsetDefaultValue(key); err != nil {
-				output.WriteError(output.Stderr(), agenterrors.Wrap(err, agenterrors.FixableByAgent).
-					WithHint("Supported keys: max_retries, timeout_ms"))
-				return nil
+				return agenterrors.Wrap(err, agenterrors.FixableByAgent).
+					WithHint("Supported keys: max_retries, timeout_ms")
 			}
 			shared.WriteItem(map[string]any{
 				"status": "unset",

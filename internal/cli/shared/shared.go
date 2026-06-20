@@ -125,16 +125,18 @@ func redactedRawListItem(item json.RawMessage, redaction output.RedactionOptions
 	return output.Redact(decoded, redaction), nil
 }
 
-func RequireFlag(flag, value, hint string) bool {
+// RequireFlag returns nil when value is present, or a structured
+// fixable_by:agent error when it is empty. Callers bubble the error so the
+// single sink in libcli.Run renders it once and exits non-zero.
+func RequireFlag(flag, value, hint string) error {
 	if value != "" {
-		return true
+		return nil
 	}
 	err := agenterrors.Newf(agenterrors.FixableByAgent, "--%s is required", flag)
 	if hint != "" {
 		err = err.WithHint(hint)
 	}
-	output.WriteError(output.Stderr(), err)
-	return false
+	return err
 }
 
 func ContextWithTimeout(parent context.Context, ms int) (context.Context, context.CancelFunc) {

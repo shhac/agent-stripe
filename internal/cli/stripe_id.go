@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
-	"github.com/shhac/agent-stripe/internal/output"
 )
 
 type stripeIDKind struct {
@@ -151,9 +150,4 @@ func idMismatchHint(id string, actual, expected stripeIDKind) string {
 	}
 	hints = append(hints, "or run 'agent-stripe investigate resolve "+id+"'")
 	return strings.Join(hints, "; ")
-}
-
-func writeCLIError(err error) error {
-	output.WriteError(output.Stderr(), err)
-	return nil
 }

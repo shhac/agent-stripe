@@ -104,8 +104,7 @@ func resolveBaseURL(flags *GlobalFlags) string {
 func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error) error {
 	resolved, err := ResolveProfile(flags)
 	if err != nil {
-		output.WriteError(output.Stderr(), err)
-		return nil
+		return err
 	}
 	return WithResolvedClient(flags, resolved, fn)
 }
@@ -135,11 +134,7 @@ func WithResolvedClient(flags *GlobalFlags, resolved *ResolvedProfile, fn func(c
 	})
 	client.SetDebug(flags.Debug)
 	client.SetDebugRedaction(RedactionOptions(flags))
-	if err := fn(ctx, client); err != nil {
-		output.WriteError(output.Stderr(), err)
-		return nil
-	}
-	return nil
+	return fn(ctx, client)
 }
 
 func GetRawItem(flags *GlobalFlags, path string, params url.Values) error {

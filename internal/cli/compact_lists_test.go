@@ -96,7 +96,7 @@ func TestEventsListFullKeepsRawRedactedObjects(t *testing.T) {
 func TestCompactListRejectsExpandWithoutFull(t *testing.T) {
 	h := newCLITestHarness(t)
 
-	stdout, stderr := h.run("--api-key", "sk_test_123", "invoices", "list", "--expand", "payment_intent")
+	stdout, stderr := h.runErr("--api-key", "sk_test_123", "invoices", "list", "--expand", "payment_intent")
 
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty", stdout)

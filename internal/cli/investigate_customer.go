@@ -17,11 +17,11 @@ func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *i
 		Use:   "customer-card-payment",
 		Short: "Find a customer's most recent charge by card last4",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !shared.RequireFlag("customer", customer, "Last4 is not unique; provide a Customer ID to keep the investigation bounded") {
-				return nil
+			if err := shared.RequireFlag("customer", customer, "Last4 is not unique; provide a Customer ID to keep the investigation bounded"); err != nil {
+				return err
 			}
-			if !shared.RequireFlag("last4", last4, "Use the final four digits the customer supplied") {
-				return nil
+			if err := shared.RequireFlag("last4", last4, "Use the final four digits the customer supplied"); err != nil {
+				return err
 			}
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.customerCardPayment(customer, last4, limit)

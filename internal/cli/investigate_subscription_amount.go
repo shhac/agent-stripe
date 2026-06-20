@@ -16,8 +16,8 @@ func newInvestigateSubscriptionAmountChange(globals shared.GlobalsFunc, outputOp
 		Use:   "subscription-amount-change",
 		Short: "Explain subscription invoice amount using latest invoice, preview, items, prices, and products",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !shared.RequireFlag("subscription", subscription, "Provide a Subscription ID such as sub_...") {
-				return nil
+			if err := shared.RequireFlag("subscription", subscription, "Provide a Subscription ID such as sub_..."); err != nil {
+				return err
 			}
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.subscriptionAmountChange(subscription)

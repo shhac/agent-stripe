@@ -15,8 +15,8 @@ func newInvestigateCustomerContext(globals shared.GlobalsFunc, outputOpts *inves
 		Use:   "customer-context",
 		Short: "Gather payment, invoice, subscription, and risk context for a customer",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !shared.RequireFlag("customer", customer, "Provide a Customer ID such as cus_...") {
-				return nil
+			if err := shared.RequireFlag("customer", customer, "Provide a Customer ID such as cus_..."); err != nil {
+				return err
 			}
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
 				return inv.customerContext(customer, limit)

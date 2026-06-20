@@ -33,16 +33,39 @@ func newCLITestHarness(t *testing.T) *cliTestHarness {
 	return h
 }
 
+// run executes a command expected to succeed, failing the test if it bubbles an
+// error to the single sink.
 func (h *cliTestHarness) run(args ...string) (string, string) {
+	h.t.Helper()
+	stdout, stderr, err := h.execute(args...)
+	if err != nil {
+		h.t.Fatalf("agent-stripe %v failed: %v\nstdout:\n%s\nstderr:\n%s", args, err, stdout, stderr)
+	}
+	return stdout, stderr
+}
+
+// runErr executes a command expected to fail, rendering the bubbled error to the
+// captured stderr exactly as libcli.Run does in production (which is the only
+// place errors are rendered now). It fails the test if the command unexpectedly
+// succeeds.
+func (h *cliTestHarness) runErr(args ...string) (string, string) {
+	h.t.Helper()
+	stdout, _, err := h.execute(args...)
+	if err == nil {
+		h.t.Fatalf("agent-stripe %v succeeded, want error", args)
+	}
+	output.WriteError(&h.stderr, err)
+	return stdout, h.stderr.String()
+}
+
+func (h *cliTestHarness) execute(args ...string) (string, string, error) {
 	h.t.Helper()
 	h.stdout.Reset()
 	h.stderr.Reset()
 	cmd := newRootCmd("test")
 	cmd.SetArgs(args)
-	if err := cmd.Execute(); err != nil {
-		h.t.Fatalf("agent-stripe %v failed: %v\nstdout:\n%s\nstderr:\n%s", args, err, h.stdout.String(), h.stderr.String())
-	}
-	return h.stdout.String(), h.stderr.String()
+	err := cmd.Execute()
+	return h.stdout.String(), h.stderr.String(), err
 }
 
 func TestConfigCommandsEditNonSecretDefaults(t *testing.T) {

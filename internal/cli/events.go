@@ -28,7 +28,7 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateExpectedStripeID(args[0], "event"); err != nil {
-				return writeCLIError(err)
+				return err
 			}
 			return shared.GetRawItem(globals(), "/v1/events/"+url.PathEscape(args[0]), url.Values{})
 		},

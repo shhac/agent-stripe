@@ -33,11 +33,11 @@ func registerUpdate(parent *cobra.Command) {
 				form:         form,
 			})
 			if err != nil {
-				return writeAuthError(err)
+				return err
 			}
 			result, err := applyAuthUpdate(cmd.Context(), req)
 			if err != nil {
-				return writeAuthError(err)
+				return err
 			}
 			shared.WriteItem(result.output(), "")
 			return nil

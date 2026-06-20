@@ -69,7 +69,24 @@ func newRootCmd(version string) *cobra.Command {
 	registerInvestigate(root, globalsFunc)
 	registerRawAPI(root, globalsFunc)
 
+	installGroupUnknownHandlers(root)
+
 	return root
+}
+
+// installGroupUnknownHandlers gives every command group (a parent that only
+// holds subcommands, with no action of its own) the same structured
+// unknown-subcommand behavior libcli installs on the root: an unknown
+// subcommand returns a fixable_by:agent error listing the valid ones, instead
+// of cobra's usage text. Groups already carrying a Run/RunE are left alone.
+func installGroupUnknownHandlers(root *cobra.Command) {
+	for _, group := range root.Commands() {
+		if !group.HasSubCommands() || group.Run != nil || group.RunE != nil {
+			continue
+		}
+		hint := "run '" + root.Name() + " " + group.Name() + " --help' to see its subcommands"
+		libcli.HandleUnknownCommand(group, hint)
+	}
 }
 
 // wrapConfigDefaults runs the config-defaults pass (explicit flag > config >

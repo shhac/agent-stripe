@@ -36,17 +36,39 @@ func newAuthCommandHarness(t *testing.T) *authCommandHarness {
 	return h
 }
 
+// run executes a command expected to succeed, failing the test if it bubbles an
+// error to the single sink.
 func (h *authCommandHarness) run(args ...string) (string, string) {
+	h.t.Helper()
+	stdout, stderr, err := h.execute(args...)
+	if err != nil {
+		h.t.Fatalf("agent-stripe %v failed: %v\nstdout:\n%s\nstderr:\n%s", args, err, stdout, stderr)
+	}
+	return stdout, stderr
+}
+
+// runErr executes a command expected to fail, rendering the bubbled error to the
+// captured stderr exactly as libcli.Run does in production. It fails the test if
+// the command unexpectedly succeeds.
+func (h *authCommandHarness) runErr(args ...string) (string, string) {
+	h.t.Helper()
+	stdout, _, err := h.execute(args...)
+	if err == nil {
+		h.t.Fatalf("agent-stripe %v succeeded, want error", args)
+	}
+	output.WriteError(&h.stderr, err)
+	return stdout, h.stderr.String()
+}
+
+func (h *authCommandHarness) execute(args ...string) (string, string, error) {
 	h.t.Helper()
 	h.stdout.Reset()
 	h.stderr.Reset()
-	root := &cobra.Command{Use: "agent-stripe"}
+	root := &cobra.Command{Use: "agent-stripe", SilenceUsage: true, SilenceErrors: true}
 	Register(root, func() *shared.GlobalFlags { return &shared.GlobalFlags{} })
 	root.SetArgs(args)
-	if err := root.Execute(); err != nil {
-		h.t.Fatalf("agent-stripe %v failed: %v\nstdout:\n%s\nstderr:\n%s", args, err, h.stdout.String(), h.stderr.String())
-	}
-	return h.stdout.String(), h.stderr.String()
+	err := root.Execute()
+	return h.stdout.String(), h.stderr.String(), err
 }
 
 func TestAuthAddStoresSecretOutOfBandAndDoesNotPrintIt(t *testing.T) {
@@ -116,7 +138,7 @@ func TestAuthAddStorageFailureDoesNotWriteProfile(t *testing.T) {
 		return "", errors.New("keychain unavailable")
 	}
 
-	stdout, stderr := h.run("auth", "add", "prod", "--api-key", "sk_test_secret")
+	stdout, stderr := h.runErr("auth", "add", "prod", "--api-key", "sk_test_secret")
 
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty on failure", stdout)
@@ -160,7 +182,7 @@ func TestAuthRemoveCredentialFailureLeavesProfile(t *testing.T) {
 		return errors.New("keychain delete failed")
 	}
 
-	stdout, stderr := h.run("auth", "remove", "prod")
+	stdout, stderr := h.runErr("auth", "remove", "prod")
 
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want empty on failure", stdout)
