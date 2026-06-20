@@ -119,9 +119,9 @@ GLOBAL FLAGS
   -p, --profile <alias>
   --context <Stripe-Context>
   --api-version <version>
-  --format json|yaml|jsonl
+  -f, --format json|yaml|jsonl
   --expose <path,key>  Reveal redacted Stripe response fields by path or key; comma-separated/repeatable
-  --timeout <ms>
+  -t, --timeout <ms>
   --max-retries <N>  Maximum automatic retries for transient Stripe 429 responses (default 2)
-  --debug   Emit structured debug records to stderr (client setup + HTTP)
+  -d, --debug   Emit structured debug records to stderr (client setup + HTTP)
 `

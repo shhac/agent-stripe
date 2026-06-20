@@ -95,8 +95,8 @@ Only GET is exposed.
 - `-p, --profile <alias>` - Stripe profile alias.
 - `--context <Stripe-Context>` - organization or related-account request context.
 - `--api-version <version>` - Stripe API version override.
-- `--format json|yaml|jsonl` - output format.
+- `-f, --format json|yaml|jsonl` - output format.
 - `--expose <path,key>` - reveal redacted Stripe response fields by path or key; comma-separated/repeatable.
-- `--timeout <ms>` - request timeout.
+- `-t, --timeout <ms>` - request timeout.
 - `--max-retries <N>` - automatic retries for transient Stripe 429 responses. Default: 2.
-- `--debug` - structured debug records to stderr.
+- `-d, --debug` - structured debug records to stderr.
