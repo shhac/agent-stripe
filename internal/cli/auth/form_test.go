@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/shhac/agent-stripe/internal/dialog"
-	"github.com/shhac/agent-stripe/internal/dialog/dialogtest"
+	"github.com/shhac/lib-agent-cli/dialog"
+	"github.com/shhac/lib-agent-cli/dialog/dialogtest"
 )
 
 func TestPromptAPIKeyViaDialog(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/shhac/agent-stripe/internal/dialog"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
+	"github.com/shhac/lib-agent-cli/dialog"
 )
 
 func promptAPIKeyViaDialog(ctx context.Context, profile, apiKey string) (string, error) {
