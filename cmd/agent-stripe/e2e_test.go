@@ -23,19 +23,21 @@ func TestCLIDebugAgainstMockStripe(t *testing.T) {
 
 func TestCLIRedactsSensitiveStripeFieldsByDefault(t *testing.T) {
 	out := runMockCLI(t, "payment-intents", "get", "pi_mock_succeeded")
-	assertContains(t, out, `"@redacted"`, `"client_secret": "[REDACTED]"`, `"api_token": "[REDACTED]"`, `"path": "client_secret"`, `"path": "metadata.api_token"`, `"order_id": "order_123"`)
+	// single-get now streams NDJSON (compact JSON, no spaces after colons)
+	assertContains(t, out, `"@redacted"`, `"client_secret":"[REDACTED]"`, `"api_token":"[REDACTED]"`, `"path":"client_secret"`, `"path":"metadata.api_token"`, `"order_id":"order_123"`)
 	assertNotContains(t, out, "pi_mock_succeeded_secret_fake", "tok_fake_order")
-	assertNotContains(t, out, `"@redacted": true`)
+	assertNotContains(t, out, `"@redacted":true`)
 
 	out = runMockCLI(t, "customers", "get", "cus_mock_123")
-	assertContains(t, out, `"email": "[REDACTED]"`, `"name": "[REDACTED]"`, `"phone": "[REDACTED]"`)
-	assertContains(t, out, `"path": "email"`, `"path": "name"`, `"path": "phone"`)
+	assertContains(t, out, `"email":"[REDACTED]"`, `"name":"[REDACTED]"`, `"phone":"[REDACTED]"`)
+	assertContains(t, out, `"path":"email"`, `"path":"name"`, `"path":"phone"`)
 	assertNotContains(t, out, "buyer@example.com", "Mock Buyer", "+15550101001")
 }
 
 func TestCLIExposeRevealsRequestedStripeFields(t *testing.T) {
 	out := runMockCLI(t, "--expose", "client_secret,metadata.api_token", "payment-intents", "get", "pi_mock_succeeded")
-	assertContains(t, out, `"client_secret": "pi_mock_succeeded_secret_fake"`, `"api_token": "tok_fake_order"`, `"order_id": "order_123"`)
+	// single-get now streams NDJSON (compact JSON, no spaces after colons)
+	assertContains(t, out, `"client_secret":"pi_mock_succeeded_secret_fake"`, `"api_token":"tok_fake_order"`, `"order_id":"order_123"`)
 	assertNotContains(t, out, `"@redacted"`)
 }
 
@@ -261,15 +263,16 @@ func TestCLIWrongIDPrefixHintsAgainstMockStripe(t *testing.T) {
 		name    string
 		args    []string
 		wants   []string
-		wantErr bool // a rejected wrong-prefix ID is a user error → non-zero exit
+		wantErr bool // true when the command must exit non-zero (fatal, non-item-level errors)
 	}{
 		{
-			name:    "resource get rejects known wrong prefix",
-			args:    []string{"invoices", "get", "pi_mock_succeeded"},
-			wants:   []string{`"fixable_by":"agent"`, `looks like a PaymentIntent ID`, `this command expects invoice ID`, `agent-stripe payment-intents get pi_mock_succeeded`, `agent-stripe investigate incoming-payment pi_mock_succeeded`},
-			wantErr: true,
+			// wrong-prefix on a multi-capable get → @unresolved on stdout, exit 0
+			name:  "resource get emits unresolved for known wrong prefix",
+			args:  []string{"invoices", "get", "pi_mock_succeeded"},
+			wants: []string{`"@unresolved"`, `"fixable_by":"agent"`, `looks like a PaymentIntent ID`, `this command expects invoice ID`, `agent-stripe payment-intents get pi_mock_succeeded`, `agent-stripe investigate incoming-payment pi_mock_succeeded`},
 		},
 		{
+			// line-items still validates before the list call → stderr + exit 1
 			name:    "nested resource rejects known wrong prefix",
 			args:    []string{"invoices", "line-items", "pi_mock_succeeded"},
 			wants:   []string{`"fixable_by":"agent"`, `looks like a PaymentIntent ID`, `this command expects invoice ID`},

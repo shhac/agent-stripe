@@ -62,16 +62,19 @@ func registerResource(root *cobra.Command, globals shared.GlobalsFunc, opts reso
 func newResourceGetCommand(globals shared.GlobalsFunc, opts resourceOptions) *cobra.Command {
 	var expand []string
 	cmd := &cobra.Command{
-		Use:   "get <" + opts.idName + ">",
+		Use:   "get <" + opts.idName + ">...",
 		Short: resourceText(opts.getShort, "Retrieve a "+opts.idName),
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateExpectedStripeID(args[0], opts.idKind); err != nil {
-				return err
-			}
+			flags := globals()
 			params := url.Values{}
 			shared.AddExpand(params, expand)
-			return shared.GetRawItem(globals(), opts.path+"/"+url.PathEscape(args[0]), params)
+			return shared.GetEntities(flags, args, func(ctx context.Context, client *api.Client, id string) (any, error) {
+				if err := validateExpectedStripeID(id, opts.idKind); err != nil {
+					return nil, err
+				}
+				return shared.FetchItem(ctx, client, flags, opts.path+"/"+url.PathEscape(id), params)
+			})
 		},
 	}
 	if opts.expandGet {

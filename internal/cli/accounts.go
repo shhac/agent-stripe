@@ -29,14 +29,17 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 		},
 	})
 	accounts.AddCommand(&cobra.Command{
-		Use:   "get <account-id>",
-		Short: "Retrieve a connected account by ID",
-		Args:  cobra.ExactArgs(1),
+		Use:   "get <account-id>...",
+		Short: "Retrieve connected accounts by ID",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateExpectedStripeID(args[0], "account"); err != nil {
-				return err
-			}
-			return shared.GetRawItem(globals(), "/v1/accounts/"+url.PathEscape(args[0]), url.Values{})
+			flags := globals()
+			return shared.GetEntities(flags, args, func(ctx context.Context, client *api.Client, id string) (any, error) {
+				if err := validateExpectedStripeID(id, "account"); err != nil {
+					return nil, err
+				}
+				return shared.FetchItem(ctx, client, flags, "/v1/accounts/"+url.PathEscape(id), url.Values{})
+			})
 		},
 	})
 	list := &cobra.Command{

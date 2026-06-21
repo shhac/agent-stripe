@@ -12,6 +12,22 @@ import (
 	libcli "github.com/shhac/lib-agent-cli/cli"
 )
 
+// GetEntities runs the multi-capable get contract for the stripe domain: it
+// sets up one client, then resolves each id through getOne and streams the
+// result per the shared get contract (NDJSON by default — one record or
+// {"@unresolved":…} per id in input order; item-level misses stay on stdout,
+// command-level failures bubble to the single sink). getOne returns the decoded
+// record for an id, or a classified *agenterrors.APIError (fixable_by:agent)
+// so a wrong-prefix / 404 becomes an @unresolved record rather than aborting
+// the batch.
+func GetEntities(flags *GlobalFlags, args []string, getOne func(ctx context.Context, client *api.Client, id string) (any, error)) error {
+	return WithClient(flags, func(ctx context.Context, client *api.Client) error {
+		return libcli.EntityGet(output.Stdout(), flags.Format, args, func(id string) (any, error) {
+			return getOne(ctx, client, id)
+		})
+	})
+}
+
 type GlobalFlags struct {
 	libcli.Globals // Format, TimeoutMS, Debug
 

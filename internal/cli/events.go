@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"net/url"
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
@@ -23,14 +25,17 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 		Short: "Stripe events and webhook-relevant activity",
 	}
 	events.AddCommand(&cobra.Command{
-		Use:   "get <event-id>",
-		Short: "Retrieve an event by ID",
-		Args:  cobra.ExactArgs(1),
+		Use:   "get <event-id>...",
+		Short: "Retrieve events by ID",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateExpectedStripeID(args[0], "event"); err != nil {
-				return err
-			}
-			return shared.GetRawItem(globals(), "/v1/events/"+url.PathEscape(args[0]), url.Values{})
+			flags := globals()
+			return shared.GetEntities(flags, args, func(ctx context.Context, client *api.Client, id string) (any, error) {
+				if err := validateExpectedStripeID(id, "event"); err != nil {
+					return nil, err
+				}
+				return shared.FetchItem(ctx, client, flags, "/v1/events/"+url.PathEscape(id), url.Values{})
+			})
 		},
 	})
 

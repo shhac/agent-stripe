@@ -148,6 +148,22 @@ func GetRawItem(flags *GlobalFlags, path string, params url.Values) error {
 	})
 }
 
+// FetchItem retrieves path, decodes the JSON response, and applies the expose-
+// aware redaction policy from flags. It returns the cleaned value so an
+// EntityGet resolver can hand it back to the multi-get stream without writing
+// it directly.
+func FetchItem(ctx context.Context, client *api.Client, flags *GlobalFlags, path string, params url.Values) (any, error) {
+	raw, err := client.Get(ctx, path, params)
+	if err != nil {
+		return nil, err
+	}
+	var data any
+	if err := json.Unmarshal(raw, &data); err != nil {
+		return nil, agenterrors.Wrap(err, agenterrors.FixableByAgent)
+	}
+	return output.Redact(data, RedactionOptions(flags)), nil
+}
+
 func GetRawList(flags *GlobalFlags, path string, params url.Values) error {
 	return WithClient(flags, func(ctx context.Context, client *api.Client) error {
 		raw, err := client.Get(ctx, path, params)
