@@ -53,7 +53,7 @@ Most list commands accept `--limit`, `--created-gte`, `--created-lte`, `--starti
 
 A wrong ID prefix on a `get` (e.g. `invoices get pi_...`) yields an `@unresolved` record on stdout (exit 0) instead of a stderr error. Redaction (`@redacted` / `[REDACTED]`) is unchanged and applies inside resolved records.
 
-Commands excluded from multi-get (remain single-id only): `balance get`, `accounts self`, `api get`, invoice/checkout `line-items`, `invoice preview`, `config get`.
+Commands excluded from multi-get (take no id arg, so multi does not apply): `balance get` (no id; defaults to NDJSON like all other gets — pass `--format json` for the object), `accounts self`, invoice/checkout `line-items`, `invoice preview`. Raw passthroughs (`api get`, `get --full` raw dumps) output pretty JSON rather than NDJSON. `config get <key>...` accepts one or more keys and returns one NDJSON line per key; misses produce `{"@unresolved":{"id","reason"}}` entries (exit 0).
 
 ## Investigations
 

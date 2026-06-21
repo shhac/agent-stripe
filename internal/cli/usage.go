@@ -118,8 +118,11 @@ OUTPUT
   stdout and exit 0; only a command-level failure (auth, network) goes to stderr with exit 1 and empty stdout.
   A wrong ID prefix on a get (e.g. invoices get pi_...) yields an @unresolved record (exit 0) instead of a
   stderr error. Redaction (@redacted / [REDACTED]) is unchanged and applies inside resolved records.
-  Excluded from multi-get (remain single): balance get, accounts self, api get, invoice/checkout line-items,
-  invoice preview, config get.
+  Excluded from multi-get (take no id arg, so multi does not apply): balance get (no id; defaults to NDJSON
+  like all other gets — pass --format json for the object), accounts self, invoice/checkout line-items,
+  invoice preview. Raw passthroughs (api get, get --full raw dumps) output pretty JSON rather than NDJSON.
+  config get <key>... accepts one or more keys and returns one NDJSON line per key; misses produce
+  {"@unresolved":{"id","reason"}} entries (exit 0).
   Sensitive Stripe fields are replaced by "[REDACTED]" and indexed in @redacted; use --expose <path,key> to opt in.
   Errors are JSON on stderr with fixable_by: agent|human|retry and a hint where possible.
   Stripe 429s retry automatically with backoff and jitter before returning fixable_by=retry.
