@@ -7,9 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	libcli "github.com/shhac/lib-agent-cli/cli"
+
 	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
@@ -25,7 +28,14 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 		Use:   "self",
 		Short: "Retrieve the account for the active key/context",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return shared.GetRawItem(globals(), "/v1/account", url.Values{})
+			flags := globals()
+			return shared.WithClient(flags, func(ctx context.Context, client *api.Client) error {
+				obj, err := shared.FetchItem(ctx, client, flags, "/v1/account", url.Values{})
+				if err != nil {
+					return err
+				}
+				return libcli.EmitItem(output.Stdout(), flags.Format, obj)
+			})
 		},
 	})
 	accounts.AddCommand(&cobra.Command{
