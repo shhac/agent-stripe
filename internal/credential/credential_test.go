@@ -105,14 +105,33 @@ func TestStoreGetListRemove(t *testing.T) {
 	}
 }
 
-func TestStoreReturnsKeychainErrorWithoutWritingIndex(t *testing.T) {
+func TestStoreFallsBackToFileWhenKeychainUnavailable(t *testing.T) {
 	dir := withCredentialTestDir(t, &fakeKeychain{err: errors.New("keychain unavailable")})
 
-	if _, err := Store("prod", "sk_test_secret"); err == nil {
-		t.Fatalf("Store() should fail")
+	storage, err := Store("prod", "sk_test_secret")
+	if err != nil {
+		t.Fatalf("Store() error = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "credentials.json")); !os.IsNotExist(err) {
-		t.Fatalf("credentials index should not exist, stat err = %v", err)
+	if storage != "file" {
+		t.Fatalf("storage = %q, want file", storage)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "credentials.json"))
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !strings.Contains(string(data), "sk_test_secret") {
+		t.Fatalf("credentials index should hold the raw key under keychain failure: %s", data)
+	}
+	if strings.Contains(string(data), keychainSentinel) {
+		t.Fatalf("credentials index should not hold the sentinel under keychain failure: %s", data)
+	}
+
+	got, err := Get("prod")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got != "sk_test_secret" {
+		t.Fatalf("Get() = %q, want sk_test_secret", got)
 	}
 }
 
@@ -135,14 +154,71 @@ func TestRemoveReturnsDeleteErrorWithoutRemovingIndex(t *testing.T) {
 	}
 }
 
-func TestGetRejectsNonKeychainManagedEntry(t *testing.T) {
+func TestGetReturnsFileManagedSecret(t *testing.T) {
 	dir := withCredentialTestDir(t, &fakeKeychain{})
-	err := os.WriteFile(filepath.Join(dir, "credentials.json"), []byte(`{"prod":{"keychain_managed":false}}`), 0o600)
+	err := os.WriteFile(filepath.Join(dir, "credentials.json"), []byte(`{"prod":{"api_key":"sk_file_secret","keychain_managed":false}}`), 0o600)
 	if err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	if _, err := Get("prod"); err == nil || !strings.Contains(err.Error(), "not keychain managed") {
-		t.Fatalf("Get() error = %v, want not keychain managed", err)
+	got, err := Get("prod")
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got != "sk_file_secret" {
+		t.Fatalf("Get() = %q, want sk_file_secret", got)
+	}
+}
+
+// TestStore_Headless_FileFallback exercises the credential-WRITE path
+// non-interactively. The per-CLI keychain opt-out (derived by lib-agent-cli from
+// the "app.paulie.agent-stripe" service) makes the keychain report unavailable,
+// so Store deterministically keeps the raw key in the 0600 index file on every
+// platform — including darwin, where it would otherwise reach the `security` GUI
+// prompt. Before the file fallback existed, Store simply failed under the opt-out
+// (and on any non-macOS host).
+func TestStore_Headless_FileFallback(t *testing.T) {
+	t.Setenv("AGENT_STRIPE_NO_KEYCHAIN", "1")
+	dir := t.TempDir()
+	config.SetConfigDir(dir)
+	t.Cleanup(func() { config.SetConfigDir("") })
+
+	storage, err := Store("headless", "sk_test_headless")
+	if err != nil {
+		t.Fatalf("Store: %v", err)
+	}
+	if storage != "file" {
+		t.Fatalf("storage=%q, want \"file\" (keychain opt-out should force the file path)", storage)
+	}
+
+	path := filepath.Join(dir, "credentials.json")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("index not written: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("index mode=%o, want 0600", mode)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "sk_test_headless") {
+		t.Errorf("file should contain the raw key under opt-out; got %s", data)
+	}
+	if strings.Contains(string(data), keychainSentinel) {
+		t.Errorf("file should NOT contain the keychain sentinel under opt-out; got %s", data)
+	}
+
+	got, err := Get("headless")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got != "sk_test_headless" {
+		t.Errorf("Get=%q, want sk_test_headless", got)
+	}
+
+	if err := Remove("headless"); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if _, err := Get("headless"); err == nil {
+		t.Error("expected NotFound after Remove")
 	}
 }
