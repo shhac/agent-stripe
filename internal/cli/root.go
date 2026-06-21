@@ -41,7 +41,7 @@ func newRootCmd(version string) *cobra.Command {
 	_ = pf.MarkHidden("base-url")
 
 	registerUsageCommand(root)
-	registerConfig(root)
+	registerConfig(root, globalsFunc)
 	registerPaymentsDomain(root)
 	registerConnectDomain(root)
 	auth.Register(root, globalsFunc)

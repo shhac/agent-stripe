@@ -5,21 +5,23 @@ import (
 	"strconv"
 	"strings"
 
+	libcli "github.com/shhac/lib-agent-cli/cli"
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	appconfig "github.com/shhac/agent-stripe/internal/config"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
-func registerConfig(root *cobra.Command) {
+func registerConfig(root *cobra.Command, globals shared.GlobalsFunc) {
 	configCmd := &cobra.Command{
 		Use:   "config",
 		Short: "Inspect and edit non-secret CLI configuration",
 	}
 	configCmd.AddCommand(newConfigPathCommand())
 	configCmd.AddCommand(newConfigShowCommand())
-	configCmd.AddCommand(newConfigGetCommand())
+	configCmd.AddCommand(newConfigGetCommand(globals))
 	configCmd.AddCommand(newConfigSetCommand())
 	configCmd.AddCommand(newConfigUnsetCommand())
 	root.AddCommand(configCmd)
@@ -51,23 +53,22 @@ func newConfigShowCommand() *cobra.Command {
 	}
 }
 
-func newConfigGetCommand() *cobra.Command {
+func newConfigGetCommand(globals shared.GlobalsFunc) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <key>",
-		Short: "Get a non-secret config value",
-		Args:  cobra.ExactArgs(1),
+		Use:   "get <key>...",
+		Short: "Get one or more non-secret config values",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			key := normalizeConfigKey(args[0])
-			value, set, err := configValue(appconfig.Read(), key)
-			if err != nil {
-				return err
-			}
-			shared.WriteItem(map[string]any{
-				"key":   key,
-				"set":   set,
-				"value": value,
-			}, "")
-			return nil
+			g := globals()
+			cfg := appconfig.Read()
+			return libcli.EntityGet(output.Stdout(), g.Format, args, func(key string) (any, error) {
+				key = normalizeConfigKey(key)
+				value, set, err := configValue(cfg, key)
+				if err != nil {
+					return nil, err
+				}
+				return map[string]any{"key": key, "value": value, "set": set}, nil
+			})
 		},
 	}
 }
