@@ -3,9 +3,17 @@
 ## Defaults
 
 - List commands default to NDJSON/jsonl: one JSON object per line.
-- Single-object commands default to pretty JSON.
+- Single-object `get` commands default to NDJSON (one line); pass `--format json` for the pretty object.
 - Investigation commands default to NDJSON evidence records.
 - Errors are JSON on stderr with `error`, `fixable_by`, and usually `hint`.
+
+## Get Contract (single + multi)
+
+`get <id>...` takes one or more ids and returns one result per id, in input order. Default output is NDJSON: one line per id — the record, or `{"@unresolved":{"id","reason","fixable_by","hint"?}}` for an id that couldn't be resolved (e.g. not found / bad id). `--format json|yaml` collapses to one `{"data":[…], "@unresolved":[…]}` envelope. A single `get <id>` is just the one-element case (NDJSON one line by default; was pretty JSON before — pass `--format json` for the object). Item-level misses stay on stdout and exit 0; only a command-level failure (auth, network) goes to stderr with exit 1 and empty stdout.
+
+A wrong ID prefix on a `get` (e.g. `invoices get pi_...`) yields an `@unresolved` record on stdout (exit 0) instead of a stderr error. Redaction (`@redacted` / `[REDACTED]`) is unchanged and applies inside resolved records.
+
+Commands excluded from multi-get (remain single-id only): `balance get`, `accounts self`, `api get`, invoice/checkout `line-items`, `invoice preview`, `config get`.
 
 Some list commands return compact summaries by default because their Stripe objects can carry bulky nested payloads or sensitive person/payment details. Use `--full` on that list command for full redacted objects, or use `get <id>` for one focused object. On compact list commands, `--expand` requires `--full`.
 
@@ -100,7 +108,7 @@ Error JSON uses `fixable_by`:
 - `human` - needs a user action, permission change, profile setup, or account context decision.
 - `retry` - transient condition. Retrying later or narrowing the query may help.
 
-Wrong known ID prefixes are preflighted before direct reads and constrained investigations. For example, `invoices get pi_...` returns a JSON error pointing at `payment-intents get`, `investigate incoming-payment`, or `investigate resolve`.
+Wrong known ID prefixes on a `get` command are handled as item-level misses: `invoices get pi_...` returns an `@unresolved` record on stdout (exit 0) with `fixable_by:"agent"` and a hint pointing at `payment-intents get`, `investigate incoming-payment`, or `investigate resolve`. Only command-level failures (auth, network) go to stderr with exit 1.
 
 Stripe 429s retry automatically with bounded exponential backoff and jitter. Use `--max-retries 0` for one-shot behavior. After retries are exhausted, the error is `fixable_by:"retry"` and includes Stripe's rate-limit reason when present.
 

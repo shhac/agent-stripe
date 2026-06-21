@@ -65,7 +65,7 @@ Source: https://docs.stripe.com/api/transfer_reversals/retrieve
 
 Stripe's v1 resource APIs are generally organized around resource-specific IDs. agent-stripe uses known Stripe ID prefixes as a local navigation aid, not as an authorization or existence check:
 
-- Direct resource `get` commands preflight known wrong prefixes and suggest the likely command before making an avoidable Stripe request.
+- Direct resource `get` commands preflight known wrong prefixes and return an `@unresolved` record on stdout (exit 0) with a command suggestion — treated as an item-level miss, not a command-level error.
 - Investigation commands can accept multiple related prefixes when the object graph is recoverable.
 - Unknown values still pass through to Stripe or search-oriented commands so invoice numbers and future Stripe ID shapes are not rejected prematurely.
 - Nested resources remain special: transfer reversal IDs require a parent transfer ID, and line item listing commands validate only the parent resource ID they can route with.

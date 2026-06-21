@@ -76,7 +76,7 @@ For local testing, run `mockstripe` and set `AGENT_STRIPE_BASE_URL` to its base 
 
 ## Output
 
-Lists and investigation output default to NDJSON. Single resources default to JSON. Errors include `fixable_by` and usually a `hint`.
+Lists and investigation output default to NDJSON. Single-resource `get` commands also default to NDJSON (one line); pass `--format json` for the pretty object. Errors include `fixable_by` and usually a `hint`.
 
 List commands that commonly carry bulky nested payloads or sensitive person/payment details return compact summaries by default. This includes customers, payment methods, PaymentIntents, charges, invoices, subscriptions, setup intents, Checkout Sessions, Payment Links, Events, and connected accounts. Add `--full` to those list commands only when raw redacted Stripe objects are needed.
 
@@ -90,6 +90,12 @@ Investigation output uses evidence records:
 ```
 
 Expanded nested Stripe objects are emitted as separate `entity` records and replaced by ID in the parent `data`, so navigation IDs stay visible and downstream commands can use the same Stripe-shaped fields. Long strings may be truncated with `truncated_fields`; rerun with `--expand-field <path>` or `--full`. Truncation controls do not override redaction.
+
+**Get (single + multi).** `get <id>...` takes one or more ids and returns one result per id, in input order. Default output is NDJSON: one line per id — the record, or `{"@unresolved":{"id","reason","fixable_by","hint"?}}` for an id that couldn't be resolved (e.g. not found / bad id). `--format json|yaml` collapses to one `{"data":[…], "@unresolved":[…]}` envelope. A single `get <id>` is just the one-element case (NDJSON one line by default; was pretty JSON before — pass `--format json` for the object). Item-level misses stay on stdout and exit 0; only a command-level failure (auth, network) goes to stderr with exit 1 and empty stdout.
+
+A wrong ID prefix on a `get` (e.g. `invoices get pi_...`) yields an `@unresolved` record on stdout (exit 0) instead of a stderr error. Redaction (`@redacted` / `[REDACTED]`) is unchanged and applies inside resolved records.
+
+Commands excluded from multi-get (remain single-id only): `balance get`, `accounts self`, `api get`, `invoice/checkout line-items`, `invoice preview`, `config get`.
 
 `accounts list` is compact by default and omits full Account KYC/profile/settings/external-account data. Use `accounts get acct_...` for one account or `accounts list --full` only when raw list objects are needed.
 

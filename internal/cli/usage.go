@@ -110,7 +110,16 @@ OUTPUT
   Lists default to NDJSON/jsonl, one object per line, with @pagination when there is another page.
   Bulky or sensitive list surfaces use compact summaries by default; add --full for raw redacted objects.
   On compact list commands, --expand requires --full; use get <id> for focused expanded reads.
-  Single-object reads default to pretty JSON.
+  Get (single + multi). get <id>... takes one or more ids and returns one result per id, in input order.
+  Default output is NDJSON: one line per id — the record, or {"@unresolved":{"id","reason","fixable_by","hint"?}}
+  for an id that couldn't be resolved (e.g. not found / bad id). --format json|yaml collapses to one
+  {"data":[...], "@unresolved":[...]} envelope. A single get <id> is just the one-element case (NDJSON one
+  line by default; was pretty JSON before — pass --format json for the object). Item-level misses stay on
+  stdout and exit 0; only a command-level failure (auth, network) goes to stderr with exit 1 and empty stdout.
+  A wrong ID prefix on a get (e.g. invoices get pi_...) yields an @unresolved record (exit 0) instead of a
+  stderr error. Redaction (@redacted / [REDACTED]) is unchanged and applies inside resolved records.
+  Excluded from multi-get (remain single): balance get, accounts self, api get, invoice/checkout line-items,
+  invoice preview, config get.
   Sensitive Stripe fields are replaced by "[REDACTED]" and indexed in @redacted; use --expose <path,key> to opt in.
   Errors are JSON on stderr with fixable_by: agent|human|retry and a hint where possible.
   Stripe 429s retry automatically with backoff and jitter before returning fixable_by=retry.

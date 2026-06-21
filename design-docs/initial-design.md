@@ -60,7 +60,7 @@ Examples:
 
 ## Output contract
 
-Lists default to NDJSON so an LLM can stream, truncate, and resume investigation without parsing a large JSON array. List commands that commonly carry bulky nested payloads or sensitive person/payment details use compact summaries by default and expose `--full` for full redacted Stripe objects. On compact list commands, `--expand` requires `--full` so expanded payloads are never silently discarded. Single-resource commands default to pretty JSON. Errors are JSON on stderr with:
+Lists default to NDJSON so an LLM can stream, truncate, and resume investigation without parsing a large JSON array. List commands that commonly carry bulky nested payloads or sensitive person/payment details use compact summaries by default and expose `--full` for full redacted Stripe objects. On compact list commands, `--expand` requires `--full` so expanded payloads are never silently discarded. Single-resource `get` commands also default to NDJSON (one line per id); pass `--format json` for the pretty object. `get <id>...` accepts one or more ids and returns one result per id in input order — the record, or an `@unresolved` line for each id that couldn't be resolved (not found / bad id). Item-level misses stay on stdout with exit 0; only command-level failures go to stderr with exit 1. Errors are JSON on stderr with:
 
 - `error`
 - `fixable_by`: `agent`, `human`, or `retry`
@@ -74,7 +74,7 @@ Sensitive Stripe response fields are redacted by default in resource output, inv
 
 Stripe rate limits and lock timeouts use HTTP 429. The CLI retries those responses with bounded exponential backoff and jitter, then emits a `fixable_by=retry` error with Stripe's rate-limit reason header when present. `--max-retries 0` disables automatic retries for callers that need one-shot behavior.
 
-Known Stripe ID prefixes are preflighted before direct retrieval commands and before investigations whose input type is constrained. A confidently wrong known prefix returns a `fixable_by=agent` JSON error with a better command suggestion. Unknown values still pass through to Stripe or search flows so invoice numbers and unusual future Stripe IDs are not blocked prematurely. Investigation commands can deliberately accept related IDs when the relationship is recoverable, such as `invoice`, `charge`, and `payment_intent` IDs for `investigate incoming-payment`.
+Known Stripe ID prefixes are preflighted before direct retrieval commands and before investigations whose input type is constrained. On a `get` command, a confidently wrong known prefix returns an `@unresolved` record on stdout (exit 0) with `fixable_by=agent` and a better command suggestion — it is treated as an item-level miss, not a command-level error. Unknown values still pass through to Stripe or search flows so invoice numbers and unusual future Stripe IDs are not blocked prematurely. Investigation commands can deliberately accept related IDs when the relationship is recoverable, such as `invoice`, `charge`, and `payment_intent` IDs for `investigate incoming-payment`.
 
 ## Command surface
 

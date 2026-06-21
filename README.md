@@ -7,7 +7,7 @@ Stripe incident triage CLI for AI agents. It is designed for read-heavy investig
 - **Keychain-first credentials**: API keys are stored in macOS Keychain and are never printed back to the caller.
 - **Multi-profile support**: configure aliases for sandbox, live, organization, or holding-account workflows.
 - **Stripe context aware**: supports `Stripe-Context` for organization keys and related-account requests.
-- **LLM-shaped output**: lists default to NDJSON, single resources default to JSON, sensitive Stripe fields are redacted by default, and errors include `fixable_by` plus hints.
+- **LLM-shaped output**: lists default to NDJSON, single `get` commands also default to NDJSON (one line; pass `--format json` for the object), sensitive Stripe fields are redacted by default, and errors include `fixable_by` plus hints.
 - **Bounded Stripe retries**: transient Stripe `429` responses retry with exponential backoff and jitter before returning a retryable error.
 - **Read-first triage**: balance, events, PaymentIntents, charges, disputes, accounts, and a GET-only raw API escape hatch.
 - **Subscription investigation**: inspect subscriptions, subscription items, invoices, and payment failures from one command group.
