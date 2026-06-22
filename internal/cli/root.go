@@ -8,6 +8,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/config"
 	"github.com/shhac/agent-stripe/internal/output"
 	libcli "github.com/shhac/lib-agent-cli/cli"
+	agentmcp "github.com/shhac/lib-agent-mcp"
 )
 
 func newRootCmd(version string) *cobra.Command {
@@ -69,6 +70,11 @@ func newRootCmd(version string) *cobra.Command {
 	registerRawAPI(root, globalsFunc)
 
 	installGroupUnknownHandlers(root)
+
+	// Expose the whole command tree as an MCP server (added last, so it reflects
+	// the complete tree). --color/--expose are output-shaping, irrelevant to a
+	// tool call, so hide them from the generated schemas.
+	root.AddCommand(agentmcp.Command(root, agentmcp.WithHiddenFlags("color", "expose")))
 
 	return root
 }
