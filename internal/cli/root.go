@@ -23,6 +23,7 @@ func newRootCmd(version string) *cobra.Command {
 		Version:       version,
 		Globals:       &globals.Globals,
 		DefaultFormat: output.FormatNDJSON,
+		Redacts:       true,
 		UnknownHint:   "run 'agent-stripe usage' to see the available domains",
 	})
 
