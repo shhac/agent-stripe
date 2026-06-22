@@ -75,6 +75,91 @@ func TestRedactSensitiveFieldsByDefault(t *testing.T) {
 	assertRedactionPath(t, notes, "metadata.api_token")
 }
 
+func TestRedactNameByObjectContext(t *testing.T) {
+	cases := []struct {
+		name       string
+		input      map[string]any
+		path       []string // path of keys to reach the "name" field
+		wantRedact bool
+	}{
+		{
+			name: "name on customer object is redacted",
+			input: map[string]any{
+				"object": "customer",
+				"name":   "Jane Doe",
+			},
+			path:       []string{"name"},
+			wantRedact: true,
+		},
+		{
+			name: "name on account object is redacted",
+			input: map[string]any{
+				"object": "account",
+				"name":   "Acme Inc",
+			},
+			path:       []string{"name"},
+			wantRedact: true,
+		},
+		{
+			name: "name in nested sub-object of customer inherits redaction",
+			input: map[string]any{
+				"object": "customer",
+				"shipping": map[string]any{
+					"name": "Jane Doe",
+				},
+			},
+			path:       []string{"shipping", "name"},
+			wantRedact: true,
+		},
+		{
+			name: "name under billing_details is redacted",
+			input: map[string]any{
+				"object": "charge",
+				"billing_details": map[string]any{
+					"name": "Jane Doe",
+				},
+			},
+			path:       []string{"billing_details", "name"},
+			wantRedact: true,
+		},
+		{
+			name: "name on a product object is not redacted",
+			input: map[string]any{
+				"object": "product",
+				"name":   "Basic Plan",
+			},
+			path:       []string{"name"},
+			wantRedact: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			redacted := Redact(tc.input, RedactionOptions{}).(map[string]any)
+			got := nestedValue(t, redacted, tc.path)
+			if tc.wantRedact && got != RedactedString {
+				t.Fatalf("name = %#v, want redacted marker", got)
+			}
+			if !tc.wantRedact && got == RedactedString {
+				t.Fatalf("name = %#v, want unredacted", got)
+			}
+		})
+	}
+}
+
+func nestedValue(t *testing.T, m map[string]any, path []string) any {
+	t.Helper()
+	var cur any = m
+	for _, key := range path {
+		asMap, ok := cur.(map[string]any)
+		if !ok {
+			t.Fatalf("expected map at key %q, got %#v", key, cur)
+		}
+		cur = asMap[key]
+	}
+	return cur
+}
+
 func TestRedactHonorsExposeByPathOrKey(t *testing.T) {
 	input := map[string]any{
 		"client_secret": "pi_mock_123_secret_fake",
