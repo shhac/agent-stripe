@@ -35,7 +35,6 @@ func newRootCmd(version string) *cobra.Command {
 	pf.StringVar(&globals.Context, "context", "", "Stripe-Context value for organization or related-account requests")
 	pf.StringVar(&globals.APIKey, "api-key", "", "API key override; never printed or persisted")
 	pf.StringVar(&globals.BaseURL, "base-url", "", "Stripe API base URL override for tests")
-	pf.StringArrayVar(&globals.Expose, "expose", nil, "Expose redacted Stripe response fields by path or key; comma-separated/repeatable")
 	pf.IntVar(&globals.MaxRetries, "max-retries", 2, "Maximum automatic retries for transient Stripe 429 responses")
 	pf.StringVar(&globals.APIVersion, "api-version", "", "Stripe API version header override")
 	_ = pf.MarkHidden("base-url")

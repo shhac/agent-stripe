@@ -2,22 +2,28 @@ package output
 
 import (
 	"strings"
+
+	out "github.com/shhac/lib-agent-output"
 )
 
+// RedactionOptions carries the per-call --expose allowlist. agent-stripe threads
+// the global --expose flag through each Redact call rather than a package global.
 type RedactionOptions struct {
 	Expose []string
 }
 
-const RedactedString = "[REDACTED]"
+// RedactedString is the masked-value placeholder. It matches the shared
+// out.RedactedPlaceholder so callers and tests can refer to either.
+const RedactedString = out.RedactedPlaceholder
 
-type RedactionNote struct {
-	Path       string `json:"path"`
-	Reason     string `json:"reason"`
-	ExposeHint string `json:"expose_hint"`
-}
+// RedactionNote re-exports the shared note shape (the @redacted list entry).
+type RedactionNote = out.RedactionNote
 
+// ParseExpose splits comma-joined --expose entries into normalized tokens. Kept
+// for callers/tests; the shared out.Redact does the same normalization
+// internally, so the raw Expose slice can also be passed straight through.
 func ParseExpose(values []string) []string {
-	var out []string
+	var result []string
 	seen := map[string]bool{}
 	for _, value := range values {
 		for _, part := range strings.Split(value, ",") {
@@ -26,81 +32,71 @@ func ParseExpose(values []string) []string {
 				continue
 			}
 			seen[normalized] = true
-			out = append(out, normalized)
+			result = append(result, normalized)
 		}
 	}
-	return out
+	return result
 }
 
+// Redact masks agent-stripe's sensitive fields using the shared redaction
+// MECHANISM (the walk, the [REDACTED] placeholder, the @redacted notes, and
+// --expose matching all live in lib-agent-output). What stays here is the
+// POLICY — stripeSecrets() decides WHICH fields are secret.
 func Redact(data any, opts RedactionOptions) any {
 	cleaned, ok := toCleanAny(data, false)
 	if !ok {
 		return data
 	}
-	expose := exposeSet(ParseExpose(opts.Expose))
-	result, notes := redactValue(cleaned, "", "", expose)
-	if len(notes) == 0 {
-		return result
-	}
-	if item, ok := result.(map[string]any); ok {
-		item["@redacted"] = notes
-	}
-	return result
+	return out.Redact(cleaned, stripeSecrets(cleaned), opts.Expose)
 }
 
-func redactValue(value any, path, currentObject string, expose map[string]bool) (any, []RedactionNote) {
-	switch v := value.(type) {
+// stripeSecrets is agent-stripe's redaction POLICY expressed as an
+// out.RedactRule. It masks a fixed list of secret-named fields, any key that
+// contains a secret-ish substring, and the object-context-sensitive "name"
+// field (PII on customer/account objects — including their nested sub-objects —
+// or under billing_details).
+//
+// The shared out.RedactRule only exposes the immediate enclosing map, but the
+// "name" policy is inherited: a name anywhere inside a customer/account subtree
+// is PII. So we precompute, in one read-only pass, the effective Stripe object
+// for every path prefix and close the rule over it. The lib still owns the
+// MECHANISM (the masking walk, [REDACTED] placeholder, @redacted notes, and
+// --expose handling).
+func stripeSecrets(decoded any) out.RedactRule {
+	objects := map[string]string{}
+	indexObjectContext(decoded, "", "", objects)
+	return func(path, key string, _ any, _ map[string]any) bool {
+		return shouldRedactField(key, path, objects[path])
+	}
+}
+
+// indexObjectContext records, for each field path, the nearest enclosing Stripe
+// object type, inheriting it into nested maps/arrays that lack their own
+// "object" marker (mirroring the old walk's currentObject inheritance).
+func indexObjectContext(value any, path, object string, into map[string]string) {
+	switch val := value.(type) {
 	case map[string]any:
-		return redactMap(v, path, currentObject, expose)
-	case []any:
-		return redactSlice(v, path, currentObject, expose)
-	default:
-		return value, nil
-	}
-}
-
-func redactMap(item map[string]any, path, currentObject string, expose map[string]bool) (map[string]any, []RedactionNote) {
-	if object, ok := item["object"].(string); ok && object != "" {
-		currentObject = object
-	}
-	out := make(map[string]any, len(item))
-	var notes []RedactionNote
-	for key, value := range item {
-		fieldPath := joinRedactionPath(path, key)
-		if shouldRedactField(key, fieldPath, currentObject) && !isExposed(key, fieldPath, expose) {
-			note := RedactionNote{
-				Path:       fieldPath,
-				Reason:     "sensitive_field",
-				ExposeHint: "--expose " + fieldPath,
-			}
-			out[key] = redactedPlaceholder(value)
-			notes = append(notes, note)
-			continue
+		if o, ok := val["object"].(string); ok && o != "" {
+			object = o
 		}
-		redacted, childNotes := redactValue(value, fieldPath, currentObject, expose)
-		out[key] = redacted
-		notes = append(notes, childNotes...)
-	}
-	return out, notes
-}
-
-func redactedPlaceholder(value any) any {
-	if value == nil {
-		return nil
-	}
-	return RedactedString
-}
-
-func redactSlice(items []any, path, currentObject string, expose map[string]bool) ([]any, []RedactionNote) {
-	out := make([]any, len(items))
-	var notes []RedactionNote
-	for idx, item := range items {
+		for key, child := range val {
+			childPath := joinRedactionPath(path, key)
+			into[childPath] = object
+			indexObjectContext(child, childPath, object, into)
+		}
+	case []any:
 		itemPath := path + "[]"
-		redacted, childNotes := redactValue(item, itemPath, currentObject, expose)
-		out[idx] = redacted
-		notes = append(notes, childNotes...)
+		for _, item := range val {
+			indexObjectContext(item, itemPath, object, into)
+		}
 	}
-	return out, notes
+}
+
+func joinRedactionPath(base, key string) string {
+	if base == "" {
+		return key
+	}
+	return base + "." + key
 }
 
 func shouldRedactField(key, path, object string) bool {
@@ -123,38 +119,6 @@ func shouldRedactField(key, path, object string) bool {
 		strings.Contains(k, "api_key")
 }
 
-func isExposed(key, path string, expose map[string]bool) bool {
-	if len(expose) == 0 {
-		return false
-	}
-	normalizedPath := normalizeExpose(path)
-	normalizedKey := normalizeExpose(key)
-	if expose["all"] || expose["*"] || expose[normalizedPath] || expose[normalizedKey] {
-		return true
-	}
-	for allowed := range expose {
-		if allowed != "" && strings.HasPrefix(normalizedPath, allowed+".") {
-			return true
-		}
-	}
-	return false
-}
-
-func exposeSet(values []string) map[string]bool {
-	out := make(map[string]bool, len(values))
-	for _, value := range values {
-		out[value] = true
-	}
-	return out
-}
-
 func normalizeExpose(value string) string {
 	return strings.Trim(strings.ToLower(strings.TrimSpace(value)), ".")
-}
-
-func joinRedactionPath(base, key string) string {
-	if base == "" {
-		return key
-	}
-	return base + "." + key
 }

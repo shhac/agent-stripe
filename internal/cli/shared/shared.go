@@ -35,7 +35,6 @@ type GlobalFlags struct {
 	Context    string
 	APIKey     string
 	BaseURL    string
-	Expose     []string
 	MaxRetries int
 	APIVersion string
 }
