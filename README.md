@@ -181,4 +181,4 @@ AGENT_STRIPE_BASE_URL=http://127.0.0.1:12111 agent-stripe --api-key sk_test_mock
 
 ## License
 
-MIT
+PolyForm Perimeter License 1.0.0 — see [LICENSE](LICENSE).
