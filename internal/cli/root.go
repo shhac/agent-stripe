@@ -6,6 +6,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/auth"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 	"github.com/shhac/agent-stripe/internal/config"
+	"github.com/shhac/agent-stripe/internal/credential"
 	"github.com/shhac/agent-stripe/internal/output"
 	libcli "github.com/shhac/lib-agent-cli/cli"
 	agentmcp "github.com/shhac/lib-agent-mcp"
@@ -82,7 +83,7 @@ func newRootCmd(version string) *cobra.Command {
 	exposeGroups(root,
 		"accounts", "api", "application-fees", "balance", "balance-transactions", "charges", "checkout-sessions", "connect", "customers", "disputes", "early-fraud-warnings", "events", "investigate", "invoices", "payment-intents", "payment-links", "payment-methods", "payments", "payouts", "prices", "products", "refunds", "setup-intents", "subscriptions", "transfers")
 
-	root.AddCommand(agentmcp.Command(root, agentmcp.WithHiddenFlags("color", "expose")))
+	root.AddCommand(agentmcp.Command(root, agentmcp.WithHiddenFlags("color", "expose"), agentmcp.WithOAuthKeyringService(credential.MCPKeychainService())))
 
 	return root
 }
