@@ -1,7 +1,7 @@
 ---
 name: agent-stripe
 description: |
-  Triage and investigate Stripe incidents, payments, invoices, subscriptions, disputes, refunds, balances, connected accounts, transfers, payouts, checkout, catalog/pricing, payment links, Radar warnings, and organization-account context. Use when:
+  Triage and investigate Stripe payments, invoices, and subscriptions. Covers incidents, disputes, refunds, balances, connected accounts, transfers, payouts, checkout, catalog/pricing, payment links, Radar warnings, and organization-account context. Use when:
   - Explaining failed or successful customer payments
   - Finding invoice payment details, card last4, or PaymentIntent metadata
   - Investigating subscriptions, renewal timing, collection risk, or past-due invoices
