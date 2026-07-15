@@ -162,9 +162,13 @@ make mock-dev ARGS="events list --type charge.failed"
 make dev ARGS="usage"
 ```
 
-## LLM Skill
+## Claude Code / AI agent skill
 
-The bundled skill lives at `skills/agent-stripe/SKILL.md`. It keeps the core safety and workflow guidance short, with deeper command, output, and scenario references in `skills/agent-stripe/references/`.
+```bash
+npx skills add shhac/agent-skills --skill agent-stripe --global
+```
+
+Installs the `agent-stripe` skill globally so Claude Code (and other AI agents) can discover and use it automatically. It ships from [`shhac/agent-skills`](https://github.com/shhac/agent-skills) — the whole family's skills in one repo, so `npx skills update` checks a single source no matter how many you use. Want several at once? Run `npx skills add shhac/agent-skills --global` and pick from the list.
 
 ## Mock Stripe
 
