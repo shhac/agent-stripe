@@ -65,8 +65,8 @@ func Redact(data any, opts RedactionOptions) any {
 func stripeSecrets(decoded any) out.RedactRule {
 	objects := map[string]string{}
 	indexObjectContext(decoded, "", "", objects)
-	return func(path, key string, _ any, _ map[string]any) bool {
-		return shouldRedactField(key, path, objects[path])
+	return func(field out.RedactField) bool {
+		return shouldRedactField(field.Key, field.Path, objects[field.Path])
 	}
 }
 
