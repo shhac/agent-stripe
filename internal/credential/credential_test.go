@@ -2,15 +2,21 @@ package credential
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/shhac/agent-stripe/internal/config"
 )
 
+// fakeKeychain stands in for the OS keychain, which is safe for concurrent
+// use — so this must be too, or the concurrency tests below report a race in
+// the double rather than exercising the code under test.
 type fakeKeychain struct {
+	mu        sync.Mutex
 	values    map[string]string
 	deleted   []string
 	err       error
@@ -21,6 +27,8 @@ func (f *fakeKeychain) Store(name, apiKey string) error {
 	if f.err != nil {
 		return f.err
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.values == nil {
 		f.values = map[string]string{}
 	}
@@ -32,6 +40,8 @@ func (f *fakeKeychain) Get(name string) (string, error) {
 	if f.err != nil {
 		return "", f.err
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	value, ok := f.values[name]
 	if !ok {
 		return "", errors.New("not found")
@@ -43,6 +53,8 @@ func (f *fakeKeychain) Delete(name string) error {
 	if f.deleteErr != nil {
 		return f.deleteErr
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.deleted = append(f.deleted, name)
 	delete(f.values, name)
 	return nil
@@ -220,5 +232,43 @@ func TestStore_Headless_FileFallback(t *testing.T) {
 	}
 	if _, err := Get("headless"); err == nil {
 		t.Error("expected NotFound after Remove")
+	}
+}
+
+// Concurrent stores must not lose each other's entries.
+//
+// This is the failure that matters most for this index: the keychain write
+// has already succeeded by the time the index is written, so an entry lost
+// to a racing writer leaves a live Stripe key in the OS keychain that
+// nothing references — invisible to `auth list` and unreachable by `auth
+// remove`, which looks the name up in the index first. Before this went
+// through creds.Store.Update, twenty concurrent writers left a single
+// surviving entry.
+func TestConcurrentStoresDoNotLoseEntries(t *testing.T) {
+	withCredentialTestDir(t, &fakeKeychain{})
+
+	const writers = 20
+	var wg sync.WaitGroup
+	for i := range writers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if _, err := Store(fmt.Sprintf("profile-%02d", i), fmt.Sprintf("sk_test_%02d", i)); err != nil {
+				t.Errorf("Store: %v", err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	for i := range writers {
+		name := fmt.Sprintf("profile-%02d", i)
+		got, err := Get(name)
+		if err != nil {
+			t.Errorf("%s was lost from the index — its keychain secret is now orphaned: %v", name, err)
+			continue
+		}
+		if want := fmt.Sprintf("sk_test_%02d", i); got != want {
+			t.Errorf("%s round-tripped as %q, want %q", name, got, want)
+		}
 	}
 }

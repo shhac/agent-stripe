@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -102,5 +104,49 @@ func TestConfigMissingProfileErrors(t *testing.T) {
 	}
 	if err := UpdateProfile("missing", func(profile Profile) Profile { return profile }); err == nil {
 		t.Fatalf("UpdateProfile() should fail for a missing profile")
+	}
+}
+
+// Concurrent StoreProfile calls must not lose each other's profiles.
+//
+// config.json is a read-modify-write over one shared file: two concurrent
+// writers each building their write from a snapshot taken before the other
+// landed silently erase each other's profile. Before StoreProfile went
+// through the locked update(), this reliably lost profiles under
+// concurrency (measured elsewhere in this family: 20 concurrent writers left
+// a single survivor).
+func TestConcurrentStoreProfileDoesNotLoseEntries(t *testing.T) {
+	dir := t.TempDir()
+	SetConfigDir(dir)
+	t.Cleanup(func() { SetConfigDir("") })
+
+	const writers = 20
+	var wg sync.WaitGroup
+	for i := range writers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			alias := fmt.Sprintf("profile-%02d", i)
+			if err := StoreProfile(alias, Profile{Context: fmt.Sprintf("acct_%02d", i)}); err != nil {
+				t.Errorf("StoreProfile(%s): %v", alias, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	cfg := Read()
+	for i := range writers {
+		alias := fmt.Sprintf("profile-%02d", i)
+		profile, ok := cfg.Profiles[alias]
+		if !ok {
+			t.Errorf("%s was lost from config.json", alias)
+			continue
+		}
+		if want := fmt.Sprintf("acct_%02d", i); profile.Context != want {
+			t.Errorf("%s.Context = %q, want %q", alias, profile.Context, want)
+		}
+	}
+	if len(cfg.Profiles) != writers {
+		t.Errorf("Profiles has %d entries, want %d", len(cfg.Profiles), writers)
 	}
 }
