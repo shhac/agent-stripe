@@ -272,3 +272,39 @@ func TestConcurrentStoresDoNotLoseEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestGetWithBackendReportsFileFallback(t *testing.T) {
+	// No keychain available: Store falls back to the index file, and the caller
+	// must be told so rather than being shown "keychain".
+	withCredentialTestDir(t, &fakeKeychain{err: errors.New("keychain unavailable")})
+
+	storage, err := Store("prod", "sk_test_file")
+	if err != nil {
+		t.Fatalf("Store() error = %v", err)
+	}
+	if storage != BackendFile {
+		t.Fatalf("Store() storage = %q, want %q", storage, BackendFile)
+	}
+
+	apiKey, backend, err := GetWithBackend("prod")
+	if err != nil {
+		t.Fatalf("GetWithBackend() error = %v", err)
+	}
+	if apiKey != "sk_test_file" || backend != BackendFile {
+		t.Fatalf("GetWithBackend() = %q, %q; want the key from the file backend", apiKey, backend)
+	}
+	if got, err := Backend("prod"); err != nil || got != BackendFile {
+		t.Fatalf("Backend() = %q, %v; want %q", got, err, BackendFile)
+	}
+}
+
+func TestGetWithBackendReportsKeychain(t *testing.T) {
+	withCredentialTestDir(t, &fakeKeychain{})
+	if _, err := Store("prod", "sk_test_keychain"); err != nil {
+		t.Fatalf("Store() error = %v", err)
+	}
+	apiKey, backend, err := GetWithBackend("prod")
+	if err != nil || apiKey != "sk_test_keychain" || backend != BackendKeychain {
+		t.Fatalf("GetWithBackend() = %q, %q, %v", apiKey, backend, err)
+	}
+}

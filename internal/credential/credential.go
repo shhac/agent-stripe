@@ -14,6 +14,13 @@ import (
 // the raw key is kept in the 0600 index file instead.
 const keychainSentinel = "__KEYCHAIN__"
 
+// Backend names for where a stored credential actually lives. Reporting the
+// wrong one understates how exposed the key is.
+const (
+	BackendKeychain = "keychain"
+	BackendFile     = "file"
+)
+
 type credentialEntry struct {
 	APIKey          string `json:"api_key,omitempty"`
 	KeychainManaged bool   `json:"keychain_managed"`
@@ -72,11 +79,11 @@ func updateIndex(mutate func(index map[string]credentialEntry) error) error {
 // choice.
 func Store(name, apiKey string) (string, error) {
 	entry := credentialEntry{APIKey: apiKey}
-	storage := "file"
+	storage := BackendFile
 	if err := keychain.Store(name, apiKey); err == nil {
 		entry.APIKey = keychainSentinel
 		entry.KeychainManaged = true
-		storage = "keychain"
+		storage = BackendKeychain
 	}
 
 	// The index write is the step that must not race: the keychain already
@@ -92,6 +99,32 @@ func Store(name, apiKey string) (string, error) {
 }
 
 func Get(name string) (string, error) {
+	apiKey, _, err := GetWithBackend(name)
+	return apiKey, err
+}
+
+// GetWithBackend returns the key and where it came from ("keychain" or
+// "file"). Callers that report a credential's storage location must use this:
+// assuming "keychain" understates the exposure on a host where the keychain was
+// unavailable and the key landed in the index file instead.
+func GetWithBackend(name string) (string, string, error) {
+	index, err := readIndex()
+	if err != nil {
+		return "", "", err
+	}
+	entry, ok := index[name]
+	if !ok {
+		return "", "", &NotFoundError{Name: name}
+	}
+	if entry.KeychainManaged {
+		apiKey, err := keychain.Get(name)
+		return apiKey, BackendKeychain, err
+	}
+	return entry.APIKey, BackendFile, nil
+}
+
+// Backend returns where a stored credential lives without reading the secret.
+func Backend(name string) (string, error) {
 	index, err := readIndex()
 	if err != nil {
 		return "", err
@@ -101,9 +134,9 @@ func Get(name string) (string, error) {
 		return "", &NotFoundError{Name: name}
 	}
 	if entry.KeychainManaged {
-		return keychain.Get(name)
+		return BackendKeychain, nil
 	}
-	return entry.APIKey, nil
+	return BackendFile, nil
 }
 
 func Remove(name string) error {

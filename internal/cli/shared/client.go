@@ -21,7 +21,7 @@ type ResolvedProfile struct {
 	BaseURL          string
 }
 
-var credentialGet = credential.Get
+var credentialGet = credential.GetWithBackend
 
 func ResolveProfile(flags *GlobalFlags) (*ResolvedProfile, error) {
 	cfg := config.Read()
@@ -41,7 +41,7 @@ func ResolveProfile(flags *GlobalFlags) (*ResolvedProfile, error) {
 		return nil, agenterrors.Newf(agenterrors.FixableByHuman, "Profile %q is not configured", alias).
 			WithHint("Run 'agent-stripe auth list' to see configured profiles")
 	}
-	apiKey, err := credentialGet(alias)
+	apiKey, backend, err := credentialGet(alias)
 	if err != nil {
 		return nil, agenterrors.Wrap(err, agenterrors.FixableByHuman).
 			WithHint("Re-add the profile with 'agent-stripe auth add " + alias + " --api-key <key>'")
@@ -52,7 +52,7 @@ func ResolveProfile(flags *GlobalFlags) (*ResolvedProfile, error) {
 		Alias:            alias,
 		Profile:          profile,
 		APIKey:           apiKey,
-		CredentialSource: "keychain",
+		CredentialSource: backend,
 		BaseURL:          resolveBaseURL(flags),
 	}, nil
 }

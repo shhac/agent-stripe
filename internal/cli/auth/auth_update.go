@@ -192,7 +192,7 @@ func (r authUpdateResult) output() map[string]any {
 		"context":        r.profile.Context,
 		"api_version":    r.profile.APIVersion,
 		"v2_api_version": r.profile.V2APIVersion,
-		"credential":     "keychain",
+		"credential":     credentialBackend(r.alias),
 	}
 	addCredentialType(fields, r.profile)
 	if r.keyRequested {

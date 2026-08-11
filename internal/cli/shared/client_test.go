@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/shhac/agent-stripe/internal/config"
+	"github.com/shhac/agent-stripe/internal/credential"
 )
 
 func withResolveProfileTest(t *testing.T) {
@@ -17,8 +18,8 @@ func withResolveProfileTest(t *testing.T) {
 	t.Setenv("STRIPE_API_VERSION", "")
 	t.Setenv("AGENT_STRIPE_BASE_URL", "")
 	previousGet := credentialGet
-	credentialGet = func(name string) (string, error) {
-		return "", errors.New("unexpected credential lookup for " + name)
+	credentialGet = func(name string) (string, string, error) {
+		return "", "", errors.New("unexpected credential lookup for " + name)
 	}
 	t.Cleanup(func() { credentialGet = previousGet })
 }
@@ -73,11 +74,11 @@ func TestResolveProfileStoredProfile(t *testing.T) {
 	if err := config.StoreProfile("prod", config.Profile{Context: "acct_saved"}); err != nil {
 		t.Fatalf("StoreProfile() error = %v", err)
 	}
-	credentialGet = func(name string) (string, error) {
+	credentialGet = func(name string) (string, string, error) {
 		if name != "prod" {
 			t.Fatalf("credential lookup name = %q", name)
 		}
-		return "sk_keychain", nil
+		return "sk_keychain", credential.BackendKeychain, nil
 	}
 
 	got, err := ResolveProfile(&GlobalFlags{Context: "acct_override"})
@@ -109,8 +110,8 @@ func TestResolveProfileMissingCredential(t *testing.T) {
 	if err := config.StoreProfile("prod", config.Profile{}); err != nil {
 		t.Fatalf("StoreProfile() error = %v", err)
 	}
-	credentialGet = func(name string) (string, error) {
-		return "", errors.New("missing key")
+	credentialGet = func(name string) (string, string, error) {
+		return "", credential.BackendKeychain, errors.New("missing key")
 	}
 
 	_, err := ResolveProfile(&GlobalFlags{})

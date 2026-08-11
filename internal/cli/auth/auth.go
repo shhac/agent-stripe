@@ -157,6 +157,17 @@ func registerDefault(parent *cobra.Command) {
 	parent.AddCommand(cmd)
 }
 
+// credentialBackend reports where a profile's key actually lives. It is looked
+// up rather than assumed: on a host without a usable keychain the key is in the
+// 0600 index file, and printing "keychain" there understates the exposure.
+func credentialBackend(alias string) string {
+	backend, err := credential.Backend(alias)
+	if err != nil {
+		return "unknown"
+	}
+	return backend
+}
+
 func registerList(parent *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -171,7 +182,7 @@ func registerList(parent *cobra.Command) {
 					"context":        profile.Context,
 					"api_version":    profile.APIVersion,
 					"v2_api_version": profile.V2APIVersion,
-					"credential":     "keychain",
+					"credential":     credentialBackend(alias),
 				}
 				addCredentialType(item, profile)
 				addCredentialTypeHint(item, item["credential_type"].(string), profile.CredentialType == "", alias)
