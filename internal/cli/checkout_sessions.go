@@ -52,3 +52,21 @@ func newCheckoutSessionLineItemsCommand(globals shared.GlobalsFunc) *cobra.Comma
 	cursor.AddFlags(lineItems)
 	return lineItems
 }
+
+func checkoutSessionListSummary(session map[string]any) map[string]any {
+	summary := map[string]any{}
+	copyString(summary, session, "id")
+	copyString(summary, session, "object")
+	copyNumber(summary, session, "created")
+	copyString(summary, session, "status")
+	copyString(summary, session, "mode")
+	copyString(summary, session, "payment_status")
+	copyString(summary, session, "customer")
+	copyExpandableID(summary, session, "payment_intent")
+	copyExpandableID(summary, session, "subscription")
+	copyExpandableID(summary, session, "payment_link")
+	copyNumber(summary, session, "amount_total")
+	copyString(summary, session, "currency")
+	copyNumber(summary, session, "expires_at")
+	return summary
+}

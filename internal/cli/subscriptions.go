@@ -113,3 +113,23 @@ OUTPUT NOTES
   Use --full or --expand-field for verbose item/product metadata.
   Redaction is independent from truncation; use --expose for redacted fields.
 `
+
+func subscriptionListSummary(sub map[string]any) map[string]any {
+	summary := map[string]any{}
+	copyString(summary, sub, "id")
+	copyString(summary, sub, "object")
+	copyNumber(summary, sub, "created")
+	copyString(summary, sub, "status")
+	copyString(summary, sub, "customer")
+	copyString(summary, sub, "collection_method")
+	copyExpandableID(summary, sub, "latest_invoice")
+	copyExpandableID(summary, sub, "default_payment_method")
+	copyNumber(summary, sub, "current_period_start")
+	copyNumber(summary, sub, "current_period_end")
+	copyBool(summary, sub, "cancel_at_period_end")
+	copyNumber(summary, sub, "cancel_at")
+	copyNumber(summary, sub, "canceled_at")
+	copyNumber(summary, sub, "trial_end")
+	addListDataCount(summary, sub, "items")
+	return summary
+}

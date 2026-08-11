@@ -26,3 +26,36 @@ func registerCharges(root *cobra.Command, globals shared.GlobalsFunc) {
 		},
 	})
 }
+
+func chargeListSummary(charge map[string]any) map[string]any {
+	summary := map[string]any{}
+	copyString(summary, charge, "id")
+	copyString(summary, charge, "object")
+	copyNumber(summary, charge, "created")
+	copyNumber(summary, charge, "amount")
+	copyNumber(summary, charge, "amount_captured")
+	copyNumber(summary, charge, "amount_refunded")
+	copyString(summary, charge, "currency")
+	copyString(summary, charge, "status")
+	copyBool(summary, charge, "paid")
+	copyBool(summary, charge, "refunded")
+	copyBool(summary, charge, "disputed")
+	copyString(summary, charge, "customer")
+	copyString(summary, charge, "payment_method")
+	copyExpandableID(summary, charge, "payment_intent")
+	copyExpandableID(summary, charge, "balance_transaction")
+	copyString(summary, charge, "failure_code")
+	copyString(summary, charge, "failure_message")
+	if details, ok := charge["payment_method_details"].(map[string]any); ok {
+		out := map[string]any{}
+		copyString(out, details, "type")
+		if card, ok := details["card"].(map[string]any); ok {
+			out["card"] = cardSummary(card)
+		}
+		if len(out) > 0 {
+			summary["payment_method_details"] = out
+		}
+	}
+	copySubset(summary, charge, "outcome", "type", "network_status", "risk_level", "seller_message")
+	return summary
+}

@@ -26,3 +26,22 @@ func registerPaymentIntents(root *cobra.Command, globals shared.GlobalsFunc) {
 		},
 	})
 }
+
+func paymentIntentListSummary(pi map[string]any) map[string]any {
+	summary := map[string]any{}
+	copyString(summary, pi, "id")
+	copyString(summary, pi, "object")
+	copyNumber(summary, pi, "created")
+	copyNumber(summary, pi, "amount")
+	copyNumber(summary, pi, "amount_received")
+	copyNumber(summary, pi, "amount_capturable")
+	copyString(summary, pi, "currency")
+	copyString(summary, pi, "status")
+	copyString(summary, pi, "customer")
+	copyString(summary, pi, "payment_method")
+	copyExpandableID(summary, pi, "latest_charge")
+	copyString(summary, pi, "invoice")
+	copyString(summary, pi, "capture_method")
+	copySubset(summary, pi, "last_payment_error", "code", "decline_code", "type", "payment_method_type", "message")
+	return summary
+}

@@ -117,3 +117,27 @@ func copySubset(summary, in map[string]any, key string, fields ...string) {
 		summary[key] = out
 	}
 }
+
+func copyExpandableID(out, in map[string]any, key string) {
+	switch value := in[key].(type) {
+	case string:
+		if value != "" {
+			out[key] = value
+		}
+	case map[string]any:
+		if id, ok := value["id"].(string); ok && id != "" {
+			out[key] = id
+		}
+	}
+}
+
+func addListDataCount(out, in map[string]any, key string) {
+	list, ok := in[key].(map[string]any)
+	if !ok {
+		return
+	}
+	data, ok := list["data"].([]any)
+	if ok && len(data) > 0 {
+		out[key+"_count"] = len(data)
+	}
+}

@@ -68,3 +68,28 @@ func registerEvents(root *cobra.Command, globals shared.GlobalsFunc) {
 	events.AddCommand(list)
 	root.AddCommand(events)
 }
+
+func eventListSummary(event map[string]any) map[string]any {
+	summary := map[string]any{}
+	copyString(summary, event, "id")
+	copyString(summary, event, "object")
+	copyString(summary, event, "type")
+	copyNumber(summary, event, "created")
+	copyBool(summary, event, "livemode")
+	copyString(summary, event, "api_version")
+	copyString(summary, event, "account")
+	copySubset(summary, event, "request", "id", "idempotency_key")
+	if data, ok := event["data"].(map[string]any); ok {
+		if object, ok := data["object"].(map[string]any); ok {
+			out := map[string]any{}
+			copyString(out, object, "id")
+			copyString(out, object, "object")
+			copyString(out, object, "status")
+			copyString(out, object, "customer")
+			if len(out) > 0 {
+				summary["data_object"] = out
+			}
+		}
+	}
+	return summary
+}

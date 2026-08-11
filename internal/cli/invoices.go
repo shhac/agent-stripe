@@ -105,3 +105,24 @@ OUTPUT NOTES
   Invoice lists are compact by default; use invoices list --full or invoices get in_... when you need raw expanded fields.
   Sensitive URLs and customer contact fields are redacted by default; use --expose only when needed.
 `
+
+func invoiceListSummary(invoice map[string]any) map[string]any {
+	summary := map[string]any{}
+	copyString(summary, invoice, "id")
+	copyString(summary, invoice, "object")
+	copyString(summary, invoice, "number")
+	copyNumber(summary, invoice, "created")
+	copyString(summary, invoice, "status")
+	copyBool(summary, invoice, "paid")
+	copyNumber(summary, invoice, "amount_due")
+	copyNumber(summary, invoice, "amount_paid")
+	copyNumber(summary, invoice, "amount_remaining")
+	copyString(summary, invoice, "currency")
+	copyString(summary, invoice, "customer")
+	copyExpandableID(summary, invoice, "subscription")
+	copyExpandableID(summary, invoice, "payment_intent")
+	copyNumber(summary, invoice, "attempt_count")
+	copyNumber(summary, invoice, "next_payment_attempt")
+	copyNumber(summary, invoice, "due_date")
+	return summary
+}
