@@ -104,12 +104,15 @@ func shouldRedactField(key, path, object string) bool {
 	p := strings.ToLower(path)
 	switch k {
 	case "client_secret", "secret", "api_key", "access_token", "refresh_token", "password",
-		"email", "customer_email", "receipt_email", "phone", "fingerprint", "iin",
-		"network_transaction_id", "authorization_code", "receipt_url", "hosted_invoice_url",
-		"invoice_pdf", "request_log_url":
+		"email", "customer_email", "receipt_email", "contact_email", "phone", "contact_phone",
+		"fingerprint", "iin", "network_transaction_id", "authorization_code", "receipt_url",
+		"hosted_invoice_url", "invoice_pdf", "request_log_url",
+		// Accounts v2 identity carries dates of birth on person objects; there is
+		// no triage question that needs the value rather than its presence.
+		"date_of_birth":
 		return true
-	case "name":
-		return object == "customer" || object == "account" || strings.Contains(p, "billing_details.name")
+	case "name", "given_name", "surname", "legal_name":
+		return isAccountLikeObject(object) || strings.Contains(p, "billing_details.name")
 	}
 	return strings.Contains(k, "secret") ||
 		strings.Contains(k, "password") ||
@@ -117,6 +120,17 @@ func shouldRedactField(key, path, object string) bool {
 		strings.Contains(k, "access_token") ||
 		strings.Contains(k, "refresh_token") ||
 		strings.Contains(k, "api_key")
+}
+
+// isAccountLikeObject covers the object types whose person-name fields are PII:
+// v1 customers and accounts, and their Accounts v2 equivalents. display_name on
+// a v2 account is a business-facing label, not a person, so it is not masked.
+func isAccountLikeObject(object string) bool {
+	switch object {
+	case "customer", "account", "v2.core.account", "v2.core.account_person":
+		return true
+	}
+	return false
 }
 
 func normalizeExpose(value string) string {

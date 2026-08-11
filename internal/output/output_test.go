@@ -189,3 +189,76 @@ func assertRedactionPath(t *testing.T, notes []RedactionNote, path string) {
 	}
 	t.Fatalf("@redacted missing path %q in %#v", path, notes)
 }
+
+func TestRedactAccountsV2IdentityFields(t *testing.T) {
+	person := map[string]any{
+		"object":        "v2.core.account_person",
+		"id":            "person_123",
+		"account":       "acct_123",
+		"given_name":    "Jenny",
+		"surname":       "Rosen",
+		"email":         "jenny.rosen@example.com",
+		"date_of_birth": map[string]any{"day": 28, "month": 1, "year": 1988},
+		"id_numbers":    []any{map[string]any{"type": "us_ssn_last_4"}},
+		"relationship":  map[string]any{"representative": true, "title": "CEO"},
+	}
+
+	got, ok := Redact(person, RedactionOptions{}).(map[string]any)
+	if !ok {
+		t.Fatalf("Redact() returned %T, want map", got)
+	}
+	for _, key := range []string{"given_name", "surname", "email", "date_of_birth"} {
+		if got[key] != RedactedString {
+			t.Fatalf("%s = %#v, want redacted", key, got[key])
+		}
+	}
+	// Relationship and ID-number types are what triage needs, and Stripe never
+	// returns the ID number itself.
+	relationship, _ := got["relationship"].(map[string]any)
+	if relationship["title"] != "CEO" || relationship["representative"] != true {
+		t.Fatalf("relationship = %#v, want it kept visible", got["relationship"])
+	}
+	idNumbers, _ := got["id_numbers"].([]any)
+	first, _ := idNumbers[0].(map[string]any)
+	if first["type"] != "us_ssn_last_4" {
+		t.Fatalf("id_numbers = %#v, want the type kept visible", got["id_numbers"])
+	}
+	if got["id"] != "person_123" || got["account"] != "acct_123" {
+		t.Fatalf("navigation IDs should stay visible: %#v", got)
+	}
+}
+
+func TestRedactKeepsV2AccountDisplayNameButMasksContact(t *testing.T) {
+	account := map[string]any{
+		"object":        "v2.core.account",
+		"id":            "acct_123",
+		"display_name":  "Furever Grooming",
+		"contact_email": "owner@furever.example.com",
+		"contact_phone": "+15550101001",
+		"identity": map[string]any{
+			"country":     "us",
+			"entity_type": "company",
+			"business_details": map[string]any{
+				"registered_name": "Furever Inc",
+			},
+		},
+	}
+
+	got, ok := Redact(account, RedactionOptions{}).(map[string]any)
+	if !ok {
+		t.Fatalf("Redact() returned %T, want map", got)
+	}
+	// display_name is a business label, not a person.
+	if got["display_name"] != "Furever Grooming" {
+		t.Fatalf("display_name = %#v, want it visible", got["display_name"])
+	}
+	for _, key := range []string{"contact_email", "contact_phone"} {
+		if got[key] != RedactedString {
+			t.Fatalf("%s = %#v, want redacted", key, got[key])
+		}
+	}
+	identity, _ := got["identity"].(map[string]any)
+	if identity["country"] != "us" || identity["entity_type"] != "company" {
+		t.Fatalf("identity = %#v, want country/entity_type visible", identity)
+	}
+}
