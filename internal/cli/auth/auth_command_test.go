@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -278,4 +279,47 @@ func parseAuthNDJSON(t *testing.T, raw string) map[string]map[string]any {
 		}
 	}
 	return items
+}
+
+func TestApplyAuthAddStoresProfileAndReportsBackend(t *testing.T) {
+	newAuthCommandHarness(t)
+
+	result, err := applyAuthAdd(context.Background(), "sandbox", authAddOptions{
+		apiKey:       "sk_test_abc",
+		contextValue: "acct_platform/acct_connected",
+	})
+	if err != nil {
+		t.Fatalf("applyAuthAdd() error = %v", err)
+	}
+
+	fields := result.output()
+	if fields["status"] != "added" || fields["profile"] != "sandbox" {
+		t.Fatalf("output = %#v", fields)
+	}
+	// Versions come back from the stored profile, so the receipt cannot drift
+	// from what was actually persisted.
+	if fields["api_version"] != config.DefaultAPIVersion || fields["v2_api_version"] != config.DefaultV2APIVersion {
+		t.Fatalf("versions = %#v", fields)
+	}
+	if fields["context"] != "acct_platform/acct_connected" {
+		t.Fatalf("context = %#v", fields["context"])
+	}
+	if fields["credential_type"] != "sk_test" {
+		t.Fatalf("credential_type = %#v", fields["credential_type"])
+	}
+	if _, leaked := fields["api_key"]; leaked {
+		t.Fatalf("receipt must never carry the key: %#v", fields)
+	}
+	for _, value := range fields {
+		if text, ok := value.(string); ok && strings.Contains(text, "sk_test_abc") {
+			t.Fatalf("receipt leaked the key: %#v", fields)
+		}
+	}
+}
+
+func TestApplyAuthAddRequiresAKey(t *testing.T) {
+	newAuthCommandHarness(t)
+	if _, err := applyAuthAdd(context.Background(), "sandbox", authAddOptions{}); err == nil {
+		t.Fatalf("applyAuthAdd() error = nil, want the missing-key error")
+	}
 }
