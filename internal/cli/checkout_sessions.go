@@ -13,7 +13,6 @@ func registerCheckoutSessions(root *cobra.Command, globals shared.GlobalsFunc) {
 		use:         "checkout-sessions",
 		aliases:     []string{"checkout_sessions"},
 		short:       "Checkout Session lookup and line items",
-		path:        "/v1/checkout/sessions",
 		idName:      "checkout-session-id",
 		idKind:      "checkout_session",
 		getShort:    "Retrieve a Checkout Session",

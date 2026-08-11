@@ -1,37 +1,17 @@
 package cli
 
 import (
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
-
-func riskServer(t *testing.T, routes map[string]string) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, ok := routes[r.URL.Path]
-		if !ok {
-			t.Fatalf("unexpected path %s", r.URL.Path)
-		}
-		if body == "fail" {
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprint(w, `{"error":{"type":"api_error","message":"boom"}}`)
-			return
-		}
-		fmt.Fprint(w, body)
-	}))
-}
 
 var riskNow = time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC)
 
 func TestCollectionRiskFlagsPastDueStatusWithoutLookups(t *testing.T) {
 	// A past-due status is decided from the subscription alone; no fetch should
 	// happen, so an empty route table proves it.
-	server := riskServer(t, map[string]string{})
-	defer server.Close()
+	server := routeServer(t, map[string]string{})
 
 	risk, err := testInvestigator(server).collectionRiskAt(map[string]any{
 		"id": "sub_1", "customer": "cus_1", "status": "past_due",
@@ -48,8 +28,7 @@ func TestCollectionRiskSurfacesCustomerLookupFailure(t *testing.T) {
 	// The customer fetch decides whether there is a default payment method.
 	// Absorbing its failure reported "no default payment method visible" — a
 	// risk that was never observed.
-	server := riskServer(t, map[string]string{"/v1/customers/cus_1": "fail"})
-	defer server.Close()
+	server := routeServer(t, map[string]string{"/v1/customers/cus_1": failingRoute(500, "api_error")})
 
 	risk, err := testInvestigator(server).collectionRiskAt(map[string]any{
 		"id": "sub_1", "customer": "cus_1", "status": "active",
@@ -65,11 +44,10 @@ func TestCollectionRiskSurfacesCustomerLookupFailure(t *testing.T) {
 func TestCollectionRiskSurfacesInvoiceLookupFailure(t *testing.T) {
 	// Symmetrically: absorbing this one dropped a real risk and reported the
 	// subscription as healthy.
-	server := riskServer(t, map[string]string{
+	server := routeServer(t, map[string]string{
 		"/v1/payment_methods/pm_1": `{"id":"pm_1","object":"payment_method","card":{"exp_month":12,"exp_year":2030}}`,
-		"/v1/invoices/in_1":        "fail",
+		"/v1/invoices/in_1":        failingRoute(500, "api_error"),
 	})
-	defer server.Close()
 
 	risk, err := testInvestigator(server).collectionRiskAt(map[string]any{
 		"id": "sub_1", "customer": "cus_1", "status": "active",
@@ -82,10 +60,9 @@ func TestCollectionRiskSurfacesInvoiceLookupFailure(t *testing.T) {
 }
 
 func TestCollectionRiskReportsExpiringCard(t *testing.T) {
-	server := riskServer(t, map[string]string{
+	server := routeServer(t, map[string]string{
 		"/v1/payment_methods/pm_1": `{"id":"pm_1","object":"payment_method","card":{"exp_month":9,"exp_year":2026}}`,
 	})
-	defer server.Close()
 
 	risk, err := testInvestigator(server).collectionRiskAt(map[string]any{
 		"id": "sub_1", "customer": "cus_1", "status": "active",
@@ -100,11 +77,10 @@ func TestCollectionRiskReportsExpiringCard(t *testing.T) {
 }
 
 func TestSubscriptionRiskScanReportsAssessmentFailures(t *testing.T) {
-	server := riskServer(t, map[string]string{
+	server := routeServer(t, map[string]string{
 		"/v1/subscriptions":   `{"object":"list","data":[{"id":"sub_1","object":"subscription","customer":"cus_1","status":"active"}],"has_more":false}`,
-		"/v1/customers/cus_1": "fail",
+		"/v1/customers/cus_1": failingRoute(500, "api_error"),
 	})
-	defer server.Close()
 
 	inv := testInvestigator(server)
 	if err := inv.subscriptionRiskScan(30, 25, subscriptionRiskSpec{

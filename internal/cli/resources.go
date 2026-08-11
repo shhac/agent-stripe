@@ -10,7 +10,6 @@ func registerCustomers(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:         "customers",
 		short:       "Customer lookup and search",
-		path:        "/v1/customers",
 		idName:      "customer-id",
 		idKind:      "customer",
 		searchable:  true,
@@ -26,7 +25,6 @@ func registerPaymentMethods(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:         "payment-methods",
 		short:       "PaymentMethod lookup by customer and type",
-		path:        "/v1/payment_methods",
 		idName:      "payment-method-id",
 		idKind:      "payment_method",
 		listSummary: paymentMethodListSummary,
@@ -41,7 +39,6 @@ func registerRefunds(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:       "refunds",
 		short:     "Refund lookup for failed or reversed customer payments",
-		path:      "/v1/refunds",
 		idName:    "refund-id",
 		idKind:    "refund",
 		expandGet: true,
@@ -56,7 +53,6 @@ func registerTransfers(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:       "transfers",
 		short:     "Connect transfer lookup and reversals",
-		path:      "/v1/transfers",
 		idName:    "transfer-id",
 		idKind:    "transfer",
 		expandGet: true,
@@ -71,7 +67,6 @@ func registerPayouts(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:       "payouts",
 		short:     "Payout lookup for Stripe balance to bank movement",
-		path:      "/v1/payouts",
 		idName:    "payout-id",
 		idKind:    "payout",
 		expandGet: true,
@@ -87,7 +82,6 @@ func registerBalanceTransactions(root *cobra.Command, globals shared.GlobalsFunc
 		use:     "balance-transactions",
 		aliases: []string{"balance_transactions", "txns"},
 		short:   "Balance transaction ledger lookup",
-		path:    "/v1/balance_transactions",
 		idName:  "balance-transaction-id",
 		idKind:  "balance_transaction",
 		listFlags: []listFlag{
@@ -102,7 +96,6 @@ func registerApplicationFees(root *cobra.Command, globals shared.GlobalsFunc) {
 		use:       "application-fees",
 		aliases:   []string{"application_fees"},
 		short:     "Connect application fee lookup",
-		path:      "/v1/application_fees",
 		idName:    "application-fee-id",
 		idKind:    "application_fee",
 		expandGet: true,
@@ -116,7 +109,6 @@ func registerProducts(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:        "products",
 		short:      "Product catalog lookup and search",
-		path:       "/v1/products",
 		idName:     "product-id",
 		idKind:     "product",
 		searchable: true,
@@ -131,7 +123,6 @@ func registerPrices(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:        "prices",
 		short:      "Price lookup and search",
-		path:       "/v1/prices",
 		idName:     "price-id",
 		idKind:     "price",
 		searchable: true,
@@ -150,7 +141,6 @@ func registerSetupIntents(root *cobra.Command, globals shared.GlobalsFunc) {
 		use:         "setup-intents",
 		aliases:     []string{"setup_intents"},
 		short:       "SetupIntent lookup for saved payment method setup",
-		path:        "/v1/setup_intents",
 		idName:      "setup-intent-id",
 		idKind:      "setup_intent",
 		expandGet:   true,
@@ -167,7 +157,6 @@ func registerPaymentLinks(root *cobra.Command, globals shared.GlobalsFunc) {
 		use:         "payment-links",
 		aliases:     []string{"payment_links"},
 		short:       "Payment Link lookup",
-		path:        "/v1/payment_links",
 		idName:      "payment-link-id",
 		idKind:      "payment_link",
 		expandGet:   true,
@@ -183,7 +172,6 @@ func registerEarlyFraudWarnings(root *cobra.Command, globals shared.GlobalsFunc)
 		use:       "early-fraud-warnings",
 		aliases:   []string{"early_fraud_warnings", "efw"},
 		short:     "Radar early fraud warning lookup",
-		path:      "/v1/radar/early_fraud_warnings",
 		idName:    "early-fraud-warning-id",
 		idKind:    "early_fraud_warning",
 		expandGet: true,

@@ -4,26 +4,14 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateDisputeImpact(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	var limit int
-	cmd := &cobra.Command{
-		Use:   "dispute-impact <dispute-id|charge-id|customer-id>",
-		Short: "Summarize dispute exposure and related payment/refund evidence",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.disputeImpact(args[0], limit)
-			})
-		},
-	}
-	cmd.Flags().IntVar(&limit, "limit", 5, "Maximum charges to inspect for customer input")
-	return cmd
+var disputeImpactInvestigation = investigationSpec{
+	use:          "dispute-impact <dispute-id|charge-id|customer-id>",
+	short:        "Summarize dispute exposure and related payment/refund evidence",
+	runWithLimit: investigator.disputeImpact,
+	limitDefault: 5,
+	limitHelp:    "Maximum charges to inspect for customer input",
 }
 
 func (i investigator) disputeImpact(id string, limit int) error {

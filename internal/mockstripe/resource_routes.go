@@ -11,6 +11,15 @@ type mockResource struct {
 	items      func() []map[string]any
 	searchable bool
 	filters    []mockFilter
+	// subLists maps a sub-path suffix to its fixtures, e.g. "line_items" for
+	// /v1/checkout/sessions/<id>/line_items. Declaring them here keeps the
+	// resource in the table instead of needing a hand-written handler.
+	subLists map[string]func(id string) []map[string]any
+	// nested serves <path>/<id>/<segment>/<sub-id>, which is how Stripe models
+	// transfer reversals.
+	nested       string
+	nestedItems  func(parentID string) []map[string]any
+	nestedObject string
 	// subPaths marks a resource whose <path>/ space is served elsewhere because
 	// it has sub-resources (accounts has persons, capabilities, external
 	// accounts), so the table does not claim the pattern.
@@ -63,8 +72,21 @@ func (r mockResource) handleGet(w http.ResponseWriter, req *http.Request) {
 	if !requireGet(w, req) {
 		return
 	}
-	id := strings.TrimPrefix(req.URL.Path, r.path+"/")
-	writeOneByID(w, r.items(), id, r.objectName)
+	rest := strings.TrimPrefix(req.URL.Path, r.path+"/")
+	if r.nested != "" && strings.Contains(rest, "/"+r.nested+"/") {
+		parent, child, _ := strings.Cut(rest, "/"+r.nested+"/")
+		writeOneByID(w, r.nestedItems(parent), child, r.nestedObject)
+		return
+	}
+	for suffix, items := range r.subLists {
+		if !strings.HasSuffix(rest, "/"+suffix) {
+			continue
+		}
+		id := strings.TrimSuffix(rest, "/"+suffix)
+		writeList(w, r.path+"/"+id+"/"+suffix, items(id), req)
+		return
+	}
+	writeOneByID(w, r.items(), rest, r.objectName)
 }
 
 func (r mockResource) filteredItems(req *http.Request) []map[string]any {
@@ -239,6 +261,30 @@ func mockResources() []mockResource {
 				stringFilter("charge", "charge"),
 				stringFilter("payment_intent", "payment_intent"),
 			},
+		},
+		{
+			path:       "/v1/checkout/sessions",
+			objectName: "checkout.session",
+			items:      checkoutSessions,
+			filters: []mockFilter{
+				stringFilter("customer", "customer"),
+				stringFilter("payment_intent", "payment_intent"),
+				stringFilter("subscription", "subscription"),
+				stringFilter("payment_link", "payment_link"),
+			},
+			subLists: map[string]func(string) []map[string]any{"line_items": checkoutLineItems},
+		},
+		{
+			path:       "/v1/transfers",
+			objectName: "transfer",
+			items:      transfers,
+			filters: []mockFilter{
+				stringFilter("destination", "destination"),
+				stringFilter("transfer_group", "transfer_group"),
+			},
+			nested:       "reversals",
+			nestedItems:  transferReversals,
+			nestedObject: "transfer_reversal",
 		},
 		{
 			path:       "/v1/accounts",

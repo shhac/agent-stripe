@@ -42,39 +42,6 @@ func (s *Server) handleBalance(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleCheckoutSessionsList(w http.ResponseWriter, r *http.Request) {
-	if !requireGet(w, r) {
-		return
-	}
-	items := checkoutSessions()
-	if customer := r.URL.Query().Get("customer"); customer != "" {
-		items = filterByString(items, "customer", customer)
-	}
-	if pi := r.URL.Query().Get("payment_intent"); pi != "" {
-		items = filterByString(items, "payment_intent", pi)
-	}
-	if subscription := r.URL.Query().Get("subscription"); subscription != "" {
-		items = filterByString(items, "subscription", subscription)
-	}
-	if paymentLink := r.URL.Query().Get("payment_link"); paymentLink != "" {
-		items = filterByString(items, "payment_link", paymentLink)
-	}
-	writeList(w, "/v1/checkout/sessions", items, r)
-}
-
-func (s *Server) handleCheckoutSessionGetOrLines(w http.ResponseWriter, r *http.Request) {
-	if !requireGet(w, r) {
-		return
-	}
-	rest := strings.TrimPrefix(r.URL.Path, "/v1/checkout/sessions/")
-	if strings.HasSuffix(rest, "/line_items") {
-		id := strings.TrimSuffix(rest, "/line_items")
-		writeList(w, "/v1/checkout/sessions/"+id+"/line_items", checkoutLineItems(id), r)
-		return
-	}
-	writeOneByID(w, checkoutSessions(), rest, "checkout.session")
-}
-
 func (s *Server) handleInvoiceSearch(w http.ResponseWriter, r *http.Request) {
 	if !requireGet(w, r) {
 		return
@@ -140,31 +107,4 @@ func (s *Server) handleInvoiceGetOrLines(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeOneByID(w, invoices(), rest, "invoice")
-}
-
-func (s *Server) handleTransfersList(w http.ResponseWriter, r *http.Request) {
-	if !requireGet(w, r) {
-		return
-	}
-	items := transfers()
-	if destination := r.URL.Query().Get("destination"); destination != "" {
-		items = filterByString(items, "destination", destination)
-	}
-	if group := r.URL.Query().Get("transfer_group"); group != "" {
-		items = filterByString(items, "transfer_group", group)
-	}
-	writeList(w, "/v1/transfers", items, r)
-}
-
-func (s *Server) handleTransferGetOrReversal(w http.ResponseWriter, r *http.Request) {
-	if !requireGet(w, r) {
-		return
-	}
-	rest := strings.TrimPrefix(r.URL.Path, "/v1/transfers/")
-	if strings.Contains(rest, "/reversals/") {
-		parts := strings.Split(rest, "/reversals/")
-		writeOneByID(w, transferReversals(parts[0]), parts[1], "transfer_reversal")
-		return
-	}
-	writeOneByID(w, transfers(), rest, "transfer")
 }

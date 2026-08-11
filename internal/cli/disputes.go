@@ -10,7 +10,6 @@ func registerDisputes(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:       "disputes",
 		short:     "Dispute lookup and evidence-status triage",
-		path:      "/v1/disputes",
 		idName:    "dispute-id",
 		idKind:    "dispute",
 		getShort:  "Retrieve a dispute by ID",

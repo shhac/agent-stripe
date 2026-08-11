@@ -10,7 +10,6 @@ func registerCharges(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:         "charges",
 		short:       "Charge lookup and search",
-		path:        "/v1/charges",
 		idName:      "charge-id",
 		idKind:      "charge",
 		getShort:    "Retrieve a charge by ID",

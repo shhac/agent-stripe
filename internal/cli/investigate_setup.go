@@ -4,26 +4,14 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateSetup(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	var limit int
-	cmd := &cobra.Command{
-		Use:   "setup <setup-intent-id|payment-method-id|customer-id>",
-		Short: "Explain saved-payment setup status and reusable payment method readiness",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.setup(args[0], limit)
-			})
-		},
-	}
-	cmd.Flags().IntVar(&limit, "limit", 5, "Maximum SetupIntents to inspect for customer or payment method input")
-	return cmd
+var setupInvestigation = investigationSpec{
+	use:          "setup <setup-intent-id|payment-method-id|customer-id>",
+	short:        "Explain saved-payment setup status and reusable payment method readiness",
+	runWithLimit: investigator.setup,
+	limitDefault: 5,
+	limitHelp:    "Maximum SetupIntents to inspect for customer or payment method input",
 }
 
 func (i investigator) setup(id string, limit int) error {

@@ -40,6 +40,7 @@ type resourceOptions struct {
 }
 
 func registerResource(root *cobra.Command, globals shared.GlobalsFunc, opts resourceOptions) {
+	opts.path = resourcePath(opts)
 	resource := &cobra.Command{
 		Use:     opts.use,
 		Aliases: opts.aliases,
@@ -190,6 +191,19 @@ func newResourceSearchCommand(globals shared.GlobalsFunc, opts resourceOptions) 
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
 	cmd.Flags().StringVar(&page, "page", "", "Search pagination cursor")
 	return cmd
+}
+
+// resourcePath resolves the collection path from the resource's ID kind,
+// falling back to an explicit path for resources that do not have one.
+func resourcePath(opts resourceOptions) string {
+	if opts.path != "" {
+		return opts.path
+	}
+	kind, ok := stripeIDKindByName(opts.idKind)
+	if !ok || kind.APIPath == "" {
+		panic("resource " + opts.use + ": no API path for id kind " + opts.idKind)
+	}
+	return kind.APIPath
 }
 
 func resourceText(value, fallback string) string {

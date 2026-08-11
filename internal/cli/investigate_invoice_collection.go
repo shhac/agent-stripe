@@ -4,26 +4,14 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateInvoiceCollection(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	var limit int
-	cmd := &cobra.Command{
-		Use:   "invoice-collection <invoice-id|customer-id|subscription-id>",
-		Short: "Explain failed or pending invoice collection and retry state",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.invoiceCollection(args[0], limit)
-			})
-		},
-	}
-	cmd.Flags().IntVar(&limit, "limit", 5, "Maximum invoices to inspect for customer or subscription input")
-	return cmd
+var invoiceCollectionInvestigation = investigationSpec{
+	use:          "invoice-collection <invoice-id|customer-id|subscription-id>",
+	short:        "Explain failed or pending invoice collection and retry state",
+	runWithLimit: investigator.invoiceCollection,
+	limitDefault: 5,
+	limitHelp:    "Maximum invoices to inspect for customer or subscription input",
 }
 
 func (i investigator) invoiceCollection(id string, limit int) error {

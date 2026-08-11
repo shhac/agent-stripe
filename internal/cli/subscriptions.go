@@ -13,7 +13,6 @@ func registerSubscriptions(root *cobra.Command, globals shared.GlobalsFunc) {
 		use:         "subscriptions",
 		aliases:     []string{"subs"},
 		short:       "Subscription lifecycle, invoice, and item investigation",
-		path:        "/v1/subscriptions",
 		idName:      "subscription-id",
 		idKind:      "subscription",
 		getShort:    "Retrieve a subscription by ID",

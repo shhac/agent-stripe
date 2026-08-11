@@ -12,7 +12,6 @@ func registerInvoices(root *cobra.Command, globals shared.GlobalsFunc) {
 	registerResource(root, globals, resourceOptions{
 		use:         "invoices",
 		short:       "Invoice lookup, line items, and payment bridge investigation",
-		path:        "/v1/invoices",
 		idName:      "invoice-id",
 		idKind:      "invoice",
 		searchable:  true,

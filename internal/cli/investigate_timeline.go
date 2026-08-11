@@ -3,26 +3,14 @@ package cli
 import (
 	"fmt"
 	"sort"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateTimeline(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	var limit int
-	cmd := &cobra.Command{
-		Use:   "timeline <customer-id>",
-		Short: "Build a chronological customer activity timeline from recent Stripe objects",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.timeline(args[0], limit)
-			})
-		},
-	}
-	cmd.Flags().IntVar(&limit, "limit", 5, "Maximum recent objects per collection")
-	return cmd
+var timelineInvestigation = investigationSpec{
+	use:          "timeline <customer-id>",
+	short:        "Build a chronological customer activity timeline from recent Stripe objects",
+	runWithLimit: investigator.timeline,
+	limitDefault: 5,
+	limitHelp:    "Maximum recent objects per collection",
 }
 
 func (i investigator) timeline(customerID string, limit int) error {

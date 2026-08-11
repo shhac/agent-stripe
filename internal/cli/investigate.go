@@ -36,20 +36,33 @@ type investigationSpec struct {
 	short string
 	long  string
 	run   func(investigator, string) error
+	// runWithLimit and limit describe the workflows that also take --limit; set
+	// one of run or runWithLimit.
+	runWithLimit func(investigator, string, int) error
+	limitDefault int
+	limitHelp    string
 }
 
 func (spec investigationSpec) command(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
+	limit := spec.limitDefault
+	cmd := &cobra.Command{
 		Use:   spec.use,
 		Short: spec.short,
 		Long:  spec.long,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
+				if spec.runWithLimit != nil {
+					return spec.runWithLimit(inv, args[0], limit)
+				}
 				return spec.run(inv, args[0])
 			})
 		},
 	}
+	if spec.runWithLimit != nil {
+		cmd.Flags().IntVar(&limit, "limit", spec.limitDefault, spec.limitHelp)
+	}
+	return cmd
 }
 
 // singleArgInvestigations are declared where their workflow lives; this list is
@@ -67,14 +80,16 @@ var singleArgInvestigations = []investigationSpec{
 	fraudReviewInvestigation,
 	refundInvestigation,
 	payoutFailureInvestigation,
+	timelineInvestigation,
+	disputeImpactInvestigation,
+	invoiceCollectionInvestigation,
+	setupInvestigation,
 }
 
 var investigationCommands = []investigationCommandFactory{
 	newInvestigateCustomerContext,
 	newInvestigateCustomerCardPayment,
 	newInvestigateWebhookDelivery,
-	newInvestigateDisputeImpact,
-	newInvestigateInvoiceCollection,
 	newInvestigateSubscriptionRenewal,
 	newInvestigateSubscriptionCancelRisk,
 	newInvestigateInvoiceMetadata,
@@ -82,8 +97,6 @@ var investigationCommands = []investigationCommandFactory{
 	newInvestigateSubscriptionItems,
 	newInvestigateSubscriptionAmountChange,
 	newInvestigateEntitlement,
-	newInvestigateSetup,
-	newInvestigateTimeline,
 	newInvestigateAccountHealth,
 	newInvestigateAccountEvents,
 	newInvestigateConnectReadiness,

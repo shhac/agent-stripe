@@ -11,7 +11,6 @@ func registerPaymentIntents(root *cobra.Command, globals shared.GlobalsFunc) {
 		use:         "payment-intents",
 		aliases:     []string{"payment_intents", "pis"},
 		short:       "PaymentIntent lookup and search",
-		path:        "/v1/payment_intents",
 		idName:      "payment-intent-id",
 		idKind:      "payment_intent",
 		getShort:    "Retrieve a PaymentIntent by ID",
