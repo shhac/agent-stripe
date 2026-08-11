@@ -42,10 +42,9 @@ func (i investigator) statementDescriptor(descriptor, customer string, limit int
 			return err
 		}
 	}
-	params := valuesWithLimit(limit)
-	if customer != "" {
-		params = valuesWithLimit(limit, "customer", customer)
-	}
+	// valuesWithLimit routes through shared.AddString, which skips empty values,
+	// so the optional scope needs no branch.
+	params := valuesWithLimit(limit, "customer", customer)
 	charges, more, err := i.listPage("/v1/charges", params)
 	if err != nil {
 		return err

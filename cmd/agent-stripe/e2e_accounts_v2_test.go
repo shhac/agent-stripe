@@ -5,7 +5,7 @@ import "testing"
 func TestCLIAccountsV2ListAgainstMockStripe(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("accounts-v2", "list", "--limit", "2")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`"id":"acct_mock_v2_active"`,
 		`"object":"v2.core.account"`,
 		`"applied_configurations":["customer","merchant"]`,
@@ -20,14 +20,14 @@ func TestCLIAccountsV2ListAgainstMockStripe(t *testing.T) {
 func TestCLIAccountsV2ListFiltersByConfiguration(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("accounts-v2", "list", "--applied-configuration", "recipient")
-	runner.AssertContains(out, `"id":"acct_mock_v2_recipient"`)
+	assertContains(t, out, `"id":"acct_mock_v2_recipient"`)
 	assertNotContains(t, out, "acct_mock_v2_active", "acct_mock_v2_restricted")
 }
 
 func TestCLIAccountsV2GetRequestsEveryIncludeByDefault(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("accounts-v2", "get", "acct_mock_v2_restricted")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`"object":"v2.core.account"`,
 		`"card_payments":{"status":"restricted"`,
 		`"description":"identity.business_details.registered_name"`,
@@ -39,13 +39,13 @@ func TestCLIAccountsV2GetRequestsEveryIncludeByDefault(t *testing.T) {
 func TestCLIAccountsV2GetNarrowsIncludes(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("accounts-v2", "get", "acct_mock_v2_restricted", "--include", "requirements")
-	runner.AssertContains(out, `"requirements":{`, `"identity":null`, `"configuration":null`)
+	assertContains(t, out, `"requirements":{`, `"identity":null`, `"configuration":null`)
 }
 
 func TestCLIAccountsV2PersonsRedactPersonalData(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("accounts-v2", "persons", "get", "acct_mock_v2_restricted", "person_mock_representative")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`"given_name":"[REDACTED]"`,
 		`"surname":"[REDACTED]"`,
 		`"email":"[REDACTED]"`,
@@ -58,7 +58,7 @@ func TestCLIAccountsV2PersonsRedactPersonalData(t *testing.T) {
 func TestCLIEventsV2ListAgainstMockStripe(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("events-v2", "list", "--object-id", "acct_mock_v2_restricted")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`"object":"v2.core.event"`,
 		`"type":"v2.core.account[configuration.merchant].capability_status_updated"`,
 		`"related_object":{"id":"acct_mock_v2_restricted"`,
@@ -69,7 +69,7 @@ func TestCLIEventsV2ListAgainstMockStripe(t *testing.T) {
 func TestCLIInvestigateAccountHealthReadsV2(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("investigate", "account-health", "acct_mock_v2_restricted")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`"object":"v2.core.account"`,
 		`"object":"v2.core.account_person"`,
 		`Accounts v2 account acct_mock_v2_restricted`,
@@ -85,7 +85,7 @@ func TestCLIInvestigateAccountHealthReadsV2(t *testing.T) {
 func TestCLIInvestigateAccountHealthFallsBackToV1(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("investigate", "account-health", "acct_mock_connected")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`is not an Accounts v2 account (v1_account_instead_of_v2_account)`,
 		`Connect v1 account acct_mock_connected charges_enabled=true payouts_enabled=false`,
 		`"namespace":"v1"`,
@@ -95,13 +95,13 @@ func TestCLIInvestigateAccountHealthFallsBackToV1(t *testing.T) {
 func TestCLIInvestigateAccountHealthHealthyV2AccountIsInfo(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("investigate", "account-health", "acct_mock_v2_active")
-	runner.AssertContains(out, `All capabilities are active`, `"severity":"info"`)
+	assertContains(t, out, `All capabilities are active`, `"severity":"info"`)
 }
 
 func TestCLIInvestigateAccountEventsAgainstMockStripe(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("investigate", "account-events", "acct_mock_v2_restricted")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`"object":"v2.core.event"`,
 		`v2 event(s) between`,
 		`current, not point-in-time`,
@@ -112,16 +112,16 @@ func TestCLIInvestigateAccountEventsAgainstMockStripe(t *testing.T) {
 func TestCLIInvestigateResolveNamesAccountNamespace(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	v2 := runner.Run("investigate", "resolve", "acct_mock_v2_active")
-	runner.AssertContains(v2, `Resolved acct_mock_v2_active as an Accounts v2 account`, `"namespace":"v2"`)
+	assertContains(t, v2, `Resolved acct_mock_v2_active as an Accounts v2 account`, `"namespace":"v2"`)
 
 	v1 := runner.Run("investigate", "resolve", "acct_mock_connected")
-	runner.AssertContains(v1, `Resolved acct_mock_connected as a Connect v1 account`, `--namespace v1`)
+	assertContains(t, v1, `Resolved acct_mock_connected as a Connect v1 account`, `--namespace v1`)
 }
 
 func TestCLIInvestigateWebhookEventHandlesV2ThinEvent(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("investigate", "webhook-event", "evt_test_mock_requirements_updated")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`"object":"v2.core.event"`,
 		`v2 events are thin`,
 		`"object":"v2.core.account"`,
@@ -151,7 +151,7 @@ func TestCLIInvestigateReportsFailedRelatedLookups(t *testing.T) {
 	runner.ArmFault("/v1/refunds=500")
 	out := runner.Run("investigate", "ledger", "ch_mock_succeeded")
 
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`"object":"charge"`,
 		`"severity":"warning"`,
 		`Could not gather refunds`,
@@ -162,7 +162,7 @@ func TestCLIRetriesRateLimitsThenSucceeds(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	runner.ArmFault("/v1/charges=429x2")
 	out := runner.Run("charges", "get", "ch_mock_succeeded")
-	runner.AssertContains(out, `"id":"ch_mock_succeeded"`)
+	assertContains(t, out, `"id":"ch_mock_succeeded"`)
 }
 
 func TestCLIReportsNonJSONErrorBodyBounded(t *testing.T) {
@@ -180,7 +180,7 @@ func TestCLIInvestigationSummariesCarryNoPersonalData(t *testing.T) {
 	out := runner.Run("investigate", "incoming-payment", "pi_mock_failed")
 
 	assertNotContains(t, out, "fPrInTdEcLiNeD", "buyer@example.com", "+15550101001")
-	runner.AssertContains(out, "insufficient funds")
+	assertContains(t, out, "insufficient funds")
 }
 
 func TestCLIAccountSubresourcesAnswerRequirements(t *testing.T) {
@@ -189,13 +189,13 @@ func TestCLIAccountSubresourcesAnswerRequirements(t *testing.T) {
 	// acct_mock_connected's requirements name "external_account". These are the
 	// commands that say what it actually has and which capability is waiting.
 	external := runner.Run("accounts", "external-accounts", "acct_mock_connected")
-	runner.AssertContains(external, `"id":"ba_mock_closed"`, `"status":"errored"`, `"last4":"6789"`)
+	assertContains(t, external, `"id":"ba_mock_closed"`, `"status":"errored"`, `"last4":"6789"`)
 
 	capabilities := runner.Run("accounts", "capabilities", "acct_mock_connected")
-	runner.AssertContains(capabilities, `"id":"transfers"`, `"status":"inactive"`, `"external_account"`)
+	assertContains(t, capabilities, `"id":"transfers"`, `"status":"inactive"`, `"external_account"`)
 
 	persons := runner.Run("accounts", "persons", "list", "acct_mock_connected")
-	runner.AssertContains(persons, `"id":"person_mock_v1_rep"`, `"representative":true`, `verification.document`)
+	assertContains(t, persons, `"id":"person_mock_v1_rep"`, `"representative":true`, `verification.document`)
 	assertNotContains(t, persons, "robin.vance@example.com")
 }
 
@@ -211,7 +211,7 @@ func TestCLIAccountPersonsFilterByRelationship(t *testing.T) {
 func TestCLIV2PayoutMethodsScopeByContext(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("accounts-v2", "payout-methods", "acct_mock_v2_recipient")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`"object":"v2.money_management.payout_method"`,
 		`"last4":"3311"`,
 		`"usage_status"`,
@@ -221,7 +221,7 @@ func TestCLIV2PayoutMethodsScopeByContext(t *testing.T) {
 func TestCLIConnectReadinessSweepsAccounts(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("investigate", "connect-readiness", "--limit", "5")
-	runner.AssertContains(out,
+	assertContains(t, out,
 		`inspected connected accounts have blockers (v2)`,
 		`acct_mock_v2_restricted`,
 		`"blocked_count":2`,
@@ -236,5 +236,5 @@ func TestCLIConnectReadinessFallsBackToV1(t *testing.T) {
 	// than reporting a platform with no accounts.
 	runner.ArmFault("/v2/core/accounts=400")
 	out := runner.Run("investigate", "connect-readiness", "--namespace", "v1", "--limit", "5")
-	runner.AssertContains(out, `(v1)`, `acct_mock_connected`)
+	assertContains(t, out, `(v1)`, `acct_mock_connected`)
 }

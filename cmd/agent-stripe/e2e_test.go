@@ -9,13 +9,13 @@ import (
 func TestCLIAgainstMockStripe(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("events", "list", "--type", "charge.failed", "--limit", "1")
-	runner.AssertContains(out, `"evt_mock_charge_failed"`, `"charge.failed"`)
+	assertContains(t, out, `"evt_mock_charge_failed"`, `"charge.failed"`)
 }
 
 func TestCLIDebugAgainstMockStripe(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("--debug", "balance", "get")
-	runner.AssertContains(out, `"@debug":"client"`, `"credential_source":"flag"`, `"@debug":"http"`, `"request_id":"req_mock_123"`)
+	assertContains(t, out, `"@debug":"client"`, `"credential_source":"flag"`, `"@debug":"http"`, `"request_id":"req_mock_123"`)
 	if strings.Contains(out, "sk_test_mock") {
 		t.Fatalf("debug output leaked API key:\n%s", out)
 	}
@@ -50,7 +50,7 @@ func TestCLIDebugRedactsStripeResponseBodies(t *testing.T) {
 func TestCLISubscriptionsAgainstMockStripe(t *testing.T) {
 	runner := newMockCLIRunner(t)
 	out := runner.Run("subscriptions", "invoices", "sub_mock_past_due", "--status", "open")
-	runner.AssertContains(out, `"in_mock_open_failed"`, `"payment_intent":"pi_mock_failed"`)
+	assertContains(t, out, `"in_mock_open_failed"`, `"payment_intent":"pi_mock_failed"`)
 }
 
 func TestCLIInvestigateInvoicePaymentAgainstMockStripe(t *testing.T) {
@@ -90,7 +90,10 @@ func TestCLIInvestigateConnectMovementAgainstMockStripe(t *testing.T) {
 	assertContains(t, out, `"id":"trr_mock_failed"`, `failure_balance_transaction`)
 }
 
-func TestCLIInvestigateNewWorkflowScenariosAgainstMockStripe(t *testing.T) {
+// Investigation workflows whose coverage is a single happy-path assertion. The
+// workflows with real branching have their own named tests in
+// e2e_workflows_test.go; this table is deliberately the shallow end.
+func TestCLIInvestigationHappyPaths(t *testing.T) {
 	checks := []struct {
 		name  string
 		args  []string
@@ -226,8 +229,10 @@ func TestCLIDomainUsageAgainstMockStripe(t *testing.T) {
 		{[]string{"connect", "usage"}, []string{`connect — connected-account`, `refund-recovery`}},
 	}
 	for _, check := range checks {
-		out := runMockCLI(t, check.args...)
-		assertContains(t, out, check.wants...)
+		t.Run(strings.Join(check.args, " "), func(t *testing.T) {
+			out := runMockCLI(t, check.args...)
+			assertContains(t, out, check.wants...)
+		})
 	}
 }
 
@@ -253,8 +258,10 @@ func TestCLINewResourcePrimitivesAgainstMockStripe(t *testing.T) {
 		{[]string{"early-fraud-warnings", "list", "--charge", "ch_mock_succeeded"}, `"issfr_mock_123"`},
 	}
 	for _, check := range checks {
-		out := runMockCLI(t, check.args...)
-		assertContains(t, out, check.want)
+		t.Run(strings.Join(check.args, " "), func(t *testing.T) {
+			out := runMockCLI(t, check.args...)
+			assertContains(t, out, check.want)
+		})
 	}
 }
 

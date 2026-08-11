@@ -81,11 +81,6 @@ func runMockCLIErr(t *testing.T, args ...string) string {
 	return newMockCLIRunner(t).RunExpectingError(args...)
 }
 
-func (r *mockCLIRunner) AssertContains(out string, wants ...string) {
-	r.t.Helper()
-	assertContains(r.t, out, wants...)
-}
-
 func assertContains(t *testing.T, out string, wants ...string) {
 	t.Helper()
 	for _, want := range wants {

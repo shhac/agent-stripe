@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"net/url"
 
 	"github.com/spf13/cobra"
 
@@ -38,8 +37,7 @@ func (i investigator) customerCardPayment(customer, last4 string, limit int) err
 	if err := validateExpectedStripeID(customer, "customer"); err != nil {
 		return err
 	}
-	params := url.Values{"customer": []string{customer}}
-	shared.AddLimit(params, limit)
+	params := valuesWithLimit(limit, "customer", customer)
 	charges, err := i.list("/v1/charges", params)
 	if err != nil {
 		return err
