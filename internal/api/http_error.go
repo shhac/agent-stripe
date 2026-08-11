@@ -59,8 +59,11 @@ func extractErrorMessage(status int, body []byte) (string, stripeErrorBody) {
 		Error stripeErrorBody `json:"error"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		if len(body) > 0 && len(body) <= 200 {
-			return fmt.Sprintf("HTTP %d: %s", status, string(body)), stripeErrorBody{}
+		// A non-JSON body is usually a proxy or gateway page rather than Stripe.
+		// Echo a bounded, single-line excerpt: enough to recognise what answered,
+		// without pasting an unbounded response into the error message.
+		if excerpt := errorBodyExcerpt(body); excerpt != "" {
+			return fmt.Sprintf("HTTP %d: %s", status, excerpt), stripeErrorBody{}
 		}
 		return fmt.Sprintf("HTTP %d", status), stripeErrorBody{}
 	}
@@ -76,6 +79,20 @@ func extractErrorMessage(status int, body []byte) (string, stripeErrorBody) {
 		parsed.Error.Code = parsed.Error.DeclineCode
 	}
 	return msg, parsed.Error
+}
+
+const errorBodyExcerptLimit = 200
+
+func errorBodyExcerpt(body []byte) string {
+	excerpt := strings.TrimSpace(string(body))
+	if excerpt == "" {
+		return ""
+	}
+	excerpt = strings.Join(strings.Fields(excerpt), " ")
+	if len(excerpt) > errorBodyExcerptLimit {
+		excerpt = excerpt[:errorBodyExcerptLimit] + "…"
+	}
+	return excerpt
 }
 
 type httpErrorInput struct {

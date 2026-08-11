@@ -73,15 +73,13 @@ func (i investigator) ledgerFromChargeID(id string) error {
 
 func (i investigator) ledgerFromCharge(charge map[string]any) {
 	i.add(entityRecord("charge", charge))
-	if txnID := idFromValue(charge["balance_transaction"]); txnID != "" {
-		if txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(txnID), url.Values{}); err == nil {
-			i.add(entityRecord("balance_transaction", txn))
-		}
+	if txn := i.followRef(charge, "balance_transaction"); txn != nil {
+		i.add(entityRecord("balance_transaction", txn))
 	}
-	if fees, err := i.list("/v1/application_fees", url.Values{"charge": []string{mapString(charge, "id")}, "limit": []string{"10"}}); err == nil {
+	if fees := i.listRelated("application fees", "/v1/application_fees", url.Values{"charge": []string{mapString(charge, "id")}, "limit": []string{"10"}}); fees != nil {
 		i.addList("application_fee", fees)
 	}
-	if refunds, err := i.list("/v1/refunds", url.Values{"charge": []string{mapString(charge, "id")}, "limit": []string{"10"}}); err == nil {
+	if refunds := i.listRelated("refunds", "/v1/refunds", url.Values{"charge": []string{mapString(charge, "id")}, "limit": []string{"10"}}); refunds != nil {
 		for _, refund := range refunds {
 			i.ledgerFromRefund(refund)
 		}
@@ -100,10 +98,8 @@ func (i investigator) ledgerFromRefundID(id string) error {
 
 func (i investigator) ledgerFromRefund(refund map[string]any) {
 	i.add(entityRecord("refund", refund))
-	if txnID := idFromValue(refund["balance_transaction"]); txnID != "" {
-		if txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(txnID), url.Values{}); err == nil {
-			i.add(entityRecord("balance_transaction", txn))
-		}
+	if txn := i.followRef(refund, "balance_transaction"); txn != nil {
+		i.add(entityRecord("balance_transaction", txn))
 	}
 	i.add(ledgerFinding("refund", refund))
 }
@@ -114,10 +110,8 @@ func (i investigator) ledgerFromSimpleObject(object, path string) error {
 		return err
 	}
 	i.add(entityRecord(object, item))
-	if txnID := idFromValue(item["balance_transaction"]); txnID != "" {
-		if txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(txnID), url.Values{}); err == nil {
-			i.add(entityRecord("balance_transaction", txn))
-		}
+	if txn := i.followRef(item, "balance_transaction"); txn != nil {
+		i.add(entityRecord("balance_transaction", txn))
 	}
 	i.add(ledgerFinding(object, item))
 	return nil

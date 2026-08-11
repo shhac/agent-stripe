@@ -146,3 +146,26 @@ func containsAll(value string, wants ...string) bool {
 	}
 	return true
 }
+
+func TestExtractErrorMessageBoundsNonJSONBodies(t *testing.T) {
+	long := strings.Repeat("gateway timeout ", 40)
+	msg, parsed := extractErrorMessage(504, []byte(long))
+	if parsed.Code != "" {
+		t.Fatalf("parsed = %#v, want empty for a non-JSON body", parsed)
+	}
+	if len(msg) > errorBodyExcerptLimit+40 {
+		t.Fatalf("message is unbounded (%d chars): %q", len(msg), msg)
+	}
+	if !strings.HasPrefix(msg, "HTTP 504: gateway timeout") || !strings.HasSuffix(msg, "…") {
+		t.Fatalf("message = %q, want a truncated excerpt", msg)
+	}
+	if strings.Contains(msg, "\n") {
+		t.Fatalf("message should be single-line: %q", msg)
+	}
+}
+
+func TestExtractErrorMessageIgnoresEmptyBody(t *testing.T) {
+	if msg, _ := extractErrorMessage(500, []byte("   \n")); msg != "HTTP 500" {
+		t.Fatalf("message = %q, want bare status", msg)
+	}
+}

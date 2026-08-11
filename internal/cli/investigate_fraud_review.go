@@ -27,16 +27,19 @@ func (i investigator) fraudReview(id string) error {
 	if err := validateAllowedStripeID(id, "early_fraud_warning", "charge", "payment_intent"); err != nil {
 		return err
 	}
+	paymentID := id
 	if strings.HasPrefix(id, "issfr_") {
 		efw, err := i.get("/v1/radar/early_fraud_warnings/"+url.PathEscape(id), url.Values{})
 		if err != nil {
 			return err
 		}
 		i.add(entityRecord("early_fraud_warning", efw))
-		id = firstNonEmpty(idFromValue(efw["charge"]), idFromValue(efw["payment_intent"]))
+		// Dispatch on the payment the warning points at, but keep id as what the
+		// caller passed so the not-found message names their input.
+		paymentID = firstNonEmpty(idFromValue(efw["charge"]), idFromValue(efw["payment_intent"]))
 	}
-	if strings.HasPrefix(id, "pi_") {
-		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(id), url.Values{})
+	if strings.HasPrefix(paymentID, "pi_") {
+		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(paymentID), url.Values{})
 		if err != nil {
 			return err
 		}
@@ -44,8 +47,8 @@ func (i investigator) fraudReview(id string) error {
 		if charge, err := i.latestChargeForPaymentIntent(pi); err == nil && charge != nil {
 			i.fraudReviewForCharge(charge)
 		}
-	} else if strings.HasPrefix(id, "ch_") {
-		charge, err := i.get("/v1/charges/"+url.PathEscape(id), url.Values{})
+	} else if strings.HasPrefix(paymentID, "ch_") {
+		charge, err := i.get("/v1/charges/"+url.PathEscape(paymentID), url.Values{})
 		if err != nil {
 			return err
 		}
@@ -60,7 +63,7 @@ func (i investigator) fraudReview(id string) error {
 
 func (i investigator) fraudReviewForCharge(charge map[string]any) {
 	i.add(entityRecord("charge", charge))
-	if warnings, err := i.list("/v1/radar/early_fraud_warnings", valuesWithLimit(10, "charge", mapString(charge, "id"))); err == nil {
+	if warnings := i.listRelated("early fraud warnings", "/v1/radar/early_fraud_warnings", valuesWithLimit(10, "charge", mapString(charge, "id"))); warnings != nil {
 		i.addList("early_fraud_warning", warnings)
 	}
 	i.relatedDisputesAndRefunds(nil, charge)

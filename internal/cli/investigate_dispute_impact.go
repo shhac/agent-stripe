@@ -65,18 +65,14 @@ func (i investigator) disputeImpact(id string, limit int) error {
 
 func (i investigator) disputeImpactRecords(dispute map[string]any) {
 	i.add(entityRecord("dispute", dispute), disputeImpactFinding(dispute))
-	if chargeID := idFromValue(dispute["charge"]); chargeID != "" {
-		if charge, err := i.get("/v1/charges/"+url.PathEscape(chargeID), url.Values{}); err == nil {
-			i.add(entityRecord("charge", charge))
-			if refunds, err := i.list("/v1/refunds", valuesWithLimit(5, "charge", chargeID)); err == nil {
-				i.addList("refund", refunds)
-			}
+	if charge := i.followRef(dispute, "charge"); charge != nil {
+		i.add(entityRecord("charge", charge))
+		if refunds := i.listRelated("refunds", "/v1/refunds", valuesWithLimit(5, "charge", mapString(charge, "id"))); refunds != nil {
+			i.addList("refund", refunds)
 		}
 	}
-	if piID := idFromValue(dispute["payment_intent"]); piID != "" {
-		if pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{}); err == nil {
-			i.add(entityRecord("payment_intent", pi))
-		}
+	if pi := i.followRef(dispute, "payment_intent"); pi != nil {
+		i.add(entityRecord("payment_intent", pi))
 	}
 }
 

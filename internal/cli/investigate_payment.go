@@ -90,12 +90,12 @@ func (i investigator) relatedDisputesAndRefunds(pi, charge map[string]any) {
 	if len(params) == 0 {
 		return
 	}
-	if disputes, err := i.list("/v1/disputes", params); err == nil {
+	if disputes := i.listRelated("disputes", "/v1/disputes", params); disputes != nil {
 		for _, dispute := range disputes {
 			i.add(entityRecord("dispute", dispute))
 		}
 	}
-	if refunds, err := i.list("/v1/refunds", params); err == nil {
+	if refunds := i.listRelated("refunds", "/v1/refunds", params); refunds != nil {
 		for _, refund := range refunds {
 			i.add(entityRecord("refund", refund))
 		}

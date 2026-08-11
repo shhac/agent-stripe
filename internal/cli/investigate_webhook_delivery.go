@@ -42,7 +42,7 @@ func (i investigator) webhookDelivery(id, endpointID string) error {
 				return err
 			}
 			i.add(entityRecord("webhook_endpoint", endpoint), webhookEndpointFinding(endpoint, mapString(event, "type")))
-		} else if endpoints, err := i.list("/v1/webhook_endpoints", url.Values{"limit": []string{"100"}}); err == nil {
+		} else if endpoints := i.listRelated("webhook endpoints", "/v1/webhook_endpoints", url.Values{"limit": []string{"100"}}); endpoints != nil {
 			for _, endpoint := range endpoints {
 				if endpointHandlesEvent(endpoint, mapString(event, "type")) {
 					i.add(entityRecord("webhook_endpoint", endpoint))
@@ -83,23 +83,24 @@ func webhookEndpointFinding(endpoint map[string]any, eventType string) evidenceR
 	if status != "" && status != "enabled" {
 		severity = "warning"
 	}
-	handles := true
+	summary := fmt.Sprintf("Webhook endpoint %s status=%s.", mapString(endpoint, "id"), status)
+	data := map[string]any{
+		"webhook_endpoint": mapString(endpoint, "id"),
+		"status":           status,
+	}
+	// Without an event type there is nothing to match against, so handles_event
+	// is omitted rather than reported as true — the endpoint-rooted path used to
+	// claim every endpoint handled an event it was never asked about.
 	if eventType != "" {
-		handles = endpointHandlesEvent(endpoint, eventType)
+		handles := endpointHandlesEvent(endpoint, eventType)
 		if !handles {
 			severity = "warning"
 		}
-	}
-	summary := fmt.Sprintf("Webhook endpoint %s status=%s.", mapString(endpoint, "id"), status)
-	if eventType != "" {
 		summary += fmt.Sprintf(" Handles %s=%t.", eventType, handles)
+		data["event_type"] = eventType
+		data["handles_event"] = handles
 	}
-	return evidenceRecord{Type: "finding", Severity: severity, Summary: summary, Data: map[string]any{
-		"webhook_endpoint": mapString(endpoint, "id"),
-		"status":           status,
-		"event_type":       eventType,
-		"handles_event":    handles,
-	}}
+	return evidenceRecord{Type: "finding", Severity: severity, Summary: summary, Data: data}
 }
 
 func endpointHandlesEvent(endpoint map[string]any, eventType string) bool {

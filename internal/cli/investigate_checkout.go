@@ -47,44 +47,32 @@ func (i investigator) checkoutLineItems(sessionID string) {
 		i.add(entityRecord("line_item", item))
 		if price := mapAnyMap(item, "price"); len(price) > 0 {
 			i.add(entityRecord("price", price))
-			if productID := idFromValue(price["product"]); productID != "" {
-				if product, err := i.get("/v1/products/"+url.PathEscape(productID), url.Values{}); err == nil {
-					i.add(entityRecord("product", product))
-				}
+			if product := i.followRef(price, "product"); product != nil {
+				i.add(entityRecord("product", product))
 			}
 		}
 	}
 }
 
 func (i investigator) relatedCheckoutObjects(session map[string]any) {
-	if customerID := idFromValue(session["customer"]); customerID != "" {
-		if customer, err := i.get("/v1/customers/"+url.PathEscape(customerID), url.Values{}); err == nil {
-			i.add(entityRecord("customer", customer))
+	if customer := i.followRef(session, "customer"); customer != nil {
+		i.add(entityRecord("customer", customer))
+	}
+	if pi := i.followRef(session, "payment_intent"); pi != nil {
+		i.add(entityRecord("payment_intent", pi))
+		if charge, err := i.latestChargeForPaymentIntent(pi); err == nil && charge != nil {
+			i.add(entityRecord("charge", charge))
 		}
 	}
-	if piID := idFromValue(session["payment_intent"]); piID != "" {
-		if pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{}); err == nil {
-			i.add(entityRecord("payment_intent", pi))
-			if charge, err := i.latestChargeForPaymentIntent(pi); err == nil && charge != nil {
-				i.add(entityRecord("charge", charge))
-			}
-		}
+	if sub := i.followRef(session, "subscription"); sub != nil {
+		i.add(entityRecord("subscription", sub))
+		i.subscriptionPaymentSummary(sub)
 	}
-	if subID := idFromValue(session["subscription"]); subID != "" {
-		if sub, err := i.get("/v1/subscriptions/"+url.PathEscape(subID), url.Values{}); err == nil {
-			i.add(entityRecord("subscription", sub))
-			i.subscriptionPaymentSummary(sub)
-		}
+	if invoice := i.followRef(session, "invoice"); invoice != nil {
+		i.add(entityRecord("invoice", invoice))
 	}
-	if invoiceID := idFromValue(session["invoice"]); invoiceID != "" {
-		if invoice, err := i.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{}); err == nil {
-			i.add(entityRecord("invoice", invoice))
-		}
-	}
-	if linkID := idFromValue(session["payment_link"]); linkID != "" {
-		if link, err := i.get("/v1/payment_links/"+url.PathEscape(linkID), url.Values{}); err == nil {
-			i.add(entityRecord("payment_link", link))
-		}
+	if link := i.followRef(session, "payment_link"); link != nil {
+		i.add(entityRecord("payment_link", link))
 	}
 }
 

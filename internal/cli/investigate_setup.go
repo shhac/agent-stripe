@@ -63,10 +63,8 @@ func (i investigator) setup(id string, limit int) error {
 	}
 	for _, seti := range setupIntents {
 		i.add(entityRecord("setup_intent", seti))
-		if pmID := idFromValue(seti["payment_method"]); pmID != "" {
-			if pm, err := i.get("/v1/payment_methods/"+url.PathEscape(pmID), url.Values{}); err == nil {
-				i.add(entityRecord("payment_method", pm))
-			}
+		if pm := i.followRef(seti, "payment_method"); pm != nil {
+			i.add(entityRecord("payment_method", pm))
 		}
 		i.add(setupFinding(seti))
 	}

@@ -52,7 +52,7 @@ func (i investigator) paymentMethodReadiness(id string) error {
 	for _, pm := range paymentMethods {
 		i.add(entityRecord("payment_method", pm))
 		i.add(paymentMethodReadinessFinding(customerID, pm))
-		if setupIntents, err := i.list("/v1/setup_intents", valuesWithLimit(3, "payment_method", mapString(pm, "id"))); err == nil {
+		if setupIntents := i.listRelated("setup intents", "/v1/setup_intents", valuesWithLimit(3, "payment_method", mapString(pm, "id"))); setupIntents != nil {
 			i.addList("setup_intent", setupIntents)
 		}
 	}
