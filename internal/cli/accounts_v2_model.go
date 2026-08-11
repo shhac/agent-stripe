@@ -260,3 +260,48 @@ func joinAndTruncate(values []string, max int) string {
 	}
 	return strings.Join(values[:max], ", ") + ", …"
 }
+
+// Serialization of the flattened model into finding data. It lives with the
+// types it serializes rather than with the one investigation that first needed
+// it.
+
+func v2CapabilityData(capabilities []v2Capability) []map[string]any {
+	data := make([]map[string]any, 0, len(capabilities))
+	for _, capability := range capabilities {
+		entry := map[string]any{
+			"capability":    capability.QualifiedName(),
+			"configuration": capability.Configuration,
+			"status":        capability.Status,
+		}
+		if len(capability.StatusCodes) > 0 {
+			entry["status_details"] = capability.StatusCodes
+		}
+		data = append(data, entry)
+	}
+	return data
+}
+
+func v2RequirementData(requirements []v2Requirement) []map[string]any {
+	data := make([]map[string]any, 0, len(requirements))
+	for _, requirement := range requirements {
+		entry := map[string]any{
+			"description":          requirement.Description,
+			"minimum_deadline":     requirement.Deadline,
+			"awaiting_action_from": requirement.AwaitingFrom,
+		}
+		if requirement.ID != "" {
+			entry["id"] = requirement.ID
+		}
+		if len(requirement.ErrorCodes) > 0 {
+			entry["error_codes"] = requirement.ErrorCodes
+		}
+		if len(requirement.Restricts) > 0 {
+			entry["restricts_capabilities"] = requirement.Restricts
+		}
+		if requirement.Reference != "" {
+			entry["reference"] = requirement.Reference
+		}
+		data = append(data, entry)
+	}
+	return data
+}
