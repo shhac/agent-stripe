@@ -3,6 +3,9 @@ package mockstripe
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 )
 
 // The mock's response vocabulary. resource_routes.go, v1_routes.go and
@@ -75,4 +78,65 @@ func requireMethod(w http.ResponseWriter, r *http.Request, methods ...string) bo
 	}
 	writeStripeError(w, http.StatusMethodNotAllowed, "invalid_request_error", "method_not_allowed", "Method not supported by mockstripe")
 	return false
+}
+
+// /v2 envelope: data plus next_page_url, no has_more and no cursor IDs.
+
+// writeV2List emits the /v2 list envelope: data plus next_page_url, with no
+// has_more and no cursor IDs.
+func writeV2List(w http.ResponseWriter, r *http.Request, path string, items []map[string]any) {
+	query := r.URL.Query()
+	start := v2PageStart(query.Get("page"), len(items))
+	limit := v2PageLimit(query.Get("limit"))
+
+	items = items[start:]
+	var nextPageURL any
+	if limit < len(items) {
+		nextPageURL = v2NextPageURL(path, start+limit, limit)
+		items = items[:limit]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data":              items,
+		"next_page_url":     nextPageURL,
+		"previous_page_url": nil,
+	})
+}
+
+func v2PageStart(page string, total int) int {
+	if page == "" {
+		return 0
+	}
+	start, err := strconv.Atoi(strings.TrimPrefix(page, "page_mock_"))
+	if err != nil || start < 0 {
+		return 0
+	}
+	return min(start, total)
+}
+
+func v2PageLimit(raw string) int {
+	if raw == "" {
+		return 10
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit < 0 {
+		return 10
+	}
+	return limit
+}
+
+func v2NextPageURL(path string, start, limit int) string {
+	query := url.Values{}
+	query.Set("page", "page_mock_"+strconv.Itoa(start))
+	query.Set("limit", strconv.Itoa(limit))
+	return path + "?" + query.Encode()
+}
+
+func writeV2Error(w http.ResponseWriter, status int, errType, code, message string) {
+	writeJSON(w, status, map[string]any{
+		"error": map[string]any{
+			"type":    errType,
+			"code":    code,
+			"message": message,
+		},
+	})
 }

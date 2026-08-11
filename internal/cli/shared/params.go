@@ -41,3 +41,17 @@ func AddIndexed(params url.Values, key string, values []string) {
 		index++
 	}
 }
+
+func AddString(values url.Values, key, value string) {
+	if value != "" {
+		values.Set(key, value)
+	}
+}
+
+func AddMulti(values url.Values, key string, items []string) {
+	for _, item := range items {
+		if item != "" {
+			values.Add(key, item)
+		}
+	}
+}

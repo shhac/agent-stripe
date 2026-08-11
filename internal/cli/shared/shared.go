@@ -3,8 +3,6 @@ package shared
 import (
 	"context"
 	"encoding/json"
-	"net/url"
-	"time"
 
 	"github.com/shhac/agent-stripe/internal/api"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
@@ -27,20 +25,6 @@ func GetEntities(flags *GlobalFlags, args []string, getOne func(ctx context.Cont
 		})
 	})
 }
-
-type GlobalFlags struct {
-	libcli.Globals // Format, TimeoutMS, Debug
-
-	Profile      string
-	Context      string
-	APIKey       string
-	BaseURL      string
-	MaxRetries   int
-	APIVersion   string
-	V2APIVersion string
-}
-
-type GlobalsFunc = func() *GlobalFlags
 
 func ToAnySlice[T any](s []T) []any {
 	result := make([]any, len(s))
@@ -155,39 +139,4 @@ func redactedRawListItem(item json.RawMessage, redaction output.RedactionOptions
 		return nil, agenterrors.Wrap(err, agenterrors.FixableByAgent)
 	}
 	return output.Redact(decoded, redaction), nil
-}
-
-// RequireFlag returns nil when value is present, or a structured
-// fixable_by:agent error when it is empty. Callers bubble the error so the
-// single sink in libcli.Run renders it once and exits non-zero.
-func RequireFlag(flag, value, hint string) error {
-	if value != "" {
-		return nil
-	}
-	err := agenterrors.Newf(agenterrors.FixableByAgent, "--%s is required", flag)
-	if hint != "" {
-		err = err.WithHint(hint)
-	}
-	return err
-}
-
-func ContextWithTimeout(parent context.Context, ms int) (context.Context, context.CancelFunc) {
-	if ms <= 0 {
-		return parent, func() {}
-	}
-	return context.WithTimeout(parent, time.Duration(ms)*time.Millisecond)
-}
-
-func AddString(values url.Values, key, value string) {
-	if value != "" {
-		values.Set(key, value)
-	}
-}
-
-func AddMulti(values url.Values, key string, items []string) {
-	for _, item := range items {
-		if item != "" {
-			values.Add(key, item)
-		}
-	}
 }

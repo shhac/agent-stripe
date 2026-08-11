@@ -38,58 +38,6 @@ func registerConnectDomain(root *cobra.Command) {
 	root.AddCommand(cmd)
 }
 
-const invoicesUsageText = `invoices — invoice payment and metadata triage
-
-COMMON STARTS
-  agent-stripe invoices get in_... --expand payment_intent
-  agent-stripe invoices line-items in_...
-  agent-stripe invoices list --customer cus_... --status open
-  agent-stripe invoices search --query "number:'ABC-0001'"
-  agent-stripe investigate invoice-payment in_...
-  agent-stripe investigate invoice-metadata in_...
-  agent-stripe investigate invoice-metadata --number ABC-0001
-
-WHEN A CUSTOMER SENDS AN INVOICE COPY
-  1. Resolve the invoice number if needed:
-     agent-stripe investigate resolve ABC-0001
-  2. Find payment details:
-     agent-stripe investigate invoice-payment in_...
-  3. Find internal product metadata on the PaymentIntent:
-     agent-stripe investigate invoice-metadata in_...
-
-OUTPUT NOTES
-  Invoice, PaymentIntent, Charge, and line-item IDs are preserved in compact output.
-  Invoice lists are compact by default; use invoices list --full or invoices get in_... when you need raw expanded fields.
-  Sensitive URLs and customer contact fields are redacted by default; use --expose only when needed.
-`
-
-const subscriptionsUsageText = `subscriptions — renewal, collection, and item triage
-
-COMMON STARTS
-  agent-stripe subscriptions get sub_... --expand latest_invoice --expand latest_invoice.payment_intent
-  agent-stripe subscriptions list --customer cus_... --status active|past_due|unpaid|all
-  agent-stripe subscriptions invoices sub_... --status open
-  agent-stripe subscriptions items sub_... --expand data.price.product
-  agent-stripe investigate subscription-renewal --subscription sub_...
-  agent-stripe investigate subscription-renewal --customer cus_...
-  agent-stripe investigate subscription-renewal --metadata tenant_id=acme
-  agent-stripe investigate subscription-items --subscription sub_...
-  agent-stripe investigate subscription-amount-change --subscription sub_...
-  agent-stripe investigate collection-risk --days 30
-  agent-stripe investigate subscription-cancel-risk --days 30
-
-QUESTIONS THIS ANSWERS
-  Last paid invoice, latest PaymentIntent/Charge, next renewal time, next preview amount.
-  Which Price/Product/metadata drove a subscription charge.
-  Whether the customer needs outreach for missing, expiring, declined, or action-required payment details.
-
-OUTPUT NOTES
-  Investigation output emits subscription, invoice, payment, item, price, and product evidence records.
-  Subscription lists are compact by default; use subscriptions list --full or subscriptions get sub_... for full objects.
-  Use --full or --expand-field for verbose item/product metadata.
-  Redaction is independent from truncation; use --expose for redacted fields.
-`
-
 const paymentsUsageText = `payments — PaymentIntent, Charge, card, and failure triage
 
 COMMON STARTS
