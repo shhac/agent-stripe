@@ -141,6 +141,13 @@ func evidenceRecordKey(record evidenceRecord) string {
 	return fmt.Sprintf("record:%x", sha256.Sum256(raw))
 }
 
+// finding is the counterpart to entityRecord for the common three-field case.
+// The bare literal was written out at ~28 sites, with "finding" spelled as a
+// string literal each time and nothing checking it.
+func finding(severity, summary string) evidenceRecord {
+	return evidenceRecord{Type: "finding", Severity: severity, Summary: summary}
+}
+
 func entityRecord(object string, data map[string]any) evidenceRecord {
 	return evidenceRecord{
 		Type:   "entity",

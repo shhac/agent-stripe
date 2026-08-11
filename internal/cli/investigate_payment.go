@@ -45,11 +45,7 @@ func (i investigator) paymentIncidentFromPI(pi map[string]any) error {
 		i.add(entityRecord("charge", charge))
 	}
 	i.relatedDisputesAndRefunds(pi, charge)
-	i.add(evidenceRecord{
-		Type:     "finding",
-		Severity: severityForPayment(pi, charge),
-		Summary:  paymentFailureSummary(pi, charge),
-	})
+	i.add(finding(severityForPayment(pi, charge), paymentFailureSummary(pi, charge)))
 	return nil
 }
 
@@ -57,11 +53,7 @@ func (i investigator) paymentIncidentFromCharge(charge map[string]any) error {
 	i.add(entityRecord("charge", charge))
 	i.followRef(charge, "payment_intent")
 	i.relatedDisputesAndRefunds(nil, charge)
-	i.add(evidenceRecord{
-		Type:     "finding",
-		Severity: severityForPayment(nil, charge),
-		Summary:  paymentFailureSummary(nil, charge),
-	})
+	i.add(finding(severityForPayment(nil, charge), paymentFailureSummary(nil, charge)))
 	return nil
 }
 

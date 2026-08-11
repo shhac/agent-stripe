@@ -33,9 +33,9 @@ func (i investigator) refund(id string) error {
 	}
 	i.addList("refund", refunds)
 	if len(refunds) == 0 {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No refunds found for " + id + "."})
+		i.add(finding("warning", "No refunds found for "+id+"."))
 		return nil
 	}
-	i.add(evidenceRecord{Type: "finding", Severity: "info", Summary: "Refund evidence gathered for original payment " + id + "."})
+	i.add(finding("info", "Refund evidence gathered for original payment "+id+"."))
 	return nil
 }

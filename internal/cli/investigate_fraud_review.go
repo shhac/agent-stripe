@@ -44,9 +44,9 @@ func (i investigator) fraudReview(id string) error {
 		i.fraudReviewForCharge(charge)
 	}
 	if i.count() == before {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No fraud-review evidence found for " + id + "."})
+		i.add(finding("warning", "No fraud-review evidence found for "+id+"."))
 	}
-	i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "Fraud review evidence gathered. Check charge outcome risk fields, early fraud warnings, disputes, and refunds before deciding customer action."})
+	i.add(finding("warning", "Fraud review evidence gathered. Check charge outcome risk fields, early fraud warnings, disputes, and refunds before deciding customer action."))
 	return nil
 }
 

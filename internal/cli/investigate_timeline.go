@@ -26,7 +26,7 @@ func (i investigator) timeline(customerID string, limit int) error {
 	for _, event := range events {
 		i.add(event.record())
 	}
-	i.add(evidenceRecord{Type: "finding", Severity: "info", Summary: fmt.Sprintf("Timeline gathered %d timestamped customer objects for %s.", len(events), customerID)})
+	i.add(finding("info", fmt.Sprintf("Timeline gathered %d timestamped customer objects for %s.", len(events), customerID)))
 	return nil
 }
 

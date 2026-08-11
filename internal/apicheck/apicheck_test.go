@@ -101,6 +101,22 @@ func commands() [][]string {
 		{"payouts", "list", "--status", "failed"},
 		{"balance-transactions", "list", "--type", "charge", "--payout", "po_mock_failed"},
 		{"application-fees", "list", "--charge", "ch_mock_succeeded"},
+		{"application-fees", "get", "fee_mock_123"},
+		{"balance-transactions", "get", "txn_mock_succeeded"},
+		{"checkout-sessions", "get", "cs_mock_paid"},
+		{"disputes", "get", "dp_mock_needs_response"},
+		{"early-fraud-warnings", "get", "issfr_mock_1"},
+		{"payment-intents", "search", "--query", "status:'succeeded'"},
+		{"payment-links", "get", "plink_mock_1"},
+		{"payouts", "get", "po_mock_failed"},
+		{"prices", "get", "price_mock_basic"},
+		{"prices", "search", "--query", "product:'prod_mock_basic'"},
+		{"products", "get", "prod_mock_basic"},
+		{"products", "search", "--query", "name:'Basic'"},
+		{"refunds", "get", "re_mock_pending"},
+		{"setup-intents", "get", "seti_mock_1"},
+		{"subscriptions", "search", "--query", "status:'active'"},
+		{"transfers", "get", "tr_mock_failed"},
 		{"products", "list", "--active", "true"},
 		{"prices", "list", "--product", "prod_mock_basic", "--type", "recurring"},
 		{"payment-links", "list", "--active", "true"},
@@ -147,8 +163,54 @@ func commands() [][]string {
 		{"accounts-v2", "get", "acct_mock_v2_restricted"},
 		{"accounts-v2", "persons", "list", "acct_mock_v2_restricted"},
 		{"accounts-v2", "payout-methods", "acct_mock_v2_recipient"},
+		{"accounts-v2", "persons", "get", "acct_mock_v2_restricted", "person_mock_representative"},
 		{"events-v2", "list", "--object-id", "acct_mock_v2_restricted"},
 		{"events-v2", "get", "evt_test_mock_requirements_updated"},
+	}
+}
+
+// notNetworked are the leaf commands that never reach Stripe, so they have no
+// requests to validate.
+var notNetworked = map[string]bool{
+	"usage": true, "version": true, "mcp": true,
+	"auth add": true, "auth update": true, "auth remove": true, "auth default": true, "auth list": true,
+	"config show": true, "config path": true, "config get": true, "config set": true, "config unset": true,
+	"payments usage": true, "connect usage": true, "invoices usage": true, "subscriptions usage": true,
+	"accounts-v2 usage": true, "events-v2 usage": true, "investigate usage": true,
+	"charges usage": true, "payment-intents usage": true, "mcp usage": true,
+	"mcp pair reset": true, "mcp pair rotate": true,
+	// api get is the raw escape hatch: its path comes from the caller, so there
+	// is no fixed request to validate.
+	"api get": true,
+	// auth check reaches Stripe, but through the credential store rather than a
+	// profile the harness can supply.
+	"auth check": true,
+}
+
+// TestCommandTableCoversEveryCommand is what makes the spec check mean
+// something. The table used to carry a comment asking contributors to keep it
+// exhaustive, with nothing enforcing it — so a new command's requests would go
+// unvalidated silently, which is exactly the failure the package exists to
+// prevent.
+func TestCommandTableCoversEveryCommand(t *testing.T) {
+	covered := map[string]bool{}
+	for _, args := range commands() {
+		for end := len(args); end > 0; end-- {
+			covered[strings.Join(args[:end], " ")] = true
+		}
+	}
+
+	var missing []string
+	for _, leaf := range cli.LeafCommandsForTest("apicheck") {
+		if covered[leaf] || notNetworked[leaf] {
+			continue
+		}
+		missing = append(missing, leaf)
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		t.Errorf("commands reaching Stripe with no entry in commands() (add them, or to notNetworked):\n  %s",
+			strings.Join(missing, "\n  "))
 	}
 }
 
@@ -167,8 +229,10 @@ func TestRequestsMatchStripeOpenAPISpec(t *testing.T) {
 		restore()
 	}
 
-	var unknownPaths, unknownParams, v2Skipped []string
+	var unknownPaths, unknownParams []string
+	v2Skipped := map[string]bool{}
 	seen := map[string]bool{}
+	v1Checked := 0
 	for _, req := range rec.requests {
 		key := req.method + " " + req.path + " " + strings.Join(req.params, ",")
 		if seen[key] {
@@ -177,9 +241,10 @@ func TestRequestsMatchStripeOpenAPISpec(t *testing.T) {
 		seen[key] = true
 
 		if strings.HasPrefix(req.path, "/v2/") {
-			v2Skipped = append(v2Skipped, req.method+" "+req.path)
+			v2Skipped[req.method+" "+req.path] = true
 			continue
 		}
+		v1Checked++
 		operation, template, ok := spec.lookup(req.method, req.path)
 		if !ok {
 			unknownPaths = append(unknownPaths, fmt.Sprintf("%s %s (from: %s)", req.method, req.path, req.from))
@@ -203,24 +268,14 @@ func TestRequestsMatchStripeOpenAPISpec(t *testing.T) {
 		t.Errorf("query parameters Stripe does not declare:\n  %s", strings.Join(unknownParams, "\n  "))
 	}
 
-	sort.Strings(v2Skipped)
-	v2Skipped = dedupe(v2Skipped)
-	t.Logf("checked %d distinct /v1 requests against spec version %s", len(seen)-len(v2Skipped), spec.version)
-	t.Logf("/v2 requests not covered by Stripe's published spec (%d), verified against docs only:\n  %s",
-		len(v2Skipped), strings.Join(v2Skipped, "\n  "))
-}
-
-func dedupe(values []string) []string {
-	seen := map[string]bool{}
-	out := values[:0]
-	for _, value := range values {
-		if seen[value] {
-			continue
-		}
-		seen[value] = true
-		out = append(out, value)
+	skipped := make([]string, 0, len(v2Skipped))
+	for path := range v2Skipped {
+		skipped = append(skipped, path)
 	}
-	return out
+	sort.Strings(skipped)
+	t.Logf("checked %d distinct /v1 requests against spec version %s", v1Checked, spec.version)
+	t.Logf("/v2 requests not covered by Stripe's published spec (%d), verified against docs only:\n  %s",
+		len(skipped), strings.Join(skipped, "\n  "))
 }
 
 type openAPISpec struct {

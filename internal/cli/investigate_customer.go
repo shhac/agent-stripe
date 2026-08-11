@@ -59,17 +59,9 @@ func (i investigator) customerCardPayment(customer, last4 string, limit int) err
 }
 
 func customerCardPaymentFinding(customer, last4 string, charge map[string]any) evidenceRecord {
-	return evidenceRecord{
-		Type:     "finding",
-		Severity: "info",
-		Summary:  fmt.Sprintf("Most recent payment for customer %s using card ending %s is charge %s for %s.", customer, last4, mapString(charge, "id"), formatAmount(charge)),
-	}
+	return finding("info", fmt.Sprintf("Most recent payment for customer %s using card ending %s is charge %s for %s.", customer, last4, mapString(charge, "id"), formatAmount(charge)))
 }
 
 func customerCardPaymentNotFound(customer, last4 string, limit int) evidenceRecord {
-	return evidenceRecord{
-		Type:     "finding",
-		Severity: "warning",
-		Summary:  fmt.Sprintf("No recent charge for customer %s matched card ending %s in the first %d charges.", customer, last4, limit),
-	}
+	return finding("warning", fmt.Sprintf("No recent charge for customer %s matched card ending %s in the first %d charges.", customer, last4, limit))
 }

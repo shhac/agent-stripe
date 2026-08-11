@@ -46,7 +46,7 @@ func (i investigator) disputeImpact(id string, limit int) error {
 		i.disputeImpactRecords(dispute)
 	}
 	if len(disputes) == 0 {
-		i.add(evidenceRecord{Type: "finding", Severity: "info", Summary: "No dispute exposure found for " + id + "."})
+		i.add(finding("info", "No dispute exposure found for "+id+"."))
 	}
 	return nil
 }

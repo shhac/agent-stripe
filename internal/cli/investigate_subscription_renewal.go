@@ -36,7 +36,7 @@ func (i investigator) subscriptionRenewal(subscription, customer, metadata strin
 		return err
 	}
 	if len(subs) == 0 {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No subscriptions matched the supplied filters."})
+		i.add(finding("warning", "No subscriptions matched the supplied filters."))
 		return nil
 	}
 	for _, sub := range subs {
@@ -49,7 +49,7 @@ func (i investigator) subscriptionRenewal(subscription, customer, metadata strin
 func (i investigator) subscriptionPaymentSummary(sub map[string]any) {
 	if latestInvoiceID := idFromValue(sub["latest_invoice"]); latestInvoiceID != "" {
 		if err := i.invoicePayment(latestInvoiceID); err != nil {
-			i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not retrieve latest invoice " + latestInvoiceID + ": " + err.Error()})
+			i.add(finding("warning", "Could not retrieve latest invoice "+latestInvoiceID+": "+err.Error()))
 		}
 	}
 	nextAmount := "unknown"

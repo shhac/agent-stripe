@@ -57,7 +57,7 @@ func (i investigator) setup(id string, limit int) error {
 		i.add(setupFinding(seti))
 	}
 	if len(setupIntents) == 0 {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No SetupIntents found for " + id + "."})
+		i.add(finding("warning", "No SetupIntents found for "+id+"."))
 	}
 	return nil
 }

@@ -46,7 +46,7 @@ func (i investigator) invoiceMetadata(invoiceID, number string) error {
 			return err
 		}
 		if len(found) == 0 {
-			i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No invoice matched number " + number + "."})
+			i.add(finding("warning", "No invoice matched number "+number+"."))
 			return nil
 		}
 		invoiceID = mapString(found[0], "id")
@@ -64,7 +64,7 @@ func (i investigator) invoiceMetadata(invoiceID, number string) error {
 		return err
 	}
 	if pi == nil {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "Invoice has no PaymentIntent."})
+		i.add(finding("warning", "Invoice has no PaymentIntent."))
 		return nil
 	}
 	i.add(entityRecord("payment_intent", pi))
@@ -98,7 +98,7 @@ func (i investigator) invoicePayment(invoiceID string) error {
 		return err
 	}
 	if pi == nil {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "Invoice has no PaymentIntent, so no card details are available from a charge."})
+		i.add(finding("warning", "Invoice has no PaymentIntent, so no card details are available from a charge."))
 		return nil
 	}
 	i.add(entityRecord("payment_intent", pi))
@@ -109,11 +109,7 @@ func (i investigator) invoicePayment(invoiceID string) error {
 	if charge != nil {
 		i.add(entityRecord("charge", charge))
 	}
-	i.add(evidenceRecord{
-		Type:     "finding",
-		Severity: severityForPayment(pi, charge),
-		Summary:  invoicePaymentSummary(invoice, pi, charge),
-	})
+	i.add(finding(severityForPayment(pi, charge), invoicePaymentSummary(invoice, pi, charge)))
 	return nil
 }
 

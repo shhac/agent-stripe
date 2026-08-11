@@ -51,7 +51,7 @@ func (i investigator) invoiceCollection(id string, limit int) error {
 		i.add(invoiceCollectionFinding(invoice))
 	}
 	if len(invoices) == 0 {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No invoices matched the supplied collection target."})
+		i.add(finding("warning", "No invoices matched the supplied collection target."))
 	}
 	return nil
 }

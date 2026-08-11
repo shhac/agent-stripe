@@ -116,7 +116,7 @@ func (i investigator) resolveInvoiceNumber(value string) error {
 		return err
 	}
 	if len(found) == 0 {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not resolve value as a known Stripe ID prefix or invoice number."})
+		i.add(finding("warning", "Could not resolve value as a known Stripe ID prefix or invoice number."))
 		return nil
 	}
 	invoice := found[0]

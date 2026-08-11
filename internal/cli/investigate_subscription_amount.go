@@ -50,11 +50,7 @@ func (i investigator) latestInvoiceEvidence(sub map[string]any) map[string]any {
 	}
 	invoice, err := i.get("/v1/invoices/"+url.PathEscape(latestInvoiceID), url.Values{})
 	if err != nil {
-		i.add(evidenceRecord{
-			Type:     "finding",
-			Severity: "warning",
-			Summary:  "Could not retrieve latest invoice " + latestInvoiceID + ": " + err.Error(),
-		})
+		i.add(finding("warning", "Could not retrieve latest invoice "+latestInvoiceID+": "+err.Error()))
 		return nil
 	}
 	i.add(entityRecord("invoice", invoice))

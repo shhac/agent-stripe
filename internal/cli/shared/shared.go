@@ -42,7 +42,10 @@ func WritePaginatedList(items []any, pagination *output.Pagination, format strin
 	}
 	result := map[string]any{"data": items}
 	if pagination != nil {
-		result["pagination"] = pagination
+		// The same @-prefixed key the NDJSON trailer uses, matching @redacted
+		// and @unresolved. The envelope used a bare "pagination", so the
+		// trailer's name depended on the output format.
+		result["@pagination"] = pagination
 	}
 	output.Print(result, f, true)
 }

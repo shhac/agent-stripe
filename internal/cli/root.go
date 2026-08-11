@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-stripe/internal/cli/auth"
@@ -135,6 +137,33 @@ func applyConfiguredDefaults(root *cobra.Command, globals *shared.GlobalFlags) {
 // once and exits non-zero.
 func Execute(version string) {
 	libcli.Run(newRootCmd(version))
+}
+
+// LeafCommandsForTest lists every runnable leaf command as a space-joined path
+// ("investigate account-health"). apicheck uses it to prove its command table
+// covers the real tree, rather than relying on a comment asking contributors to
+// keep the two in sync.
+func LeafCommandsForTest(version string) []string {
+	var walk func(cmd *cobra.Command, prefix []string) []string
+	walk = func(cmd *cobra.Command, prefix []string) []string {
+		var out []string
+		for _, child := range cmd.Commands() {
+			if child.Hidden || child.Name() == "help" || child.Name() == "completion" {
+				continue
+			}
+			path := append(append([]string{}, prefix...), child.Name())
+			if len(child.Commands()) > 0 {
+				out = append(out, walk(child, path)...)
+				continue
+			}
+			if child.RunE == nil && child.Run == nil {
+				continue
+			}
+			out = append(out, strings.Join(path, " "))
+		}
+		return out
+	}
+	return walk(newRootCmd(version), nil)
 }
 
 // RunForTest executes one command in-process and returns the exit code the

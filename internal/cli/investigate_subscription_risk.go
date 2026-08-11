@@ -85,7 +85,7 @@ func (i investigator) subscriptionRiskScan(days, limit int, spec subscriptionRis
 		i.add(entityRecord("subscription", sub), subscriptionRiskFinding("warning", risk, sub))
 	}
 	if risky == 0 {
-		i.add(evidenceRecord{Type: "finding", Severity: "info", Summary: spec.empty})
+		i.add(finding("info", spec.empty))
 	}
 	return nil
 }

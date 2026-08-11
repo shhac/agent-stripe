@@ -164,3 +164,26 @@ func newCompactListServer(t *testing.T) *httptest.Server {
 		}
 	}))
 }
+
+func TestPaginationKeyIsTheSameInEveryFormat(t *testing.T) {
+	h := newCLITestHarness(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"object":"list","has_more":true,"data":[{"id":"pi_123","object":"payment_intent"}]}`))
+	}))
+	defer server.Close()
+
+	ndjson, _ := h.run("--api-key", "sk_test_123", "--base-url", server.URL, "payment-intents", "list", "--limit", "1")
+	if !strings.Contains(ndjson, `"@pagination"`) {
+		t.Fatalf("NDJSON trailer = %s", ndjson)
+	}
+
+	// The envelope used a bare "pagination" while every doc and every other
+	// marker (@redacted, @unresolved) is @-prefixed.
+	envelope, _ := h.run("--api-key", "sk_test_123", "--base-url", server.URL, "payment-intents", "list", "--limit", "1", "--format", "json")
+	if !strings.Contains(envelope, `"@pagination"`) {
+		t.Fatalf("json envelope = %s", envelope)
+	}
+	if strings.Contains(envelope, `"pagination"`) {
+		t.Fatalf("json envelope still carries the un-prefixed key: %s", envelope)
+	}
+}

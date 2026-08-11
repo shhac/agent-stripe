@@ -46,7 +46,7 @@ func (i investigator) paymentMethodReadiness(id string) error {
 		}
 	}
 	if len(paymentMethods) == 0 {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No visible saved card payment methods found for customer " + customerID + "."})
+		i.add(finding("warning", "No visible saved card payment methods found for customer "+customerID+"."))
 	}
 	return nil
 }

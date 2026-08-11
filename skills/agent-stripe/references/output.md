@@ -99,7 +99,7 @@ Truncation controls do not override redaction. Use `--expose` for redacted field
 
 ## Pagination
 
-List NDJSON output includes an `@pagination` record when Stripe reports more results:
+The pagination trailer uses the same `@pagination` key in every format: a trailing record in NDJSON, and a top-level key beside `data` in the `--format json|yaml` envelope. List NDJSON output includes it when Stripe reports more results:
 
 ```json
 {"id":"pi_...","object":"payment_intent"}
