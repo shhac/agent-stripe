@@ -9,6 +9,18 @@ The resource commands remain available for direct exploration, but investigation
 
 Investigation output preserves Stripe-shaped `data` as much as possible. When Stripe returns an expanded nested object in a field that can also be an ID string, the parent field is replaced by the nested object's ID and the nested object is emitted as its own `entity` record. Long strings are truncated by default, with `truncated_fields` pointing at `--expand-field <path>` or `--full`. Sensitive Stripe fields are redacted by default with `"[REDACTED]"` leaf values and a top-level `@redacted` path list; `--expose <field-or-path>` is required to reveal them.
 
+## Evidence Pipeline
+
+There is one accumulator: the collector. A workflow calls `i.add(...)` where it finds a record and returns `error`; it does not thread a `[]evidenceRecord` slice through its call graph. Records are normalized and deduped exactly once, inside `collector.add`, and are then either streamed as they arrive (NDJSON) or buffered for a single envelope (`--format json|yaml`). Both paths therefore emit the same records in the same order.
+
+This replaced a threaded slice that was really the collector's own list handed back to callers, alongside a second normalize-and-dedup path used only by the buffered format. The two disagreed: `--format json` emitted a duplicate entity and dropped one that NDJSON showed.
+
+Where a workflow needs to know whether a step produced anything, it compares `i.count()` around the step, or tests the domain collection it just fetched — not the length of a records slice, which was always the whole investigation's output.
+
+Related lookups go through `i.fetchRelated` / `i.followRef` / `i.listRelated`, which resolve the API path from the ID prefix and record a warning when the fetch fails. A failed lookup must never read as an absence: "no disputes" and "the dispute call failed" are different answers, and only one of them is safe to act on.
+
+Finding summaries are free text and are **not** passed through the redaction policy. Never interpolate a Stripe object or sub-object into a summary — name the scalar fields you want. `last_payment_error` nests a full PaymentMethod, so `%v` on it leaks billing name, email, phone, and the card fingerprint.
+
 ## Adding A Workflow
 
 Each investigation class should be mostly independent:

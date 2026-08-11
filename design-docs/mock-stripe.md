@@ -51,6 +51,22 @@ The v2 routes reproduce the parts of the v2 transport that command code has to g
 - Pagination returns `next_page_url` with a `page` token and no `has_more`.
 - A v1-only fixture account returns 400 `v1_account_instead_of_v2_account` from `/v2/core/accounts/:id`, so namespace fallback is exercised end to end.
 
+### Fault injection
+
+Every mock response used to be healthy, which made the paths that matter most in triage unreachable from the tests: a retried 429, a related lookup that fails, a gateway returning a non-JSON body. Faults are requested per path, either with a header or armed out of band for the subprocess case:
+
+```
+X-Mock-Fault: /v1/disputes=500       fail that path with a Stripe-shaped error
+X-Mock-Fault: /v1/charges=429x2      429 twice, then succeed (drives the retry path)
+X-Mock-Fault: /v1/events=garbage     non-JSON body
+X-Mock-Fault: *=500                  fail everything
+
+POST /_mock/faults?rules=<same spec> arms the rules for later requests
+DELETE /_mock/faults                 clears them
+```
+
+Repeat counts are per server instance, so one `httptest` server per test keeps them independent.
+
 The mock intentionally rejects missing credentials and unsupported methods. Most Stripe-shaped endpoints are GET-only; `POST /v1/invoices/create_preview` is allowed because it is the API shape Stripe uses for previewing a future invoice and is central to subscription investigations.
 
 ## CLI wiring
