@@ -20,9 +20,20 @@ func (i investigator) refundSettlement(id string) error {
 	if err := validateAllowedStripeID(id, "refund", "charge"); err != nil {
 		return err
 	}
-	refunds, err := i.refundsForSettlement(id)
+	refunds, looked, err := i.refundsForSettlement(id)
 	if err != nil {
 		return err
+	}
+	if !looked {
+		// The lookup failed, so "none was issued" would be a claim about data
+		// never seen — and it is the sentence support repeats to a customer.
+		i.add(evidenceRecord{
+			Type:     "finding",
+			Severity: "warning",
+			Summary:  "Could not determine whether " + id + " has refunds; the lookup failed. Re-run before telling the customer no refund was issued.",
+			Data:     map[string]any{"input": id},
+		})
+		return nil
 	}
 	if len(refunds) == 0 {
 		i.add(evidenceRecord{
@@ -42,15 +53,22 @@ func (i investigator) refundSettlement(id string) error {
 	return nil
 }
 
-func (i investigator) refundsForSettlement(id string) ([]map[string]any, error) {
+// refundsForSettlement reports whether the lookup actually happened, because a
+// failed list and an empty list are the same nil otherwise.
+func (i investigator) refundsForSettlement(id string) ([]map[string]any, bool, error) {
 	if strings.HasPrefix(id, "re_") {
 		refund, err := i.get("/v1/refunds/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return []map[string]any{refund}, nil
+		return []map[string]any{refund}, true, nil
 	}
-	return i.listRelated("refunds", "/v1/refunds", valuesWithLimit(10, "charge", id)), nil
+	refunds, err := i.list("/v1/refunds", valuesWithLimit(10, "charge", id))
+	if err != nil {
+		i.add(relatedWarning("refunds for "+id, err))
+		return nil, false, nil
+	}
+	return refunds, true, nil
 }
 
 // refundSettlementFinding separates "Stripe sent it" from "the bank posted it",

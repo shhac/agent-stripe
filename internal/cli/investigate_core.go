@@ -60,15 +60,25 @@ func (i investigator) postForm(path string, params url.Values) (map[string]any, 
 }
 
 func (i investigator) list(path string, params url.Values) ([]map[string]any, error) {
+	items, _, err := i.listPage(path, params)
+	return items, err
+}
+
+// listPage also reports whether Stripe had more results. A scan that states an
+// absence — "no duplicates found", "no charge matched" — is only true of what
+// it actually read, so the workflows making those claims need to know they saw
+// a partial page.
+func (i investigator) listPage(path string, params url.Values) ([]map[string]any, bool, error) {
 	raw, err := i.client.Get(i.ctx, path, params)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	list, err := api.DecodeList(raw)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return i.decodeListItems(list.Data)
+	items, err := i.decodeListItems(list.Data)
+	return items, list.HasMore, err
 }
 
 // listV2 is list for the /v2 list envelope, which has no has_more and no
@@ -84,6 +94,29 @@ func (i investigator) listV2(path string, params url.Values) ([]map[string]any, 
 		return nil, err
 	}
 	return i.decodeListItems(list.Data)
+}
+
+// fetchListV2 retrieves a /v2 list without recording its items. A sparse list
+// record would otherwise shadow a fuller one fetched afterwards, because the
+// collector dedups on object and ID and keeps the first it saw.
+func (i investigator) fetchListV2(path string, params url.Values) ([]map[string]any, error) {
+	raw, err := i.client.Get(i.ctx, path, params)
+	if err != nil {
+		return nil, err
+	}
+	list, err := api.DecodeV2List(raw)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list.Data))
+	for _, rawItem := range list.Data {
+		item, err := decodeObject(rawItem)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 func (i investigator) decodeListItems(data []json.RawMessage) ([]map[string]any, error) {

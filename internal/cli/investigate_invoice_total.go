@@ -24,19 +24,24 @@ func (i investigator) invoiceTotal(invoiceID string) error {
 	}
 	i.add(entityRecord("invoice", invoice))
 
-	lines := i.listRelated("invoice lines", "/v1/invoices/"+url.PathEscape(invoiceID)+"/lines", url.Values{"limit": []string{"100"}})
-	i.addList("line_item", lines)
+	lines, err := i.list("/v1/invoices/"+url.PathEscape(invoiceID)+"/lines", url.Values{"limit": []string{"100"}})
+	if err != nil {
+		i.add(relatedWarning("invoice lines", err))
+	} else {
+		i.addList("line_item", lines)
+	}
 	if customerID := idFromValue(invoice["customer"]); customerID != "" {
 		i.fetchRelated("customer", customerID)
 	}
-	i.add(invoiceTotalFinding(invoice, lines))
+	i.add(invoiceTotalFinding(invoice, lines, err == nil))
 	return nil
 }
 
-// invoiceTotalFinding walks the same arithmetic Stripe does, and names the step
-// that disagrees. Printing the fields alone leaves the reader to do this by
-// hand, which is the part they got wrong before asking.
-func invoiceTotalFinding(invoice map[string]any, lines []map[string]any) evidenceRecord {
+// invoiceTotalFinding walks the same arithmetic Stripe does and names the step
+// that disagrees. It takes linesComplete because every claim about the line sum
+// is false when the lines could not be read — zero lines previously skipped the
+// mismatch check and reported a clean reconciliation.
+func invoiceTotalFinding(invoice map[string]any, lines []map[string]any, linesComplete bool) evidenceRecord {
 	currency := mapString(invoice, "currency")
 	subtotal, _ := mapInt64(invoice, "subtotal")
 	total, _ := mapInt64(invoice, "total")
@@ -74,7 +79,7 @@ func invoiceTotalFinding(invoice map[string]any, lines []map[string]any) evidenc
 	}
 
 	mismatches := []string{}
-	if len(lines) > 0 && lineSum != subtotal {
+	if linesComplete && lineSum != subtotal {
 		mismatches = append(mismatches, fmt.Sprintf("line items sum to %d but subtotal is %d", lineSum, subtotal))
 	}
 	if expected := subtotal - discount + tax; expected != total {
@@ -85,17 +90,29 @@ func invoiceTotalFinding(invoice map[string]any, lines []map[string]any) evidenc
 		mismatches = append(mismatches, fmt.Sprintf("amount paid %d differs from total %d", amountPaid, total))
 	}
 
-	summary := fmt.Sprintf("Invoice %s: %d line item(s) summing to %d, subtotal %d, discounts %d, tax %d, total %d, paid %d (%s).",
-		mapString(invoice, "id"), len(lines), lineSum, subtotal, discount, tax, total, amountPaid, currency)
+	if !linesComplete {
+		data["lines_complete"] = false
+	}
+	summary := ""
+	if linesComplete {
+		summary = fmt.Sprintf("Invoice %s: %d line item(s) summing to %d, subtotal %d, discounts %d, tax %d, total %d, paid %d (%s).",
+			mapString(invoice, "id"), len(lines), lineSum, subtotal, discount, tax, total, amountPaid, currency)
+	} else {
+		summary = fmt.Sprintf("Invoice %s: line items could not be read, so the line sum is not checked. Subtotal %d, discounts %d, tax %d, total %d, paid %d (%s).",
+			mapString(invoice, "id"), subtotal, discount, tax, total, amountPaid, currency)
+	}
 	severity := "info"
+	if !linesComplete {
+		severity = "warning"
+	}
 	if len(mismatches) > 0 {
 		severity = "warning"
 		summary += " Does not reconcile: " + joinAndTruncate(mismatches, 3) + "."
 		data["mismatches"] = mismatches
-	} else {
+	} else if linesComplete {
 		summary += " The arithmetic reconciles."
 	}
-	if taxedLines == 0 && tax != 0 {
+	if linesComplete && taxedLines == 0 && tax != 0 {
 		summary += " Tax is charged at invoice level with no per-line tax amounts."
 	}
 	return evidenceRecord{

@@ -88,9 +88,12 @@ var alwaysRedacted = map[string]bool{
 	"phone": true, "contact_phone": true,
 	"fingerprint": true, "iin": true, "network_transaction_id": true, "authorization_code": true,
 	"receipt_url": true, "hosted_invoice_url": true, "invoice_pdf": true, "request_log_url": true,
-	// Accounts v2 identity carries dates of birth on person objects; no triage
-	// question needs the value rather than its presence.
+	// Person objects carry dates of birth in both namespaces (v1 "dob",
+	// v2 "date_of_birth"); no triage question needs the value, only its presence.
 	"date_of_birth": true,
+	"dob":           true,
+	"ssn_last_4":    true,
+	"id_number":     true,
 }
 
 // secretSubstrings catch the open-ended families — client_secret, api_key,
@@ -103,7 +106,11 @@ func shouldRedactField(key, path, object string) bool {
 		return true
 	}
 	switch k {
-	case "name", "given_name", "surname", "legal_name":
+	// Connect v1 persons use first_name/last_name on object "person"; Accounts
+	// v2 uses given_name/surname on v2.core.account_person. Both are the same
+	// PII and both must be masked — covering only the v2 spelling left v1
+	// person names in plaintext.
+	case "name", "given_name", "surname", "legal_name", "first_name", "last_name", "maiden_name", "full_name_aliases":
 		return isAccountLikeObject(object) || strings.Contains(strings.ToLower(path), "billing_details.name")
 	}
 	for _, substring := range secretSubstrings {
@@ -119,7 +126,7 @@ func shouldRedactField(key, path, object string) bool {
 // a v2 account is a business-facing label, not a person, so it is not masked.
 func isAccountLikeObject(object string) bool {
 	switch object {
-	case "customer", "account", "v2.core.account", "v2.core.account_person":
+	case "customer", "account", "person", "v2.core.account", "v2.core.account_person":
 		return true
 	}
 	return false

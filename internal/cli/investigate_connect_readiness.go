@@ -42,9 +42,9 @@ func (i investigator) connectReadiness(limit int, namespace string) error {
 		namespace = namespaceAuto
 	}
 	if namespace != namespaceV1 {
-		blocked, total, err := i.connectReadinessV2(limit)
+		result, err := i.connectReadinessV2(limit)
 		if err == nil {
-			i.add(connectReadinessFinding(namespaceV2, blocked, total))
+			i.add(connectReadinessFinding(namespaceV2, result))
 			return nil
 		}
 		if namespace == namespaceV2 || !isNotV2AccountError(err) {
@@ -57,80 +57,108 @@ func (i investigator) connectReadiness(limit int, namespace string) error {
 			Data:     map[string]any{"namespace": namespaceV1, "v2_error_code": api.ErrorCode(err)},
 		})
 	}
-	blocked, total, err := i.connectReadinessV1(limit)
+	result, err := i.connectReadinessV1(limit)
 	if err != nil {
 		return err
 	}
-	i.add(connectReadinessFinding(namespaceV1, blocked, total))
+	i.add(connectReadinessFinding(namespaceV1, result))
 	return nil
 }
 
-func (i investigator) connectReadinessV2(limit int) ([]string, int, error) {
+// readinessSweep separates the three outcomes. Counting an account that could
+// not be retrieved as "not blocked" let the sweep report a healthy platform
+// when every assessment had failed.
+type readinessSweep struct {
+	inspected  int
+	blocked    []string
+	unassessed []string
+}
+
+func (i investigator) connectReadinessV2(limit int) (readinessSweep, error) {
 	params := url.Values{}
 	shared.AddLimit(params, limit)
-	accounts, err := i.listV2("/v2/core/accounts", params)
+	// The list is fetched without emitting: /v2/core/accounts supports no
+	// include, so its records carry null configuration and requirements and
+	// would shadow the detailed per-account records fetched below.
+	accounts, err := i.fetchListV2("/v2/core/accounts", params)
 	if err != nil {
-		return nil, 0, err
+		return readinessSweep{}, err
 	}
 	includes, err := v2AccountIncludeParams(nil)
 	if err != nil {
-		return nil, 0, err
+		return readinessSweep{}, err
 	}
-	blocked := []string{}
+	sweep := readinessSweep{inspected: len(accounts)}
 	for _, listed := range accounts {
 		id := mapString(listed, "id")
 		account, err := i.get(v2AccountPath(id), includes)
 		if err != nil {
 			i.add(relatedWarning("account "+id, err))
+			sweep.unassessed = append(sweep.unassessed, id)
 			continue
 		}
 		finding := v2AccountHealthFinding(account, 0)
 		if finding.Severity != "warning" {
 			continue
 		}
-		blocked = append(blocked, id)
+		sweep.blocked = append(sweep.blocked, id)
 		i.add(finding)
 	}
-	return blocked, len(accounts), nil
+	return sweep, nil
 }
 
-func (i investigator) connectReadinessV1(limit int) ([]string, int, error) {
+func (i investigator) connectReadinessV1(limit int) (readinessSweep, error) {
 	accounts, err := i.list("/v1/accounts", valuesWithLimit(limit))
 	if err != nil {
-		return nil, 0, err
+		return readinessSweep{}, err
 	}
-	blocked := []string{}
+	sweep := readinessSweep{inspected: len(accounts)}
 	for _, account := range accounts {
 		finding := accountHealthFinding(account)
 		if finding.Severity != "warning" {
 			continue
 		}
-		blocked = append(blocked, mapString(account, "id"))
+		sweep.blocked = append(sweep.blocked, mapString(account, "id"))
 		i.add(finding)
 	}
-	return blocked, len(accounts), nil
+	return sweep, nil
 }
 
-func connectReadinessFinding(namespace string, blocked []string, total int) evidenceRecord {
-	if len(blocked) == 0 {
-		return evidenceRecord{
-			Type:     "finding",
-			Severity: "info",
-			Summary:  fmt.Sprintf("All %d inspected connected accounts are unblocked (%s).", total, namespace),
-			Data:     map[string]any{"namespace": namespace, "inspected": total, "blocked_count": 0},
-		}
+func connectReadinessFinding(namespace string, sweep readinessSweep) evidenceRecord {
+	data := map[string]any{
+		"namespace":     namespace,
+		"inspected":     sweep.inspected,
+		"blocked_count": len(sweep.blocked),
 	}
-	return evidenceRecord{
-		Type:     "finding",
-		Severity: "warning",
-		Summary: fmt.Sprintf("%d of %d inspected connected accounts have blockers (%s): %s. Use account-health for the detail on one.",
-			len(blocked), total, namespace, joinAndTruncate(blocked, 10)),
-		Command: "agent-stripe investigate account-health " + blocked[0],
-		Data: map[string]any{
-			"namespace":     namespace,
-			"inspected":     total,
-			"blocked_count": len(blocked),
-			"blocked":       blocked,
-		},
+	if len(sweep.blocked) > 0 {
+		data["blocked"] = sweep.blocked
 	}
+	if len(sweep.unassessed) > 0 {
+		data["unassessed"] = sweep.unassessed
+		data["unassessed_count"] = len(sweep.unassessed)
+	}
+
+	summary := ""
+	if len(sweep.blocked) == 0 {
+		summary = fmt.Sprintf("No blockers found across %d inspected connected accounts (%s).", sweep.inspected, namespace)
+	} else {
+		summary = fmt.Sprintf("%d of %d inspected connected accounts have blockers (%s): %s. Use account-health for the detail on one.",
+			len(sweep.blocked), sweep.inspected, namespace, joinAndTruncate(sweep.blocked, 10))
+	}
+	// An account that could not be retrieved was not assessed, so the sweep
+	// cannot claim it is healthy — and cannot call the run clean.
+	if len(sweep.unassessed) > 0 {
+		summary += fmt.Sprintf(" %d could not be assessed and are not covered by that: %s.",
+			len(sweep.unassessed), joinAndTruncate(sweep.unassessed, 10))
+	}
+
+	severity := "info"
+	if len(sweep.blocked) > 0 || len(sweep.unassessed) > 0 {
+		severity = "warning"
+	}
+	record := evidenceRecord{Type: "finding", Severity: severity, Summary: summary, Data: data}
+	if len(sweep.blocked) > 0 {
+		record.Command = "agent-stripe investigate account-health " + sweep.blocked[0]
+	}
+	return record
 }

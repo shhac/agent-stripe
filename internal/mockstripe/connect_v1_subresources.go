@@ -79,6 +79,12 @@ func accountPersons(accountID string) []map[string]any {
 			"first_name": "Robin",
 			"last_name":  "Vance",
 			"email":      "robin.vance@example.com",
+			"phone":      "+15550102002",
+			"dob":        map[string]any{"day": 4, "month": 7, "year": 1985},
+			"address": map[string]any{
+				"line1": "18 Halyard Way", "city": "Bristol", "postal_code": "BS1 5TY", "country": "GB",
+			},
+			"ssn_last_4_provided": true,
 			"relationship": map[string]any{
 				"representative":    true,
 				"owner":             true,

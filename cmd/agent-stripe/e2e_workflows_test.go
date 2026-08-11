@@ -79,3 +79,55 @@ func TestCLIRefundRecoveryReportsConnectLiability(t *testing.T) {
 		`application fee was kept`,
 	)
 }
+
+// The four cases below are the class of bug this suite exists for: a failed or
+// truncated fetch turning into a confident, wrongly-signed claim. Each was a
+// real defect found by review after the workflows shipped.
+
+func TestCLIConnectReadinessWillNotCallUnassessedAccountsHealthy(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	runner.ArmFault("/v2/core/accounts/acct=500")
+	out := runner.Run("investigate", "connect-readiness", "--limit", "5")
+
+	runner.AssertContains(out, `could not be assessed`, `"unassessed_count":3`, `"severity":"warning"`)
+	assertNotContains(t, out, "All 3 inspected connected accounts are unblocked")
+}
+
+func TestCLIRefundSettlementWillNotSayNoRefundWasIssuedOnAFailedLookup(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	runner.ArmFault("/v1/refunds=500")
+	out := runner.Run("investigate", "refund-settlement", "ch_mock_succeeded")
+
+	runner.AssertContains(out, `Could not determine whether`, `Re-run before telling the customer`)
+	assertNotContains(t, out, "none was issued")
+}
+
+func TestCLIInvoiceTotalWillNotReconcileWithoutItsLines(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	runner.ArmFault("/v1/invoices/in_mock_paid/lines=500")
+	out := runner.Run("investigate", "invoice-total", "in_mock_paid")
+
+	runner.AssertContains(out, `line items could not be read`, `"severity":"warning"`)
+	assertNotContains(t, out, "The arithmetic reconciles")
+}
+
+func TestCLIScansSayWhenTheyOnlySawOnePage(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	dupes := runner.Run("investigate", "duplicate-charge", "--customer", "cus_mock_123", "--limit", "1")
+	runner.AssertContains(dupes, `not inspected`, `"scan_truncated":true`)
+
+	descriptor := runner.Run("investigate", "statement-descriptor", "--descriptor", "NOTHINGMATCHES", "--limit", "1")
+	runner.AssertContains(descriptor, `not scanned`, `"scan_truncated":true`)
+}
+
+func TestCLIConnectV1PersonNamesAreRedacted(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	// Connect v1 persons use first_name/last_name on object "person"; the v2
+	// spelling was covered and this one was not.
+	out := runner.Run("accounts", "persons", "list", "acct_mock_connected")
+
+	runner.AssertContains(out, `"first_name":"[REDACTED]"`, `"last_name":"[REDACTED]"`, `"dob":"[REDACTED]"`)
+	assertNotContains(t, out, "Robin", "Vance", "robin.vance@example.com", "+15550102002")
+	// Relationship and verification state stay visible — that is the triage data.
+	runner.AssertContains(out, `"representative":true`, `verification.document`)
+}

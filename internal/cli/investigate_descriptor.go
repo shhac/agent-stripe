@@ -46,7 +46,7 @@ func (i investigator) statementDescriptor(descriptor, customer string, limit int
 	if customer != "" {
 		params = valuesWithLimit(limit, "customer", customer)
 	}
-	charges, err := i.list("/v1/charges", params)
+	charges, more, err := i.listPage("/v1/charges", params)
 	if err != nil {
 		return err
 	}
@@ -58,12 +58,16 @@ func (i investigator) statementDescriptor(descriptor, customer string, limit int
 		}
 	}
 	if len(matches) == 0 {
+		summary := fmt.Sprintf("No charge among the %d most recent matched descriptor %q. Statement text is often truncated or prefixed by the bank; try a shorter fragment, a --customer, or a larger --limit.",
+			len(charges), descriptor)
+		if more {
+			summary += " Older charges exist beyond this page and were not scanned."
+		}
 		i.add(evidenceRecord{
 			Type:     "finding",
 			Severity: "warning",
-			Summary: fmt.Sprintf("No charge among the %d most recent matched descriptor %q. Statement text is often truncated or prefixed by the bank; try a shorter fragment, a --customer, or a larger --limit.",
-				len(charges), descriptor),
-			Data: map[string]any{"descriptor": descriptor, "inspected": len(charges)},
+			Summary:  summary,
+			Data:     map[string]any{"descriptor": descriptor, "inspected": len(charges), "scan_truncated": more},
 		})
 		return nil
 	}

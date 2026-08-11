@@ -38,7 +38,7 @@ func (i investigator) actionRequired(customer string, limit int) error {
 	if customer != "" {
 		params = valuesWithLimit(limit, "customer", customer)
 	}
-	intents, err := i.list("/v1/payment_intents", params)
+	intents, more, err := i.listPage("/v1/payment_intents", params)
 	if err != nil {
 		return err
 	}
@@ -55,11 +55,15 @@ func (i investigator) actionRequired(customer string, limit int) error {
 		i.add(actionRequiredFinding(pi, invoice))
 	}
 	if stalled == 0 {
+		summary := fmt.Sprintf("No payments are waiting on customer action across %d inspected PaymentIntents.", len(intents))
+		if more {
+			summary += " Older PaymentIntents were not inspected; raise --limit to widen the scan."
+		}
 		i.add(evidenceRecord{
 			Type:     "finding",
 			Severity: "info",
-			Summary:  fmt.Sprintf("No payments are waiting on customer action across %d inspected PaymentIntents.", len(intents)),
-			Data:     map[string]any{"inspected": len(intents), "customer": customer},
+			Summary:  summary,
+			Data:     map[string]any{"inspected": len(intents), "customer": customer, "scan_truncated": more},
 		})
 	}
 	return nil

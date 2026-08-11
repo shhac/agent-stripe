@@ -40,7 +40,7 @@ func (i investigator) duplicateCharge(customer, last4 string, windowHours, limit
 	if err := validateExpectedStripeID(customer, "customer"); err != nil {
 		return err
 	}
-	charges, err := i.list("/v1/charges", valuesWithLimit(limit, "customer", customer))
+	charges, more, err := i.listPage("/v1/charges", valuesWithLimit(limit, "customer", customer))
 	if err != nil {
 		return err
 	}
@@ -75,23 +75,45 @@ func (i investigator) duplicateCharge(customer, last4 string, windowHours, limit
 		}
 	}
 	if clusters == 0 {
+		summary := fmt.Sprintf("No duplicate charges found for customer %s across %d recent charges within %dh.",
+			customer, len(charges), windowHours)
+		if more {
+			summary += " This customer has older charges that were not inspected; raise --limit to widen the scan."
+		}
 		i.add(evidenceRecord{
 			Type:     "finding",
 			Severity: "info",
-			Summary: fmt.Sprintf("No duplicate charges found for customer %s across %d recent charges within %dh.",
-				customer, len(charges), windowHours),
-			Data: map[string]any{"customer": customer, "inspected": len(charges), "window_hours": windowHours},
+			Summary:  summary,
+			Data:     map[string]any{"customer": customer, "inspected": len(charges), "window_hours": windowHours, "scan_truncated": more},
 		})
 	}
 	return nil
 }
 
-// duplicateChargeKey is what "the same charge twice" means here: same money, on
-// the same card. Two different cards for the same amount is a customer
-// retrying, not a double charge.
+// duplicateChargeKey is what "the same charge twice" means here: same money,
+// same instrument. Two different cards for the same amount is a customer
+// retrying, not a double charge. The payment method type is part of the key
+// because cardLast4 is empty for ACH, SEPA and wallets — without it, unrelated
+// bank transfers of equal value would group and be described as a card.
 func duplicateChargeKey(charge map[string]any) string {
 	amount, _ := mapInt64(charge, "amount")
-	return fmt.Sprintf("%d|%s|%s", amount, mapString(charge, "currency"), cardLast4(charge))
+	return fmt.Sprintf("%d|%s|%s|%s", amount, mapString(charge, "currency"),
+		chargePaymentMethodType(charge), cardLast4(charge))
+}
+
+func chargePaymentMethodType(charge map[string]any) string {
+	return mapString(mapAnyMap(charge, "payment_method_details"), "type")
+}
+
+// describeInstrument avoids claiming a card was involved when none was.
+func describeInstrument(charge map[string]any) string {
+	if last4 := cardLast4(charge); last4 != "" {
+		return "card ending " + last4
+	}
+	if kind := chargePaymentMethodType(charge); kind != "" {
+		return kind
+	}
+	return "an unknown payment method"
 }
 
 // clusterByWindow splits charges that share a key into runs that are actually
@@ -104,17 +126,22 @@ func clusterByWindow(charges []map[string]any, windowSeconds int64) [][]map[stri
 		return left < right
 	})
 
+	// Anchored to the cluster's first charge rather than the previous one: with
+	// a rolling comparison, charges 23h apart chain indefinitely and a 46h span
+	// gets reported as being "within" a 24h window.
 	var clusters [][]map[string]any
 	current := []map[string]any{}
-	var previous int64
+	var anchor int64
 	for _, charge := range sorted {
 		created, _ := mapInt64(charge, "created")
-		if len(current) > 0 && created-previous > windowSeconds {
+		if len(current) > 0 && created-anchor > windowSeconds {
 			clusters = append(clusters, current)
 			current = nil
 		}
+		if len(current) == 0 {
+			anchor = created
+		}
 		current = append(current, charge)
-		previous = created
 	}
 	if len(current) > 0 {
 		clusters = append(clusters, current)
@@ -137,8 +164,8 @@ func duplicateChargeFinding(customer string, cluster []map[string]any) evidenceR
 			refunded++
 		}
 	}
-	summary := fmt.Sprintf("Customer %s has %d charges of %d %s on card ending %s within %d seconds: %s.",
-		customer, len(cluster), amount, mapString(cluster[0], "currency"), cardLast4(cluster[0]), last-first, joinAndTruncate(ids, 6))
+	summary := fmt.Sprintf("Customer %s has %d charges of %d %s on %s within %d seconds: %s.",
+		customer, len(cluster), amount, mapString(cluster[0], "currency"), describeInstrument(cluster[0]), last-first, joinAndTruncate(ids, 6))
 	if refunded > 0 {
 		summary += fmt.Sprintf(" %d of them are already refunded.", refunded)
 	}
@@ -153,6 +180,7 @@ func duplicateChargeFinding(customer string, cluster []map[string]any) evidenceR
 			"amount":         amount,
 			"currency":       mapString(cluster[0], "currency"),
 			"last4":          cardLast4(cluster[0]),
+			"instrument":     describeInstrument(cluster[0]),
 			"seconds_apart":  last - first,
 			"refunded_count": refunded,
 		},
