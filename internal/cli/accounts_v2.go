@@ -76,9 +76,9 @@ func newAccountsV2ListCommand(globals shared.GlobalsFunc) *cobra.Command {
 				params.Set("closed", "true")
 			}
 			if full {
-				return shared.GetRawV2List(globals(), "/v2/core/accounts", params)
+				return shared.GetRawList(globals(), "/v2/core/accounts", params)
 			}
-			return getSummarizedV2List(globals(), "/v2/core/accounts", params, v2AccountListSummary)
+			return getSummarizedList(globals(), "/v2/core/accounts", params, v2AccountListSummary)
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return")
@@ -116,9 +116,9 @@ func newAccountsV2PersonsListCommand(globals shared.GlobalsFunc) *cobra.Command 
 			shared.AddString(params, "page", page)
 			path := v2AccountPersonsPath(args[0])
 			if full {
-				return shared.GetRawV2List(globals(), path, params)
+				return shared.GetRawList(globals(), path, params)
 			}
-			return getSummarizedV2List(globals(), path, params, v2PersonListSummary)
+			return getSummarizedList(globals(), path, params, v2PersonListSummary)
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return")

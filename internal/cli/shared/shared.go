@@ -95,34 +95,50 @@ func WriteRawItem(raw json.RawMessage, format string, redaction output.Redaction
 	output.Print(output.Redact(data, redaction), f, true)
 }
 
-func WriteRawList(raw json.RawMessage, format string, redaction output.RedactionOptions) error {
+// DecodeListPage turns either namespace's list envelope into the same pair:
+// the raw items and the pagination record for them. The namespaces differ in
+// exactly this one place — v1 has has_more plus cursor IDs, v2 has a next-page
+// URL carrying a token — so everything above this decodes once and stops caring
+// which namespace it is reading.
+func DecodeListPage(path string, raw json.RawMessage) ([]json.RawMessage, *output.Pagination, error) {
+	if api.IsV2Path(path) {
+		list, err := api.DecodeV2List(raw)
+		if err != nil {
+			return nil, nil, err
+		}
+		return list.Data, v2Pagination(list), nil
+	}
 	list, err := api.DecodeList(raw)
+	if err != nil {
+		return nil, nil, err
+	}
+	return list.Data, v1Pagination(list), nil
+}
+
+func v1Pagination(list *api.ListResponse) *output.Pagination {
+	if !list.HasMore && list.NextPage == "" {
+		return nil
+	}
+	return &output.Pagination{HasMore: list.HasMore, NextPage: list.NextPage}
+}
+
+// v2Pagination reports the page token lifted out of next_page_url, which is the
+// value --page takes.
+func v2Pagination(list *api.V2ListResponse) *output.Pagination {
+	if !list.HasMore() {
+		return nil
+	}
+	return &output.Pagination{HasMore: true, NextPage: list.NextPageToken()}
+}
+
+// WriteRawList renders a list page of either namespace as redacted raw objects.
+func WriteRawList(path string, raw json.RawMessage, format string, redaction output.RedactionOptions) error {
+	data, pagination, err := DecodeListPage(path, raw)
 	if err != nil {
 		return err
 	}
-	var pagination *output.Pagination
-	if list.HasMore || list.NextPage != "" {
-		pagination = &output.Pagination{
-			HasMore:  list.HasMore,
-			NextPage: list.NextPage,
-		}
-	}
-	if output.ResolveFormat(format, output.FormatNDJSON) == output.FormatNDJSON {
-		w := output.NewNDJSONWriter(output.Stdout())
-		for _, item := range list.Data {
-			decoded, err := redactedRawListItem(item, redaction)
-			if err != nil {
-				return err
-			}
-			_ = w.WriteItem(decoded)
-		}
-		if pagination != nil {
-			_ = w.WritePagination(pagination)
-		}
-		return nil
-	}
-	items := make([]any, 0, len(list.Data))
-	for _, item := range list.Data {
+	items := make([]any, 0, len(data))
+	for _, item := range data {
 		decoded, err := redactedRawListItem(item, redaction)
 		if err != nil {
 			return err
@@ -131,47 +147,6 @@ func WriteRawList(raw json.RawMessage, format string, redaction output.Redaction
 	}
 	WritePaginatedList(items, pagination, format)
 	return nil
-}
-
-// WriteRawV2List renders a /v2 list envelope through the same NDJSON +
-// @pagination contract as a v1 list. The v2 envelope has no has_more and no
-// cursor IDs, so the next-page token is lifted out of next_page_url and
-// reported as next_page — the value --page takes.
-func WriteRawV2List(raw json.RawMessage, format string, redaction output.RedactionOptions) error {
-	list, err := api.DecodeV2List(raw)
-	if err != nil {
-		return err
-	}
-	items := make([]any, 0, len(list.Data))
-	for _, item := range list.Data {
-		decoded, err := redactedRawListItem(item, redaction)
-		if err != nil {
-			return err
-		}
-		items = append(items, decoded)
-	}
-	WritePaginatedList(items, V2Pagination(list), format)
-	return nil
-}
-
-func V2Pagination(list *api.V2ListResponse) *output.Pagination {
-	if !list.HasMore() {
-		return nil
-	}
-	return &output.Pagination{
-		HasMore:  true,
-		NextPage: list.NextPageToken(),
-	}
-}
-
-func GetRawV2List(flags *GlobalFlags, path string, params url.Values) error {
-	return WithClient(flags, func(ctx context.Context, client *api.Client) error {
-		raw, err := client.Get(ctx, path, params)
-		if err != nil {
-			return err
-		}
-		return WriteRawV2List(raw, flags.Format, RedactionOptions(flags))
-	})
 }
 
 func redactedRawListItem(item json.RawMessage, redaction output.RedactionOptions) (any, error) {

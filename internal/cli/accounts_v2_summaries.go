@@ -1,29 +1,5 @@
 package cli
 
-import (
-	"context"
-	"net/url"
-
-	"github.com/shhac/agent-stripe/internal/api"
-	"github.com/shhac/agent-stripe/internal/cli/shared"
-)
-
-// getSummarizedV2List is getSummarizedList for the /v2 list envelope: no
-// has_more, and the next page is a token lifted out of next_page_url.
-func getSummarizedV2List(flags *shared.GlobalFlags, path string, params url.Values, summarize func(map[string]any) map[string]any) error {
-	return shared.WithClient(flags, func(ctx context.Context, client *api.Client) error {
-		raw, err := client.Get(ctx, path, params)
-		if err != nil {
-			return err
-		}
-		list, err := api.DecodeV2List(raw)
-		if err != nil {
-			return err
-		}
-		return writeSummarizedList(flags, list.Data, shared.V2Pagination(list), summarize)
-	})
-}
-
 func v2AccountListSummary(account map[string]any) map[string]any {
 	summary := map[string]any{}
 	copyString(summary, account, "id")

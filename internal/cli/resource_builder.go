@@ -137,11 +137,11 @@ func getSummarizedList(flags *shared.GlobalFlags, path string, params url.Values
 		if err != nil {
 			return err
 		}
-		list, err := api.DecodeList(raw)
+		data, pagination, err := shared.DecodeListPage(path, raw)
 		if err != nil {
 			return err
 		}
-		return writeSummarizedList(flags, list.Data, listPagination(list), summarize)
+		return writeSummarizedList(flags, data, pagination, summarize)
 	})
 }
 
@@ -167,16 +167,6 @@ func summarizedListItem(raw json.RawMessage, summarize func(map[string]any) map[
 		return nil, agenterrors.Wrap(err, agenterrors.FixableByAgent)
 	}
 	return summarize(item), nil
-}
-
-func listPagination(list *api.ListResponse) *output.Pagination {
-	if !list.HasMore && list.NextPage == "" {
-		return nil
-	}
-	return &output.Pagination{
-		HasMore:  list.HasMore,
-		NextPage: list.NextPage,
-	}
 }
 
 func newResourceSearchCommand(globals shared.GlobalsFunc, opts resourceOptions) *cobra.Command {

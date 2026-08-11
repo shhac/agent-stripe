@@ -180,7 +180,7 @@ func GetRawList(flags *GlobalFlags, path string, params url.Values) error {
 		if err != nil {
 			return err
 		}
-		return WriteRawList(raw, flags.Format, RedactionOptions(flags))
+		return WriteRawList(path, raw, flags.Format, RedactionOptions(flags))
 	})
 }
 

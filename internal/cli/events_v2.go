@@ -53,9 +53,9 @@ func newEventsV2ListCommand(globals shared.GlobalsFunc) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := v2EventListParams(limit, page, objectID, types, createdGTE, createdLTE)
 			if full {
-				return shared.GetRawV2List(globals(), "/v2/core/events", params)
+				return shared.GetRawList(globals(), "/v2/core/events", params)
 			}
-			return getSummarizedV2List(globals(), "/v2/core/events", params, v2EventListSummary)
+			return getSummarizedList(globals(), "/v2/core/events", params, v2EventListSummary)
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return")
