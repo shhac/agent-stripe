@@ -3,23 +3,12 @@ package cli
 import (
 	"fmt"
 	"net/url"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateDisputeResponse(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "dispute-response <dispute-id>",
-		Short: "Summarize dispute response status, evidence due date, and related payment objects",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.disputeResponse(args[0])
-			})
-		},
-	}
+var disputeResponseInvestigation = investigationSpec{
+	use:   "dispute-response <dispute-id>",
+	short: "Summarize dispute response status, evidence due date, and related payment objects",
+	run:   investigator.disputeResponse,
 }
 
 func (i investigator) disputeResponse(disputeID string) error {

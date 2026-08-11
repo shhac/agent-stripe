@@ -10,17 +10,10 @@ import (
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 )
 
-func newInvestigateOutgoingPayment(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "outgoing-payment <transfer-id|payout-id|account-id>",
-		Short: "Explain what happened to money moving from you to a connected business",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.outgoingPayment(args[0])
-			})
-		},
-	}
+var outgoingPaymentInvestigation = investigationSpec{
+	use:   "outgoing-payment <transfer-id|payout-id|account-id>",
+	short: "Explain what happened to money moving from you to a connected business",
+	run:   investigator.outgoingPayment,
 }
 
 func newInvestigateRefundRecovery(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
@@ -39,17 +32,10 @@ func newInvestigateRefundRecovery(globals shared.GlobalsFunc, outputOpts *eviden
 	return cmd
 }
 
-func newInvestigatePayoutFailure(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "payout-failure <payout-id>",
-		Short: "Explain payout failure details and related ledger movement",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.payoutFailure(args[0])
-			})
-		},
-	}
+var payoutFailureInvestigation = investigationSpec{
+	use:   "payout-failure <payout-id>",
+	short: "Explain payout failure details and related ledger movement",
+	run:   investigator.payoutFailure,
 }
 
 func (i investigator) outgoingPayment(id string) error {

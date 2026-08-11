@@ -4,23 +4,12 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigatePaymentMethodReadiness(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "payment-method-readiness <customer-id|payment-method-id>",
-		Short: "Check whether a customer has usable saved payment details",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.paymentMethodReadiness(args[0])
-			})
-		},
-	}
+var paymentMethodReadinessInvestigation = investigationSpec{
+	use:   "payment-method-readiness <customer-id|payment-method-id>",
+	short: "Check whether a customer has usable saved payment details",
+	run:   investigator.paymentMethodReadiness,
 }
 
 func (i investigator) paymentMethodReadiness(id string) error {

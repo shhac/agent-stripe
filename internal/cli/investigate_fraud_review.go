@@ -3,23 +3,12 @@ package cli
 import (
 	"net/url"
 	"strings"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateFraudReview(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "fraud-review <early-fraud-warning-id|charge-id|payment-intent-id>",
-		Short: "Gather Radar early fraud warnings, disputes, refunds, and risk outcome",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.fraudReview(args[0])
-			})
-		},
-	}
+var fraudReviewInvestigation = investigationSpec{
+	use:   "fraud-review <early-fraud-warning-id|charge-id|payment-intent-id>",
+	short: "Gather Radar early fraud warnings, disputes, refunds, and risk outcome",
+	run:   investigator.fraudReview,
 }
 
 func (i investigator) fraudReview(id string) error {

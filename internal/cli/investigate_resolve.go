@@ -4,23 +4,13 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/shhac/agent-stripe/internal/api"
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateResolve(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "resolve <stripe-id-or-invoice-number>",
-		Short: "Identify a Stripe object and suggest next investigation commands",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.resolve(args[0])
-			})
-		},
-	}
+var resolveInvestigation = investigationSpec{
+	use:   "resolve <stripe-id-or-invoice-number>",
+	short: "Identify a Stripe object and suggest next investigation commands",
+	run:   investigator.resolve,
 }
 
 func (i investigator) resolve(value string) error {

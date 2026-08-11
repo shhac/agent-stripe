@@ -3,23 +3,12 @@ package cli
 import (
 	"net/url"
 	"strings"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateRefund(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "refund <refund-id|charge-id|payment-intent-id>",
-		Short: "Explain refund state from a refund or its original payment",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.refund(args[0])
-			})
-		},
-	}
+var refundInvestigation = investigationSpec{
+	use:   "refund <refund-id|charge-id|payment-intent-id>",
+	short: "Explain refund state from a refund or its original payment",
+	run:   investigator.refund,
 }
 
 func (i investigator) refund(id string) error {

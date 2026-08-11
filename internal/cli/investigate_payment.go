@@ -4,22 +4,13 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateIncomingPayment(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "incoming-payment <payment-intent-id|charge-id|invoice-id>",
-		Short: "Explain what happened to a customer payment to you",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.incomingPayment(args[0])
-			})
-		},
-	}
+var incomingPaymentInvestigation = investigationSpec{
+	use:   "incoming-payment <payment-intent-id|charge-id|invoice-id>",
+	short: "Explain what happened to a customer payment to you",
+	run:   investigator.incomingPayment,
 }
 
 func (i investigator) incomingPayment(id string) error {

@@ -3,23 +3,12 @@ package cli
 import (
 	"net/url"
 	"strings"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateLedger(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "ledger <charge-id|payment-intent-id|refund-id|transfer-id|payout-id|balance-transaction-id|application-fee-id>",
-		Short: "Gather balance transactions and related money-movement objects",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.ledger(args[0])
-			})
-		},
-	}
+var ledgerInvestigation = investigationSpec{
+	use:   "ledger <charge-id|payment-intent-id|refund-id|transfer-id|payout-id|balance-transaction-id|application-fee-id>",
+	short: "Gather balance transactions and related money-movement objects",
+	run:   investigator.ledger,
 }
 
 func (i investigator) ledger(id string) error {

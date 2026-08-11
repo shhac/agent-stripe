@@ -4,23 +4,13 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/shhac/agent-stripe/internal/api"
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateWebhookEvent(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "webhook-event <event-id>",
-		Short: "Explain a Stripe event and emit the underlying object",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.webhookEvent(args[0])
-			})
-		},
-	}
+var webhookEventInvestigation = investigationSpec{
+	use:   "webhook-event <event-id>",
+	short: "Explain a Stripe event and emit the underlying object",
+	run:   investigator.webhookEvent,
 }
 
 func (i investigator) webhookEvent(eventID string) error {

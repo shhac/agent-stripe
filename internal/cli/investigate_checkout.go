@@ -3,23 +3,12 @@ package cli
 import (
 	"fmt"
 	"net/url"
-
-	"github.com/spf13/cobra"
-
-	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateCheckoutSession(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "checkout-session <checkout-session-id>",
-		Short: "Explain Checkout completion, line items, and resulting payment or subscription",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.checkoutSession(args[0])
-			})
-		},
-	}
+var checkoutSessionInvestigation = investigationSpec{
+	use:   "checkout-session <checkout-session-id>",
+	short: "Explain Checkout completion, line items, and resulting payment or subscription",
+	run:   investigator.checkoutSession,
 }
 
 func (i investigator) checkoutSession(sessionID string) error {

@@ -13,6 +13,9 @@ func registerInvestigate(root *cobra.Command, globals shared.GlobalsFunc) {
 		Aliases: []string{"invest"},
 		Short:   "Opinionated Stripe incident investigations",
 	}
+	for _, spec := range singleArgInvestigations {
+		investigate.AddCommand(spec.command(globals, outputOpts))
+	}
 	for _, newCommand := range investigationCommands {
 		investigate.AddCommand(newCommand(globals, outputOpts))
 	}
@@ -25,15 +28,52 @@ func registerInvestigate(root *cobra.Command, globals shared.GlobalsFunc) {
 
 type investigationCommandFactory func(shared.GlobalsFunc, *evidenceOptions) *cobra.Command
 
+// investigationSpec declares the common shape: one Stripe ID in, evidence out.
+// Workflows that take several flags stay hand-written, because their validation
+// is part of what they mean; this only removes the identical cobra prologue.
+type investigationSpec struct {
+	use   string
+	short string
+	long  string
+	run   func(investigator, string) error
+}
+
+func (spec investigationSpec) command(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
+	return &cobra.Command{
+		Use:   spec.use,
+		Short: spec.short,
+		Long:  spec.long,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
+				return spec.run(inv, args[0])
+			})
+		},
+	}
+}
+
+// singleArgInvestigations are declared where their workflow lives; this list is
+// only the registration order.
+var singleArgInvestigations = []investigationSpec{
+	resolveInvestigation,
+	webhookEventInvestigation,
+	disputeResponseInvestigation,
+	invoicePaymentInvestigation,
+	incomingPaymentInvestigation,
+	checkoutSessionInvestigation,
+	paymentMethodReadinessInvestigation,
+	outgoingPaymentInvestigation,
+	ledgerInvestigation,
+	fraudReviewInvestigation,
+	refundInvestigation,
+	payoutFailureInvestigation,
+}
+
 var investigationCommands = []investigationCommandFactory{
-	newInvestigateResolve,
 	newInvestigateCustomerContext,
 	newInvestigateCustomerCardPayment,
-	newInvestigateWebhookEvent,
 	newInvestigateWebhookDelivery,
-	newInvestigateDisputeResponse,
 	newInvestigateDisputeImpact,
-	newInvestigateInvoicePayment,
 	newInvestigateInvoiceCollection,
 	newInvestigateSubscriptionRenewal,
 	newInvestigateSubscriptionCancelRisk,
@@ -42,18 +82,10 @@ var investigationCommands = []investigationCommandFactory{
 	newInvestigateSubscriptionItems,
 	newInvestigateSubscriptionAmountChange,
 	newInvestigateEntitlement,
-	newInvestigateIncomingPayment,
-	newInvestigateCheckoutSession,
-	newInvestigatePaymentMethodReadiness,
 	newInvestigateSetup,
 	newInvestigateTimeline,
-	newInvestigateOutgoingPayment,
 	newInvestigateAccountHealth,
 	newInvestigateAccountEvents,
-	newInvestigateLedger,
-	newInvestigateFraudReview,
-	newInvestigateRefund,
-	newInvestigatePayoutFailure,
 	newInvestigateRefundRecovery,
 }
 

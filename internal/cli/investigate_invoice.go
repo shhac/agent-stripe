@@ -8,17 +8,10 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateInvoicePayment(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
-	return &cobra.Command{
-		Use:   "invoice-payment <invoice-id>",
-		Short: "Explain how an invoice was paid, including card last4 when available",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
-				return inv.invoicePayment(args[0])
-			})
-		},
-	}
+var invoicePaymentInvestigation = investigationSpec{
+	use:   "invoice-payment <invoice-id>",
+	short: "Explain how an invoice was paid, including card last4 when available",
+	run:   investigator.invoicePayment,
 }
 
 func newInvestigateInvoiceMetadata(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
