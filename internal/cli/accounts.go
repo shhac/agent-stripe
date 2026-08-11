@@ -99,11 +99,7 @@ func addControllerSummary(summary, account map[string]any) {
 	copyString(out, controller, "type")
 	copyString(out, controller, "requirement_collection")
 	if dashboard, ok := controller["stripe_dashboard"].(map[string]any); ok {
-		copyString(out, dashboard, "type")
-		if dashboardType, ok := out["type"]; ok {
-			out["stripe_dashboard_type"] = dashboardType
-			delete(out, "type")
-		}
+		copyStringAs(out, dashboard, "type", "stripe_dashboard_type")
 	}
 	if len(out) > 0 {
 		summary["controller"] = out
@@ -149,32 +145,5 @@ func addCapabilitiesSummary(summary, account map[string]any) {
 	}
 	if len(out) > 0 {
 		summary["capabilities"] = out
-	}
-}
-
-func copyString(out, in map[string]any, key string) {
-	value, ok := in[key].(string)
-	if ok && value != "" {
-		out[key] = value
-	}
-}
-
-func copyBool(out, in map[string]any, key string) {
-	value, ok := in[key].(bool)
-	if ok {
-		out[key] = value
-	}
-}
-
-func copyNumber(out, in map[string]any, key string) {
-	if value, ok := in[key].(float64); ok {
-		out[key] = value
-	}
-}
-
-func addArrayCount(out, in map[string]any, key string) {
-	items, ok := in[key].([]any)
-	if ok && len(items) > 0 {
-		out[key+"_count"] = len(items)
 	}
 }

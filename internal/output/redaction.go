@@ -99,27 +99,38 @@ func joinRedactionPath(base, key string) string {
 	return base + "." + key
 }
 
+// alwaysRedacted are fields masked wherever they appear. Anything a substring
+// rule below already covers is deliberately absent: this list is the policy a
+// reader audits, so a key that cannot change the answer is noise.
+var alwaysRedacted = map[string]bool{
+	"email": true, "customer_email": true, "receipt_email": true, "contact_email": true,
+	"phone": true, "contact_phone": true,
+	"fingerprint": true, "iin": true, "network_transaction_id": true, "authorization_code": true,
+	"receipt_url": true, "hosted_invoice_url": true, "invoice_pdf": true, "request_log_url": true,
+	// Accounts v2 identity carries dates of birth on person objects; no triage
+	// question needs the value rather than its presence.
+	"date_of_birth": true,
+}
+
+// secretSubstrings catch the open-ended families — client_secret, api_key,
+// refresh_token, a metadata key named api_token, and so on.
+var secretSubstrings = []string{"secret", "password", "token", "api_key"}
+
 func shouldRedactField(key, path, object string) bool {
 	k := strings.ToLower(key)
-	p := strings.ToLower(path)
-	switch k {
-	case "client_secret", "secret", "api_key", "access_token", "refresh_token", "password",
-		"email", "customer_email", "receipt_email", "contact_email", "phone", "contact_phone",
-		"fingerprint", "iin", "network_transaction_id", "authorization_code", "receipt_url",
-		"hosted_invoice_url", "invoice_pdf", "request_log_url",
-		// Accounts v2 identity carries dates of birth on person objects; there is
-		// no triage question that needs the value rather than its presence.
-		"date_of_birth":
+	if alwaysRedacted[k] {
 		return true
-	case "name", "given_name", "surname", "legal_name":
-		return isAccountLikeObject(object) || strings.Contains(p, "billing_details.name")
 	}
-	return strings.Contains(k, "secret") ||
-		strings.Contains(k, "password") ||
-		strings.Contains(k, "token") ||
-		strings.Contains(k, "access_token") ||
-		strings.Contains(k, "refresh_token") ||
-		strings.Contains(k, "api_key")
+	switch k {
+	case "name", "given_name", "surname", "legal_name":
+		return isAccountLikeObject(object) || strings.Contains(strings.ToLower(path), "billing_details.name")
+	}
+	for _, substring := range secretSubstrings {
+		if strings.Contains(k, substring) {
+			return true
+		}
+	}
+	return false
 }
 
 // isAccountLikeObject covers the object types whose person-name fields are PII:

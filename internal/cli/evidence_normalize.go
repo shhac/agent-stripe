@@ -31,25 +31,30 @@ func defaultEvidenceOptions() evidenceOptions {
 }
 
 func normalizeRecord(record evidenceRecord, opts evidenceOptions, seen map[string]bool) (evidenceRecord, []evidenceRecord) {
-	if record.Type != "entity" || record.Data == nil {
-		if record.Data != nil {
-			if redacted, ok := output.Redact(record.Data, opts.redaction).(map[string]any); ok {
-				record.Data = redacted
-			}
-		}
+	if record.Data == nil {
+		return record, nil
+	}
+	if record.Type != "entity" {
+		record.Data = redactMap(record.Data, opts.redaction)
 		return record, nil
 	}
 	result := normalizeValue(record.Data, "", opts, seen)
 	if normalized, ok := result.value.(map[string]any); ok {
-		if redacted, ok := output.Redact(normalized, opts.redaction).(map[string]any); ok {
-			record.Data = redacted
-		} else {
-			record.Data = normalized
-		}
+		record.Data = redactMap(normalized, opts.redaction)
 	}
 	record.ExtractedEntities = append(record.ExtractedEntities, result.notes...)
 	record.TruncatedFields = append(record.TruncatedFields, result.truncated...)
 	return record, result.records
+}
+
+// redactMap applies the redaction policy, keeping the input when the policy
+// hands back something that is no longer a map.
+func redactMap(data map[string]any, opts output.RedactionOptions) map[string]any {
+	redacted, ok := output.Redact(data, opts).(map[string]any)
+	if !ok {
+		return data
+	}
+	return redacted
 }
 
 type normalizeResult struct {

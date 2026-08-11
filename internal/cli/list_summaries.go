@@ -8,13 +8,7 @@ func customerListSummary(customer map[string]any) map[string]any {
 	copyBool(summary, customer, "delinquent")
 	copyNumber(summary, customer, "balance")
 	copyString(summary, customer, "currency")
-	if invoiceSettings, ok := customer["invoice_settings"].(map[string]any); ok {
-		copyString(summary, invoiceSettings, "default_payment_method")
-		if defaultPM, ok := summary["default_payment_method"]; ok {
-			delete(summary, "default_payment_method")
-			summary["invoice_settings"] = map[string]any{"default_payment_method": defaultPM}
-		}
-	}
+	copySubset(summary, customer, "invoice_settings", "default_payment_method")
 	return summary
 }
 
@@ -28,16 +22,7 @@ func paymentMethodListSummary(pm map[string]any) map[string]any {
 	if card, ok := pm["card"].(map[string]any); ok {
 		summary["card"] = cardSummary(card)
 	}
-	if usBank, ok := pm["us_bank_account"].(map[string]any); ok {
-		out := map[string]any{}
-		copyString(out, usBank, "bank_name")
-		copyString(out, usBank, "last4")
-		copyString(out, usBank, "account_type")
-		copyString(out, usBank, "account_holder_type")
-		if len(out) > 0 {
-			summary["us_bank_account"] = out
-		}
-	}
+	copySubset(summary, pm, "us_bank_account", "bank_name", "last4", "account_type", "account_holder_type")
 	return summary
 }
 
