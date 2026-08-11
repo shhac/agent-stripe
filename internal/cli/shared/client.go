@@ -11,6 +11,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/credential"
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 	"github.com/shhac/agent-stripe/internal/output"
+	"github.com/shhac/lib-agent-cli/creds"
 )
 
 type ResolvedProfile struct {
@@ -58,7 +59,7 @@ func ResolveProfile(flags *GlobalFlags) (*ResolvedProfile, error) {
 }
 
 func resolveAlias(flags *GlobalFlags, cfg *config.Config) string {
-	return firstNonEmpty(flags.Profile, os.Getenv("AGENT_STRIPE_PROFILE"), cfg.DefaultProfile)
+	return creds.FirstNonEmpty(flags.Profile, os.Getenv("AGENT_STRIPE_PROFILE"), cfg.DefaultProfile)
 }
 
 func resolveDirectAPIKey(flags *GlobalFlags) (string, string) {
@@ -75,9 +76,9 @@ func resolvedDirectProfile(alias string, flags *GlobalFlags, apiKey, source stri
 	return &ResolvedProfile{
 		Alias: alias,
 		Profile: config.Profile{
-			Context:      firstNonEmpty(flags.Context, os.Getenv("STRIPE_CONTEXT")),
-			APIVersion:   firstNonEmpty(flags.APIVersion, os.Getenv("STRIPE_API_VERSION"), config.DefaultAPIVersion),
-			V2APIVersion: firstNonEmpty(flags.V2APIVersion, os.Getenv("STRIPE_V2_API_VERSION"), config.DefaultV2APIVersion),
+			Context:      creds.FirstNonEmpty(flags.Context, os.Getenv("STRIPE_CONTEXT")),
+			APIVersion:   creds.FirstNonEmpty(flags.APIVersion, os.Getenv("STRIPE_API_VERSION"), config.DefaultAPIVersion),
+			V2APIVersion: creds.FirstNonEmpty(flags.V2APIVersion, os.Getenv("STRIPE_V2_API_VERSION"), config.DefaultV2APIVersion),
 		},
 		APIKey:           apiKey,
 		CredentialSource: source,
@@ -105,7 +106,7 @@ func applyProfileOverrides(profile config.Profile, flags *GlobalFlags) config.Pr
 }
 
 func resolveBaseURL(flags *GlobalFlags) string {
-	return firstNonEmpty(flags.BaseURL, os.Getenv("AGENT_STRIPE_BASE_URL"))
+	return creds.FirstNonEmpty(flags.BaseURL, os.Getenv("AGENT_STRIPE_BASE_URL"))
 }
 
 func WithClient(flags *GlobalFlags, fn func(context.Context, *api.Client) error) error {
@@ -205,13 +206,4 @@ func resolvedBaseURL(baseURL string) string {
 		return "https://api.stripe.com"
 	}
 	return baseURL
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }

@@ -355,10 +355,8 @@ func listPage(items []map[string]any, r *http.Request) pagedList {
 
 func applyCursor(items []map[string]any, query url.Values) []map[string]any {
 	if startingAfter := query.Get("starting_after"); startingAfter != "" {
-		if idx := indexByID(items, startingAfter); idx >= 0 && idx+1 < len(items) {
+		if idx := indexByID(items, startingAfter); idx >= 0 {
 			items = items[idx+1:]
-		} else if idx >= 0 {
-			items = nil
 		}
 	}
 	if endingBefore := query.Get("ending_before"); endingBefore != "" {

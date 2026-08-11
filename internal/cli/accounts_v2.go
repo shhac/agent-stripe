@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -48,7 +49,7 @@ func newAccountsV2GetCommand(globals shared.GlobalsFunc) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringArrayVar(&include, "include", nil, "Field to include; repeatable. Defaults to every include. One of: "+joinAndTruncate(v2AccountIncludes, len(v2AccountIncludes)))
+	cmd.Flags().StringArrayVar(&include, "include", nil, "Field to include; repeatable. Defaults to every include. One of: "+strings.Join(v2AccountIncludes, ", "))
 	return cmd
 }
 
@@ -166,7 +167,7 @@ func v2AccountIncludeParams(include []string) (url.Values, error) {
 	for _, value := range include {
 		if !slices.Contains(v2AccountIncludes, value) {
 			return nil, agenterrors.Newf(agenterrors.FixableByAgent, "unknown --include value %q", value).
-				WithHint("Valid includes: " + joinAndTruncate(v2AccountIncludes, len(v2AccountIncludes)))
+				WithHint("Valid includes: " + strings.Join(v2AccountIncludes, ", "))
 		}
 	}
 	shared.AddIndexed(params, "include", include)

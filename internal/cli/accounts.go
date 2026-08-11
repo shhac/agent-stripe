@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
 
 	"github.com/spf13/cobra"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
-	agenterrors "github.com/shhac/agent-stripe/internal/errors"
 	"github.com/shhac/agent-stripe/internal/output"
 )
 
@@ -63,7 +61,7 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 			if full {
 				return shared.GetRawList(flags, "/v1/accounts", params)
 			}
-			return listAccountSummaries(flags, params)
+			return getSummarizedList(flags, "/v1/accounts", params, accountListSummary)
 		},
 	}
 	list.Flags().IntVar(&limit, "limit", 10, "Maximum results to return (1-100)")
@@ -71,29 +69,6 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 	list.Flags().BoolVar(&full, "full", false, "Return full Stripe account objects instead of compact summaries")
 	accounts.AddCommand(list)
 	root.AddCommand(accounts)
-}
-
-func listAccountSummaries(flags *shared.GlobalFlags, params url.Values) error {
-	return shared.WithClient(flags, func(ctx context.Context, client *api.Client) error {
-		raw, err := client.Get(ctx, "/v1/accounts", params)
-		if err != nil {
-			return err
-		}
-		list, err := api.DecodeList(raw)
-		if err != nil {
-			return err
-		}
-		items := make([]any, 0, len(list.Data))
-		for _, rawItem := range list.Data {
-			var account map[string]any
-			if err := json.Unmarshal(rawItem, &account); err != nil {
-				return agenterrors.Wrap(err, agenterrors.FixableByAgent)
-			}
-			items = append(items, accountListSummary(account))
-		}
-		shared.WritePaginatedList(items, listPagination(list), flags.Format)
-		return nil
-	})
 }
 
 func accountListSummary(account map[string]any) map[string]any {

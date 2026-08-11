@@ -103,24 +103,6 @@ func invalidateCache() {
 	cacheMu.Unlock()
 }
 
-// Write overwrites config.json with cfg wholesale and invalidates the cache.
-//
-// This is NOT a read-modify-write: it has no read step of its own, so a
-// caller that built cfg from a stale Read() can still clobber a concurrent
-// writer. Every read-modify-write in this package goes through update
-// instead, which holds one lock across load, mutate, and save. Write still
-// takes the same lock around its own save so it cannot interleave with a
-// concurrent update's write.
-func Write(cfg *Config) error {
-	if err := store().WithLock(func() error {
-		return store().Save(cfg)
-	}); err != nil {
-		return err
-	}
-	invalidateCache()
-	return nil
-}
-
 // update runs mutate against config.json's current on-disk state under the
 // store's exclusive lock, then invalidates the cache so the next Read
 // reflects the write. Concurrent callers serialize instead of each building

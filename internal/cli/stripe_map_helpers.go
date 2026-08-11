@@ -1,5 +1,7 @@
 package cli
 
+import "github.com/shhac/lib-agent-cli/creds"
+
 func idFromValue(value any) string {
 	switch v := value.(type) {
 	case string:
@@ -58,11 +60,6 @@ func mapInt64(m map[string]any, key string) (int64, bool) {
 	}
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
-}
+// firstNonEmpty is the canonical helper from lib-agent-cli, aliased so the
+// investigation code reads without a package qualifier.
+var firstNonEmpty = creds.FirstNonEmpty

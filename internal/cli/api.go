@@ -2,6 +2,7 @@ package cli
 
 import (
 	"net/url"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -46,12 +47,8 @@ func parseQueryPairs(pairs []string) (url.Values, error) {
 }
 
 func splitQueryPair(pair string) (string, string, bool) {
-	for i, r := range pair {
-		if r == '=' {
-			return pair[:i], pair[i+1:], i > 0
-		}
-	}
-	return "", "", false
+	key, value, found := strings.Cut(pair, "=")
+	return key, value, found && key != ""
 }
 
 func sharedQueryError(pair string) error {
