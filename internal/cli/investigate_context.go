@@ -57,27 +57,6 @@ func (i investigator) customerContext(customer string, limit int) error {
 	return nil
 }
 
-// addRelatedList fetches a related collection and records it, reporting a
-// fetch failure as a warning instead of silently returning partial evidence.
-func (i investigator) addRelatedList(object, path string, params url.Values) []map[string]any {
-	items, err := i.list(path, params)
-	if err != nil {
-		i.add(evidenceRecord{
-			Type:     "finding",
-			Severity: "warning",
-			Summary:  "Could not gather " + object + " context from " + path + "; continuing with available evidence.",
-			Data: map[string]any{
-				"object": object,
-				"path":   path,
-				"error":  err.Error(),
-			},
-		})
-		return nil
-	}
-	i.addList(object, items)
-	return items
-}
-
 func relatedWarning(name string, err error) evidenceRecord {
 	return evidenceRecord{
 		Type:     "finding",
@@ -87,6 +66,15 @@ func relatedWarning(name string, err error) evidenceRecord {
 			"error": err.Error(),
 		},
 	}
+}
+
+// relatedListWarning is relatedWarning with the path, so a consumer parsing
+// degraded-evidence findings can tell which collection was missed.
+func relatedListWarning(object, path string, err error) evidenceRecord {
+	record := relatedWarning(object+" from "+path, err)
+	record.Data["object"] = object
+	record.Data["path"] = path
+	return record
 }
 
 func valuesWithLimit(limit int, pairs ...string) url.Values {

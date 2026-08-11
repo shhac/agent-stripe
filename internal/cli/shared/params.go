@@ -20,14 +20,6 @@ func AddCreatedRange(params url.Values, gte, lte string) {
 	}
 }
 
-func AddExpand(params url.Values, expand []string) {
-	for _, item := range expand {
-		if item != "" {
-			params.Add("expand[]", item)
-		}
-	}
-}
-
 // AddIndexed encodes an array parameter the way Stripe's /v2 namespace requires
 // it: include[0]=a&include[1]=b. The unindexed /v1 form is rejected there, even
 // for a single value.

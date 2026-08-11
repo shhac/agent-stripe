@@ -52,7 +52,7 @@ func newSubscriptionItemsCommand(globals shared.GlobalsFunc) *cobra.Command {
 			params := url.Values{"subscription": []string{args[0]}}
 			shared.AddLimit(params, limit)
 			cursor.AddTo(params)
-			shared.AddExpand(params, expand)
+			shared.AddMulti(params, "expand[]", expand)
 			return shared.GetRawList(globals(), "/v1/subscription_items", params)
 		},
 	}

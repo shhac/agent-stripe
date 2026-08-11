@@ -69,7 +69,7 @@ func newResourceGetCommand(globals shared.GlobalsFunc, opts resourceOptions) *co
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flags := globals()
 			params := url.Values{}
-			shared.AddExpand(params, expand)
+			shared.AddMulti(params, "expand[]", expand)
 			return shared.GetEntities(flags, args, func(ctx context.Context, client *api.Client, id string) (any, error) {
 				if err := validateExpectedStripeID(id, opts.idKind); err != nil {
 					return nil, err
@@ -100,7 +100,7 @@ func newResourceListCommand(globals shared.GlobalsFunc, opts resourceOptions) *c
 			shared.AddLimit(params, limit)
 			shared.AddCreatedRange(params, createdGTE, createdLTE)
 			cursor.AddTo(params)
-			shared.AddExpand(params, expand)
+			shared.AddMulti(params, "expand[]", expand)
 			for _, flag := range opts.listFlags {
 				shared.AddString(params, flag.param, *values[flag.name])
 			}

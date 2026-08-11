@@ -48,7 +48,8 @@ func (i investigator) accountEvents(accountID string, limit int, eventTypes []st
 		return accountErr
 	}
 
-	params := v2EventListParams(limit, "", accountID, eventTypes, "", "")
+	params := valuesWithLimit(limit)
+	addV2EventFilters(params, accountID, eventTypes, "", "")
 	events, err := i.listV2("/v2/core/events", params)
 	if err != nil {
 		return err

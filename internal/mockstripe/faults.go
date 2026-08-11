@@ -25,20 +25,20 @@ import (
 // subprocess — arms the same rules out of band with
 // POST /_mock/faults?rules=<spec>, which applies them to every later request.
 type faultRules struct {
-	mu        sync.Mutex
-	remaining map[string]int
-	standing  string
+	mu       sync.Mutex
+	used     map[string]int
+	standing string
 }
 
 func newFaultRules() *faultRules {
-	return &faultRules{remaining: map[string]int{}}
+	return &faultRules{used: map[string]int{}}
 }
 
 func (f *faultRules) arm(rules string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.standing = rules
-	f.remaining = map[string]int{}
+	f.used = map[string]int{}
 }
 
 func (f *faultRules) standingRules() string {
@@ -48,9 +48,9 @@ func (f *faultRules) standingRules() string {
 }
 
 type faultRule struct {
-	status int
-	body   string
-	times  int
+	status  int
+	nonJSON bool
+	times   int
 }
 
 // apply writes a fault response and reports whether it handled the request.
@@ -62,7 +62,7 @@ func (f *faultRules) apply(w http.ResponseWriter, r *http.Request) bool {
 	if rule.times > 0 && !f.consume(key, rule.times) {
 		return false
 	}
-	if rule.body == "garbage" {
+	if rule.nonJSON {
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(rule.status)
 		_, _ = w.Write([]byte("<html><body>upstream gateway error</body></html>"))
@@ -106,7 +106,7 @@ func (f *faultRules) match(r *http.Request) (faultRule, string, bool) {
 
 func parseFaultSpec(spec string) (faultRule, bool) {
 	if spec == "garbage" {
-		return faultRule{status: http.StatusBadGateway, body: "garbage"}, true
+		return faultRule{status: http.StatusBadGateway, nonJSON: true}, true
 	}
 	statusPart, timesPart, repeated := strings.Cut(spec, "x")
 	status, err := strconv.Atoi(statusPart)
@@ -124,15 +124,16 @@ func parseFaultSpec(spec string) (faultRule, bool) {
 	return rule, true
 }
 
-// consume reports whether this request still falls inside the rule's count.
+// consume reports whether this request still falls inside the rule's count,
+// counting up from zero — the map holds uses spent, not uses left.
 func (f *faultRules) consume(key string, times int) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	used := f.remaining[key]
-	if used >= times {
+	spent := f.used[key]
+	if spent >= times {
 		return false
 	}
-	f.remaining[key] = used + 1
+	f.used[key] = spent + 1
 	return true
 }
 

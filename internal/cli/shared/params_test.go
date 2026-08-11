@@ -9,7 +9,7 @@ func TestAddParams(t *testing.T) {
 	values := url.Values{}
 	AddLimit(values, 12)
 	AddCreatedRange(values, "100", "200")
-	AddExpand(values, []string{"latest_charge", "customer"})
+	AddMulti(values, "expand[]", []string{"latest_charge", "customer"})
 
 	if values.Get("limit") != "12" {
 		t.Fatalf("limit = %q", values.Get("limit"))

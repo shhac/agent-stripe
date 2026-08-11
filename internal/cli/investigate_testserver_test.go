@@ -7,53 +7,39 @@ import (
 	"testing"
 )
 
-// routeServer builds a stub Stripe from a path→body table. Thirteen tests were
-// hand-rolling the same switch-with-a-fatal-default; a table reads as the
-// fixture it is, and an unexpected path still fails loudly.
-//
-// A body of "" means the route exists and returns an empty list; use
-// failingRoute to make a path return a Stripe-shaped error.
-func routeServer(t *testing.T, routes map[string]string) *httptest.Server {
+// route is what a stub path returns. Modelled as a struct because the previous
+// string encoding smuggled three things through one type — a JSON body, ""
+// meaning "empty list", and a sentinel-prefixed error — so a fixture body could
+// in principle be misread as a fault.
+type route struct {
+	body   string
+	status int
+	code   string
+}
+
+func jsonRoute(body string) route { return route{body: body} }
+
+func failingRoute(status int, code string) route { return route{status: status, code: code} }
+
+// routeServer builds a stub Stripe from a path table. An unexpected path still
+// fails loudly, which is the property the hand-rolled switches had.
+func routeServer(t *testing.T, routes map[string]route) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, ok := routes[r.URL.Path]
+		spec, ok := routes[r.URL.Path]
 		if !ok {
 			t.Errorf("unexpected request path %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			fmt.Fprint(w, `{"error":{"type":"invalid_request_error","code":"resource_missing"}}`)
 			return
 		}
-		if status, errBody, isFailure := parseFailingRoute(body); isFailure {
-			w.WriteHeader(status)
-			fmt.Fprint(w, errBody)
+		if spec.status != 0 {
+			w.WriteHeader(spec.status)
+			fmt.Fprintf(w, `{"error":{"type":"invalid_request_error","code":%q,"message":"injected"}}`, spec.code)
 			return
 		}
-		if body == "" {
-			fmt.Fprint(w, emptyList)
-			return
-		}
-		fmt.Fprint(w, body)
+		fmt.Fprint(w, spec.body)
 	}))
 	t.Cleanup(server.Close)
 	return server
-}
-
-const emptyList = `{"object":"list","data":[],"has_more":false}`
-
-const failPrefix = "\x00fail\x00"
-
-// failingRoute marks a route as returning a Stripe error with the given status
-// and code.
-func failingRoute(status int, code string) string {
-	return fmt.Sprintf("%s%d %s", failPrefix, status, code)
-}
-
-func parseFailingRoute(body string) (int, string, bool) {
-	if len(body) < len(failPrefix) || body[:len(failPrefix)] != failPrefix {
-		return 0, "", false
-	}
-	var status int
-	var code string
-	_, _ = fmt.Sscanf(body[len(failPrefix):], "%d %s", &status, &code)
-	return status, fmt.Sprintf(`{"error":{"type":"invalid_request_error","code":%q,"message":"injected"}}`, code), true
 }

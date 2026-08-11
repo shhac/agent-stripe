@@ -44,6 +44,12 @@ type investigationSpec struct {
 }
 
 func (spec investigationSpec) command(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
+	// Caught at registration rather than when someone runs the subcommand, so a
+	// malformed spec fails every test instead of shipping. resourcePath takes
+	// the same approach for an unsatisfiable resource.
+	if (spec.run == nil) == (spec.runWithLimit == nil) {
+		panic("investigation " + spec.use + ": set exactly one of run or runWithLimit")
+	}
 	limit := spec.limitDefault
 	cmd := &cobra.Command{
 		Use:   spec.use,

@@ -11,7 +11,7 @@ var riskNow = time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC)
 func TestCollectionRiskFlagsPastDueStatusWithoutLookups(t *testing.T) {
 	// A past-due status is decided from the subscription alone; no fetch should
 	// happen, so an empty route table proves it.
-	server := routeServer(t, map[string]string{})
+	server := routeServer(t, map[string]route{})
 
 	risk, err := testInvestigator(server).collectionRiskAt(map[string]any{
 		"id": "sub_1", "customer": "cus_1", "status": "past_due",
@@ -28,7 +28,7 @@ func TestCollectionRiskSurfacesCustomerLookupFailure(t *testing.T) {
 	// The customer fetch decides whether there is a default payment method.
 	// Absorbing its failure reported "no default payment method visible" — a
 	// risk that was never observed.
-	server := routeServer(t, map[string]string{"/v1/customers/cus_1": failingRoute(500, "api_error")})
+	server := routeServer(t, map[string]route{"/v1/customers/cus_1": failingRoute(500, "api_error")})
 
 	risk, err := testInvestigator(server).collectionRiskAt(map[string]any{
 		"id": "sub_1", "customer": "cus_1", "status": "active",
@@ -44,8 +44,8 @@ func TestCollectionRiskSurfacesCustomerLookupFailure(t *testing.T) {
 func TestCollectionRiskSurfacesInvoiceLookupFailure(t *testing.T) {
 	// Symmetrically: absorbing this one dropped a real risk and reported the
 	// subscription as healthy.
-	server := routeServer(t, map[string]string{
-		"/v1/payment_methods/pm_1": `{"id":"pm_1","object":"payment_method","card":{"exp_month":12,"exp_year":2030}}`,
+	server := routeServer(t, map[string]route{
+		"/v1/payment_methods/pm_1": jsonRoute(`{"id":"pm_1","object":"payment_method","card":{"exp_month":12,"exp_year":2030}}`),
 		"/v1/invoices/in_1":        failingRoute(500, "api_error"),
 	})
 
@@ -60,8 +60,8 @@ func TestCollectionRiskSurfacesInvoiceLookupFailure(t *testing.T) {
 }
 
 func TestCollectionRiskReportsExpiringCard(t *testing.T) {
-	server := routeServer(t, map[string]string{
-		"/v1/payment_methods/pm_1": `{"id":"pm_1","object":"payment_method","card":{"exp_month":9,"exp_year":2026}}`,
+	server := routeServer(t, map[string]route{
+		"/v1/payment_methods/pm_1": jsonRoute(`{"id":"pm_1","object":"payment_method","card":{"exp_month":9,"exp_year":2026}}`),
 	})
 
 	risk, err := testInvestigator(server).collectionRiskAt(map[string]any{
@@ -77,8 +77,8 @@ func TestCollectionRiskReportsExpiringCard(t *testing.T) {
 }
 
 func TestSubscriptionRiskScanReportsAssessmentFailures(t *testing.T) {
-	server := routeServer(t, map[string]string{
-		"/v1/subscriptions":   `{"object":"list","data":[{"id":"sub_1","object":"subscription","customer":"cus_1","status":"active"}],"has_more":false}`,
+	server := routeServer(t, map[string]route{
+		"/v1/subscriptions":   jsonRoute(`{"object":"list","data":[{"id":"sub_1","object":"subscription","customer":"cus_1","status":"active"}],"has_more":false}`),
 		"/v1/customers/cus_1": failingRoute(500, "api_error"),
 	})
 

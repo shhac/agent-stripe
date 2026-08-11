@@ -62,14 +62,6 @@ func newEventsV2ListCommand(globals shared.GlobalsFunc) *cobra.Command {
 	})
 }
 
-func v2EventListParams(limit int, page, objectID string, types []string, createdGTE, createdLTE string) url.Values {
-	params := url.Values{}
-	shared.AddLimit(params, limit)
-	shared.AddString(params, "page", page)
-	addV2EventFilters(params, objectID, types, createdGTE, createdLTE)
-	return params
-}
-
 func addV2EventFilters(params url.Values, objectID string, types []string, createdGTE, createdLTE string) {
 	shared.AddString(params, "object_id", objectID)
 	shared.AddIndexed(params, "types", types)

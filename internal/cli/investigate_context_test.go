@@ -30,7 +30,7 @@ func TestCustomerContextReportsRelatedListErrors(t *testing.T) {
 	}
 	records := inv.records()
 
-	warning := findFinding(records, "Could not gather payment_method context")
+	warning := findFinding(records, "Could not gather payment_method from /v1/payment_methods")
 	if warning == nil {
 		t.Fatalf("expected warning for failed payment_methods list, got %#v", records)
 		return

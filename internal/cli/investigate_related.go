@@ -38,9 +38,17 @@ func (i investigator) followRef(parent map[string]any, field string) map[string]
 func (i investigator) listRelated(label, path string, params url.Values) []map[string]any {
 	items, err := i.list(path, params)
 	if err != nil {
-		i.add(relatedWarning(label, err))
+		i.add(relatedListWarning(label, path, err))
 		return nil
 	}
+	return items
+}
+
+// addRelatedList is listRelated plus recording, for the callers that want the
+// collection in the evidence stream as well as in hand.
+func (i investigator) addRelatedList(object, path string, params url.Values) []map[string]any {
+	items := i.listRelated(object, path, params)
+	i.addList(object, items)
 	return items
 }
 
