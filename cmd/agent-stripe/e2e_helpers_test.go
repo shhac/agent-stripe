@@ -1,7 +1,9 @@
 package main
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os/exec"
 	"strings"
 	"testing"
@@ -19,6 +21,22 @@ func newMockCLIRunner(t *testing.T) *mockCLIRunner {
 	server := httptest.NewServer(mockstripe.NewServer())
 	t.Cleanup(server.Close)
 	return &mockCLIRunner{t: t, server: server}
+}
+
+// ArmFault makes the mock fail matching paths for the rest of the test, so an
+// e2e case can check what the CLI reports when a related lookup fails rather
+// than only ever seeing a healthy Stripe. Spec format is documented on
+// mockstripe's fault rules (e.g. "/v1/disputes=500", "/v1/charges=429x2").
+func (r *mockCLIRunner) ArmFault(spec string) {
+	r.t.Helper()
+	resp, err := http.Post(r.server.URL+"/_mock/faults?rules="+url.QueryEscape(spec), "", nil)
+	if err != nil {
+		r.t.Fatalf("arm fault %q: %v", spec, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		r.t.Fatalf("arm fault %q: status %d", spec, resp.StatusCode)
+	}
 }
 
 func (r *mockCLIRunner) Run(args ...string) string {

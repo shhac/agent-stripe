@@ -33,6 +33,24 @@ func paymentIntents() []map[string]any {
 				"code":         "card_declined",
 				"decline_code": "insufficient_funds",
 				"message":      "Your card has insufficient funds.",
+				// Real Stripe nests the failed PaymentMethod here, PII and all.
+				// The shallow version of this fixture is why a summary that
+				// interpolated the whole map looked harmless in tests.
+				"payment_method": map[string]any{
+					"id":     "pm_mock_declined",
+					"object": "payment_method",
+					"type":   "card",
+					"billing_details": map[string]any{
+						"name":  "Mock Buyer",
+						"email": "buyer@example.com",
+						"phone": "+15550101001",
+					},
+					"card": map[string]any{
+						"brand":       "visa",
+						"last4":       "0341",
+						"fingerprint": "fPrInTdEcLiNeD",
+					},
+				},
 			},
 			"metadata": map[string]string{
 				"order_id": "order_failed",

@@ -158,3 +158,57 @@ func hasRoute(routes []string, want string) bool {
 	}
 	return false
 }
+
+func TestFaultInjectionFailsMatchingPath(t *testing.T) {
+	server := httptest.NewServer(NewServer())
+	defer server.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, server.URL+"/v1/charges", nil)
+	req.SetBasicAuth("sk_test_mock", "")
+	req.Header.Set("X-Mock-Fault", "/v1/charges=500")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", resp.StatusCode)
+	}
+
+	// A path the rule does not name is unaffected.
+	other, _ := http.NewRequest(http.MethodGet, server.URL+"/v1/refunds", nil)
+	other.SetBasicAuth("sk_test_mock", "")
+	other.Header.Set("X-Mock-Fault", "/v1/charges=500")
+	resp2, err := http.DefaultClient.Do(other)
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("unrelated path status = %d, want 200", resp2.StatusCode)
+	}
+}
+
+func TestFaultInjectionCountsRepeats(t *testing.T) {
+	server := httptest.NewServer(NewServer())
+	defer server.Close()
+
+	statuses := []int{}
+	for range 3 {
+		req, _ := http.NewRequest(http.MethodGet, server.URL+"/v1/charges", nil)
+		req.SetBasicAuth("sk_test_mock", "")
+		req.Header.Set("X-Mock-Fault", "/v1/charges=429x2")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("request error: %v", err)
+		}
+		statuses = append(statuses, resp.StatusCode)
+		resp.Body.Close()
+	}
+	want := []int{429, 429, 200}
+	for idx, status := range statuses {
+		if status != want[idx] {
+			t.Fatalf("statuses = %v, want %v", statuses, want)
+		}
+	}
+}

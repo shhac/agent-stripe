@@ -25,6 +25,12 @@ func Routes() []string {
 		"GET  /v2/core/accounts/<id>/persons/<person_id>",
 		"GET  /v2/core/events                          (Bearer auth; object_id, indexed types[i], limit, page)",
 		"GET  /v2/core/events/<id>",
+		"",
+		"Fault injection (header, any route):",
+		"  X-Mock-Fault: /v1/disputes=500      fail that path",
+		"  X-Mock-Fault: /v1/charges=429x2     429 twice then succeed",
+		"  X-Mock-Fault: /v1/events=garbage    non-JSON body",
+		"  X-Mock-Fault: *=500                 fail everything",
 	}
 	for _, resource := range mockResources() {
 		routes = append(routes, fmt.Sprintf("GET  %s", resource.path))

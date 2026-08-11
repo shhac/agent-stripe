@@ -143,3 +143,42 @@ func TestCLIAccountsV2RejectsV1AccountID(t *testing.T) {
 		"agent-stripe accounts get <acct_id>",
 	)
 }
+
+func TestCLIInvestigateReportsFailedRelatedLookups(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	// The charge itself resolves; the refund lookup beside it fails. The report
+	// must say so rather than reading as "this charge has no refunds".
+	runner.ArmFault("/v1/refunds=500")
+	out := runner.Run("investigate", "ledger", "ch_mock_succeeded")
+
+	runner.AssertContains(out,
+		`"object":"charge"`,
+		`"severity":"warning"`,
+		`Could not gather refunds`,
+	)
+}
+
+func TestCLIRetriesRateLimitsThenSucceeds(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	runner.ArmFault("/v1/charges=429x2")
+	out := runner.Run("charges", "get", "ch_mock_succeeded")
+	runner.AssertContains(out, `"id":"ch_mock_succeeded"`)
+}
+
+func TestCLIReportsNonJSONErrorBodyBounded(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	runner.ArmFault("/v1/charges=garbage")
+	out := runner.RunExpectingError("charges", "get", "ch_mock_succeeded")
+	assertContains(t, out, "HTTP 502", "upstream gateway error")
+}
+
+func TestCLIInvestigationSummariesCarryNoPersonalData(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	// pi_mock_failed's last_payment_error nests a PaymentMethod, as Stripe's
+	// does. Entity data is redacted; summaries must not carry it in the first
+	// place, since they never pass through the redaction policy.
+	out := runner.Run("investigate", "incoming-payment", "pi_mock_failed")
+
+	assertNotContains(t, out, "fPrInTdEcLiNeD", "buyer@example.com", "+15550101001")
+	runner.AssertContains(out, "insufficient funds")
+}
