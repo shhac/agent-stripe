@@ -112,9 +112,24 @@ CARD LAST4 FLOW
 
 const connectUsageText = `connect — connected-account and money movement triage
 
+TWO ACCOUNT NAMESPACES
+  Stripe has two connected-account models and both use the acct_ prefix:
+    Connect v1  /v1/accounts       -> 'accounts'      charges_enabled, payouts_enabled, requirements arrays
+    Accounts v2 /v2/core/accounts  -> 'accounts-v2'   configurations, nested capabilities, requirement entries
+  If you do not know which one an ID is, do not guess:
+    agent-stripe investigate resolve acct_...            names the namespace
+    agent-stripe investigate account-health acct_...     probes v2, falls back to v1, and says which answered
+  A v2 account ID also works on v1 money-movement endpoints (transfers, payouts, balance transactions,
+  application fees), so those commands are namespace-independent. A v1-only ID is rejected by /v2.
+
 COMMON STARTS
   agent-stripe accounts self
   agent-stripe accounts get acct_...
+  agent-stripe accounts-v2 get acct_...
+  agent-stripe accounts-v2 list --applied-configuration merchant
+  agent-stripe accounts-v2 persons list acct_...
+  agent-stripe events-v2 list --object-id acct_...
+  agent-stripe investigate account-events acct_...
   agent-stripe transfers list --destination acct_...
   agent-stripe payouts get po_...
   agent-stripe balance-transactions get txn_...
@@ -123,18 +138,33 @@ COMMON STARTS
   agent-stripe investigate outgoing-payment tr_...
   agent-stripe investigate outgoing-payment po_...
   agent-stripe investigate outgoing-payment acct_...
-  agent-stripe investigate account-health acct_...
+  agent-stripe investigate account-health acct_... [--namespace auto|v1|v2]
   agent-stripe investigate ledger ch_...|pi_...|re_...|tr_...|po_...|txn_...|fee_...
   agent-stripe investigate refund re_...|ch_...|pi_...
   agent-stripe investigate payout-failure po_...
   agent-stripe investigate refund-recovery trr_... --transfer tr_...
 
+WHY IS THIS ACCOUNT BLOCKED?
+  v1: charges_enabled / payouts_enabled plus requirements.currently_due field names.
+  v2: no such flags. Each capability has its own status per configuration
+      (merchant.card_payments, merchant.stripe_balance.payouts, recipient.bank_accounts.local),
+      and each requirement entry says who must act (awaiting_action_from) and which capabilities
+      it restricts. account-health reports whichever model applies and never mixes them.
+
+WHAT CHANGED RECENTLY?
+  v1 activity: agent-stripe events list --type account.updated
+  v2 activity: agent-stripe investigate account-events acct_...
+  Accounts v2 capability and requirement changes exist ONLY as v2 thin events, so /v1/events
+  will never show them. Thin events carry no snapshot; state fetched for them is current state.
+
 CONTEXT
-  Use --context for organization keys or related-account requests.
+  Use --context for organization keys or related-account requests. It applies to /v1 and /v2 alike.
   Connected-account failures often involve requirements, external accounts, balance transactions, transfers, reversals, and payouts.
 
 OUTPUT NOTES
   Findings summarize failed/canceled/reversed movement and include failure_code, failure_message, failure_reason, or failure balance transaction when present.
-  accounts list is compact by default; use accounts list --full or accounts get acct_... for full Account objects.
-  Connected account IDs and ledger IDs stay visible; sensitive URLs/contact fields remain redacted unless exposed.
+  accounts list and accounts-v2 list are compact by default; use --full or get <acct_id> for full objects.
+  accounts-v2 get requests every include by default, because Stripe returns null for fields you did not ask for.
+  v2 lists paginate by token: read @pagination.next_page and pass it back as --page.
+  Connected account IDs and ledger IDs stay visible; person names, dates of birth, and contact fields are redacted unless exposed.
 `

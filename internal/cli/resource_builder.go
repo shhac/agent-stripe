@@ -141,31 +141,24 @@ func getSummarizedList(flags *shared.GlobalFlags, path string, params url.Values
 		if err != nil {
 			return err
 		}
-		if output.ResolveFormat(flags.Format, output.FormatNDJSON) == output.FormatNDJSON {
-			w := output.NewNDJSONWriter(output.Stdout())
-			for _, rawItem := range list.Data {
-				item, err := summarizedListItem(rawItem, summarize)
-				if err != nil {
-					return err
-				}
-				_ = w.WriteItem(item)
-			}
-			if pagination := listPagination(list); pagination != nil {
-				_ = w.WritePagination(pagination)
-			}
-			return nil
-		}
-		items := make([]any, 0, len(list.Data))
-		for _, rawItem := range list.Data {
-			item, err := summarizedListItem(rawItem, summarize)
-			if err != nil {
-				return err
-			}
-			items = append(items, item)
-		}
-		shared.WritePaginatedList(items, listPagination(list), flags.Format)
-		return nil
+		return writeSummarizedList(flags, list.Data, listPagination(list), summarize)
 	})
+}
+
+// writeSummarizedList is the shared tail of every compact list command: map the
+// raw items through their summary, then emit them with the pagination record
+// the namespace produced. Only the decoding differs between /v1 and /v2.
+func writeSummarizedList(flags *shared.GlobalFlags, data []json.RawMessage, pagination *output.Pagination, summarize func(map[string]any) map[string]any) error {
+	items := make([]any, 0, len(data))
+	for _, rawItem := range data {
+		item, err := summarizedListItem(rawItem, summarize)
+		if err != nil {
+			return err
+		}
+		items = append(items, item)
+	}
+	shared.WritePaginatedList(items, pagination, flags.Format)
+	return nil
 }
 
 func summarizedListItem(raw json.RawMessage, summarize func(map[string]any) map[string]any) (map[string]any, error) {

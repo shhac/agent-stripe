@@ -28,6 +28,11 @@ func TestRefundRecoveryRequiresParentTransferForReversal(t *testing.T) {
 func TestOutgoingPaymentFlagsDisabledConnectedAccount(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/v2/core/accounts/acct_disabled":
+			// A Connect v1 account rejected by the v2 namespace: the auto
+			// namespace probe must fall back rather than fail.
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"error":{"type":"invalid_request_error","code":"v1_account_instead_of_v2_account","message":"V1 Account ID cannot be used in V2 Account APIs."}}`)
 		case "/v1/accounts/acct_disabled":
 			fmt.Fprint(w, `{"id":"acct_disabled","object":"account","charges_enabled":false,"payouts_enabled":false,"requirements":{"currently_due":["external_account"]}}`)
 		case "/v1/transfers":
@@ -43,7 +48,10 @@ func TestOutgoingPaymentFlagsDisabledConnectedAccount(t *testing.T) {
 		t.Fatalf("outgoingPayment() error = %v", err)
 	}
 	assertRecordObject(t, records, "account", "acct_disabled")
-	finding := findFinding(records, "Account acct_disabled charges_enabled=false payouts_enabled=false")
+	if fallback := findFinding(records, "Account acct_disabled is not an Accounts v2 account"); fallback == nil {
+		t.Fatalf("records = %#v, want a namespace fallback finding", records)
+	}
+	finding := findFinding(records, "Connect v1 account acct_disabled charges_enabled=false payouts_enabled=false")
 	if finding == nil || finding.Severity != "warning" {
 		t.Fatalf("finding = %#v, want disabled account warning", finding)
 	}

@@ -70,7 +70,7 @@ func (i investigator) outgoingPayment(id string) ([]evidenceRecord, error) {
 		}
 		return i.appendEvidence(nil, entityRecord("payout", payout), moneyMovementFinding("payout", payout)), nil
 	default:
-		return i.accountHealth(id)
+		return i.accountHealth(id, namespaceAuto)
 	}
 }
 

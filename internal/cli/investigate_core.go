@@ -114,6 +114,30 @@ func (i investigator) list(path string, params url.Values) ([]map[string]any, er
 	return items, nil
 }
 
+// listV2 is list for the /v2 list envelope, which has no has_more and no
+// cursor IDs. Investigations read one page; deeper paging is the job of the
+// resource commands with --page.
+func (i investigator) listV2(path string, params url.Values) ([]map[string]any, error) {
+	raw, err := i.client.Get(i.ctx, path, params)
+	if err != nil {
+		return nil, err
+	}
+	list, err := api.DecodeV2List(raw)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list.Data))
+	for _, rawItem := range list.Data {
+		item, err := decodeObject(rawItem)
+		if err != nil {
+			return nil, err
+		}
+		i.emitEntity(item)
+		items = append(items, item)
+	}
+	return items, nil
+}
+
 func (i investigator) emitEntity(item map[string]any) {
 	if !isStripeEntity(item) {
 		return

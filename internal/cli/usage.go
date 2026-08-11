@@ -9,12 +9,12 @@ func registerUsageCommand(root *cobra.Command) {
 const usageText = `agent-stripe — Stripe triage CLI for AI agents
 
 PROFILE SETUP
-  agent-stripe auth add <profile> --form [--context <acct_or_path>] [--api-version <version>]
-  agent-stripe auth add <profile> --api-key <rk_or_sk> [--context <acct_or_path>] [--api-version <version>]
+  agent-stripe auth add <profile> --form [--context <acct_or_path>] [--api-version <version>] [--v2-api-version <version>]
+  agent-stripe auth add <profile> --api-key <rk_or_sk> [--context <acct_or_path>] [--api-version <version>] [--v2-api-version <version>]
   agent-stripe auth check [profile]
   agent-stripe auth list
   agent-stripe auth default <profile>
-  agent-stripe auth update <profile> [--api-key <rk_or_sk>|--form] [--context <ctx>|--clear-context] [--api-version <version>] [--default]
+  agent-stripe auth update <profile> [--api-key <rk_or_sk>|--form] [--context <ctx>|--clear-context] [--api-version <version>] [--v2-api-version <version>] [--default]
   agent-stripe auth remove <profile>
   agent-stripe config path
   agent-stripe config show
@@ -65,6 +65,22 @@ TRIAGE STARTERS
   agent-stripe accounts self
   agent-stripe accounts list [--full]
   agent-stripe accounts get <acct_id>
+  agent-stripe accounts-v2 get <acct_id> [--include requirements]
+  agent-stripe accounts-v2 list [--applied-configuration merchant|customer|recipient] [--page <token>]
+  agent-stripe accounts-v2 persons list <acct_id>
+  agent-stripe accounts-v2 usage
+  agent-stripe events-v2 list [--object-id <acct_id>] [--type <v2.core...>]
+  agent-stripe events-v2 get <evt_id>
+  agent-stripe events-v2 usage
+
+TWO ACCOUNT NAMESPACES
+  Connect v1 (/v1/accounts) and Accounts v2 / UA2 (/v2/core/accounts) are different object models that
+  share the acct_ prefix. 'accounts' reads v1 only; 'accounts-v2' reads v2 only; neither retries the other.
+  When the namespace is unknown, ask instead of guessing:
+    agent-stripe investigate resolve <acct_id>
+    agent-stripe investigate account-health <acct_id>
+  A v2 account ID works on v1 money-movement endpoints; a v1-only ID is rejected by /v2 with
+  v1_account_instead_of_v2_account. See 'agent-stripe connect usage'.
 
 INVESTIGATIONS
   agent-stripe investigate usage
@@ -91,7 +107,8 @@ INVESTIGATIONS
   agent-stripe investigate setup <seti_id|pm_id|cus_id>
   agent-stripe investigate timeline <cus_id>
   agent-stripe investigate outgoing-payment <tr_id|po_id|acct_id>
-  agent-stripe investigate account-health <acct_id>
+  agent-stripe investigate account-health <acct_id> [--namespace auto|v1|v2]
+  agent-stripe investigate account-events <acct_id>
   agent-stripe investigate ledger <ch_id|pi_id|re_id|tr_id|po_id|txn_id|fee_id>
   agent-stripe investigate refund <re_id|ch_id|pi_id>
   agent-stripe investigate payout-failure <po_id>
@@ -104,7 +121,11 @@ INVESTIGATIONS
 
 RAW READ-ONLY API
   agent-stripe api get /v1/payment_intents/pi_... [--query expand[]=latest_charge]
+  agent-stripe api get /v2/core/accounts/acct_... [--query include[0]=requirements]
   Only GET is exposed initially so agents can investigate without mutation risk.
+  /v2 paths automatically use Bearer auth and the v2 API version. /v2 needs indexed arrays
+  (include[0]=...), not the v1 include[]/expand[] form. Prefer the wrapped accounts-v2 and
+  events-v2 commands: they validate includes, summarize, and paginate for you.
 
 OUTPUT
   Lists default to NDJSON/jsonl, one object per line, with @pagination when there is another page.
@@ -130,7 +151,8 @@ OUTPUT
 GLOBAL FLAGS
   -p, --profile <alias>
   --context <Stripe-Context>
-  --api-version <version>
+  --api-version <version>     Stripe-Version for /v1 requests
+  --v2-api-version <version>  Stripe-Version for /v2 requests (Accounts v2, v2 core events)
   -f, --format json|yaml|jsonl
   --expose <path,key>  Reveal redacted Stripe response fields by path or key; comma-separated/repeatable
   -t, --timeout <ms>

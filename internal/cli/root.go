@@ -69,6 +69,8 @@ func newRootCmd(version string) *cobra.Command {
 	registerPaymentLinks(root, globalsFunc)
 	registerEarlyFraudWarnings(root, globalsFunc)
 	registerAccounts(root, globalsFunc)
+	registerAccountsV2(root, globalsFunc)
+	registerEventsV2(root, globalsFunc)
 	registerInvestigate(root, globalsFunc)
 	registerRawAPI(root, globalsFunc)
 
@@ -82,7 +84,7 @@ func newRootCmd(version string) *cobra.Command {
 	// surface is ~one-tool-per-group instead of one-per-leaf. Credential/config/
 	// usage commands are deliberately left out — they aren't agent tasks.
 	exposeGroups(root,
-		"accounts", "api", "application-fees", "balance", "balance-transactions", "charges", "checkout-sessions", "connect", "customers", "disputes", "early-fraud-warnings", "events", "investigate", "invoices", "payment-intents", "payment-links", "payment-methods", "payments", "payouts", "prices", "products", "refunds", "setup-intents", "subscriptions", "transfers")
+		"accounts", "accounts-v2", "api", "application-fees", "balance", "balance-transactions", "charges", "checkout-sessions", "connect", "customers", "disputes", "early-fraud-warnings", "events", "events-v2", "investigate", "invoices", "payment-intents", "payment-links", "payment-methods", "payments", "payouts", "prices", "products", "refunds", "setup-intents", "subscriptions", "transfers")
 
 	root.AddCommand(agentmcp.Command(root, agentmcp.WithHiddenFlags("color", "expose"), agentmcp.WithOAuthKeyringService(credential.MCPKeychainService())))
 

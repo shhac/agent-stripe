@@ -7,35 +7,133 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/shhac/agent-stripe/internal/api"
 	"github.com/shhac/agent-stripe/internal/cli/shared"
+	agenterrors "github.com/shhac/agent-stripe/internal/errors"
+)
+
+const (
+	namespaceAuto = "auto"
+	namespaceV1   = "v1"
+	namespaceV2   = "v2"
 )
 
 func newInvestigateAccountHealth(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
-	return &cobra.Command{
+	var namespace string
+	cmd := &cobra.Command{
 		Use:   "account-health <account-id>",
 		Short: "Explain connected account requirements, capabilities, and money movement blockers",
-		Args:  cobra.ExactArgs(1),
+		Long: "Explains why a connected account can or cannot take payments and get paid.\n" +
+			"Both Connect v1 and Accounts v2 use the acct_ prefix, so --namespace auto (the default)\n" +
+			"reads the v2 account first and falls back to v1 when Stripe says the ID is not a v2 account.",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateNamespace(namespace); err != nil {
+				return err
+			}
 			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
-				return inv.accountHealth(args[0])
+				return inv.accountHealth(args[0], namespace)
 			})
 		},
 	}
+	cmd.Flags().StringVar(&namespace, "namespace", namespaceAuto, "Account namespace to read: auto, v1, or v2")
+	return cmd
 }
 
-func (i investigator) accountHealth(accountID string) ([]evidenceRecord, error) {
+func validateNamespace(namespace string) error {
+	switch namespace {
+	case namespaceAuto, namespaceV1, namespaceV2:
+		return nil
+	}
+	return agenterrors.Newf(agenterrors.FixableByAgent, "unknown --namespace value %q", namespace).
+		WithHint("Use auto (default), v1 for Connect v1 accounts, or v2 for Accounts v2")
+}
+
+func (i investigator) accountHealth(accountID, namespace string) ([]evidenceRecord, error) {
 	if err := validateExpectedStripeID(accountID, "account"); err != nil {
 		return nil, err
 	}
+	if namespace == "" {
+		namespace = namespaceAuto
+	}
+	if namespace == namespaceV1 {
+		return i.accountHealthV1(accountID, nil)
+	}
+
+	includes, err := v2AccountIncludeParams(nil)
+	if err != nil {
+		return nil, err
+	}
+	account, err := i.get(v2AccountPath(accountID), includes)
+	if err != nil {
+		if namespace == namespaceV2 || !isNotV2AccountError(err) {
+			return nil, err
+		}
+		return i.accountHealthV1(accountID, []evidenceRecord{v2FallbackFinding(accountID, err)})
+	}
+	return i.accountHealthV2(accountID, account)
+}
+
+// isNotV2AccountError matches the documented ways Stripe says "this ID or this
+// platform is not on Accounts v2". Anything else (auth, rate limit, network)
+// must surface rather than being masked by a v1 retry.
+func isNotV2AccountError(err error) bool {
+	switch api.ErrorCode(err) {
+	case "v1_account_instead_of_v2_account",
+		"account_not_yet_compatible_with_v2",
+		"accounts_v2_access_blocked",
+		"non_connect_platform_accounts_v2_access_blocked":
+		return true
+	}
+	return api.ErrorStatus(err) == 404
+}
+
+func v2FallbackFinding(accountID string, err error) evidenceRecord {
+	reason := api.ErrorCode(err)
+	if reason == "" {
+		reason = "not found in the v2 namespace"
+	}
+	return evidenceRecord{
+		Type:     "finding",
+		Severity: "info",
+		Summary:  "Account " + accountID + " is not an Accounts v2 account (" + reason + "); read from Connect v1 instead.",
+		Command:  "agent-stripe accounts get " + accountID,
+		Data:     map[string]any{"namespace": namespaceV1, "v2_error_code": api.ErrorCode(err)},
+	}
+}
+
+func (i investigator) accountHealthV1(accountID string, prefix []evidenceRecord) ([]evidenceRecord, error) {
+	// The fallback note is emitted before the v1 read so a streaming reader
+	// sees why the namespace changed before the v1-shaped account arrives.
+	records := i.appendEvidenceAll(nil, prefix)
 	account, err := i.get("/v1/accounts/"+url.PathEscape(accountID), url.Values{})
 	if err != nil {
 		return nil, err
 	}
-	records := i.appendEvidence(nil, entityRecord("account", account), accountHealthFinding(account))
-	if transfers, err := i.list("/v1/transfers", valuesWithLimit(5, "destination", accountID)); err == nil {
-		records = i.appendListRecords(records, "transfer", transfers)
+	records = i.appendEvidence(records, entityRecord("account", account), accountHealthFinding(account))
+	return i.appendAccountTransfers(records, accountID), nil
+}
+
+func (i investigator) accountHealthV2(accountID string, account map[string]any) ([]evidenceRecord, error) {
+	records := i.appendEvidence(nil, entityRecord(objectV2Account, account))
+	persons, err := i.listV2(v2AccountPersonsPath(accountID), url.Values{})
+	if err == nil {
+		for _, person := range persons {
+			records = i.appendEvidence(records, entityRecord(objectV2Person, person))
+		}
 	}
-	return records, nil
+	records = i.appendEvidence(records, v2AccountHealthFinding(account, len(persons)))
+	return i.appendAccountTransfers(records, accountID), nil
+}
+
+// appendAccountTransfers is shared by both namespaces: transfers live in /v1
+// for v1 and v2 accounts alike, and a v2 account ID is accepted there.
+func (i investigator) appendAccountTransfers(records []evidenceRecord, accountID string) []evidenceRecord {
+	transfers, err := i.list("/v1/transfers", valuesWithLimit(5, "destination", accountID))
+	if err != nil {
+		return records
+	}
+	return i.appendListRecords(records, "transfer", transfers)
 }
 
 func accountHealthFinding(account map[string]any) evidenceRecord {
@@ -54,7 +152,7 @@ func accountHealthFinding(account map[string]any) evidenceRecord {
 	if len(blockers) > 0 {
 		severity = "warning"
 	}
-	summary := fmt.Sprintf("Account %s charges_enabled=%t payouts_enabled=%t.", mapString(account, "id"), mapBool(account, "charges_enabled"), mapBool(account, "payouts_enabled"))
+	summary := fmt.Sprintf("Connect v1 account %s charges_enabled=%t payouts_enabled=%t.", mapString(account, "id"), mapBool(account, "charges_enabled"), mapBool(account, "payouts_enabled"))
 	if len(blockers) > 0 {
 		summary += " Blockers: " + strings.Join(blockers, ", ") + "."
 	}
@@ -63,6 +161,7 @@ func accountHealthFinding(account map[string]any) evidenceRecord {
 		Severity: severity,
 		Summary:  summary,
 		Data: map[string]any{
+			"namespace":           namespaceV1,
 			"account":             mapString(account, "id"),
 			"charges_enabled":     mapBool(account, "charges_enabled"),
 			"payouts_enabled":     mapBool(account, "payouts_enabled"),
@@ -71,4 +170,124 @@ func accountHealthFinding(account map[string]any) evidenceRecord {
 			"future_requirements": mapAnyMap(account, "future_requirements"),
 		},
 	}
+}
+
+// v2AccountHealthFinding reads only v2 signals. A v2.core.account has no
+// charges_enabled/payouts_enabled — enablement is per-capability, and what is
+// missing is a requirement entry rather than a field name in an array.
+func v2AccountHealthFinding(account map[string]any, personCount int) evidenceRecord {
+	capabilities := v2AccountCapabilities(account)
+	capabilityRollup := summarizeV2Capabilities(capabilities)
+	requirements := v2AccountRequirements(account, "requirements")
+	requirementRollup := summarizeV2Requirements(requirements)
+
+	severity := "info"
+	if len(capabilityRollup.Restricted) > 0 || len(requirementRollup.Blocking) > 0 || mapBool(account, "closed") {
+		severity = "warning"
+	}
+
+	summary := v2AccountHealthSummary(account, capabilityRollup, requirementRollup)
+	return evidenceRecord{
+		Type:     "finding",
+		Severity: severity,
+		Summary:  summary,
+		Command:  "agent-stripe investigate account-events " + mapString(account, "id"),
+		Data: map[string]any{
+			"namespace":               namespaceV2,
+			"account":                 mapString(account, "id"),
+			"closed":                  mapBool(account, "closed"),
+			"dashboard":               mapString(account, "dashboard"),
+			"applied_configurations":  v2AppliedConfigurations(account),
+			"capabilities":            v2CapabilityData(capabilities),
+			"capabilities_not_active": capabilityRollup.Restricted,
+			"requirements":            v2RequirementData(requirements),
+			"requirements_summary":    v2RequirementSummary(account, "requirements"),
+			"future_requirements":     v2RequirementData(v2AccountRequirements(account, "future_requirements")),
+			"person_count":            personCount,
+		},
+	}
+}
+
+func v2AccountHealthSummary(account map[string]any, capabilities v2CapabilityRollup, requirements v2RequirementRollup) string {
+	id := mapString(account, "id")
+	configurations := v2AppliedConfigurations(account)
+	summary := fmt.Sprintf("Accounts v2 account %s has configurations [%s]", id, strings.Join(configurations, ", "))
+	if dashboard := mapString(account, "dashboard"); dashboard != "" {
+		summary += " and dashboard " + dashboard
+	}
+	summary += "."
+	if mapBool(account, "closed") {
+		summary += " The account is closed."
+	}
+	if len(capabilities.Restricted) == 0 {
+		summary += " All capabilities are active."
+	} else {
+		summary += " Capabilities not active: " + joinAndTruncate(capabilities.Restricted, 6) + "."
+	}
+	return summary + v2RequirementSentence(requirements)
+}
+
+// v2RequirementSentence reports only what the integrator can act on in its
+// headline count and deadline breakdown, then mentions Stripe-side entries
+// separately — they are outstanding, but nobody can supply anything for them.
+func v2RequirementSentence(requirements v2RequirementRollup) string {
+	if len(requirements.Blocking) == 0 {
+		if requirements.Counts["eventually_due"] > 0 {
+			return fmt.Sprintf(" No requirement needs action now; %d eventually due.", requirements.Counts["eventually_due"])
+		}
+		if requirements.AwaitingStripe > 0 {
+			return fmt.Sprintf(" Nothing is outstanding from you; %d requirement(s) are awaiting Stripe.", requirements.AwaitingStripe)
+		}
+		return " No outstanding requirements need action."
+	}
+	sentence := fmt.Sprintf(" %d requirement(s) need action from you (%d past due, %d currently due): %s.",
+		len(requirements.Blocking),
+		requirements.UserCounts["past_due"],
+		requirements.UserCounts["currently_due"],
+		joinAndTruncate(requirements.Blocking, 6))
+	if requirements.AwaitingStripe > 0 {
+		sentence += fmt.Sprintf(" A further %d requirement(s) are awaiting Stripe, not you.", requirements.AwaitingStripe)
+	}
+	return sentence
+}
+
+func v2CapabilityData(capabilities []v2Capability) []map[string]any {
+	data := make([]map[string]any, 0, len(capabilities))
+	for _, capability := range capabilities {
+		entry := map[string]any{
+			"capability":    capability.QualifiedName(),
+			"configuration": capability.Configuration,
+			"status":        capability.Status,
+		}
+		if len(capability.StatusCodes) > 0 {
+			entry["status_details"] = capability.StatusCodes
+		}
+		data = append(data, entry)
+	}
+	return data
+}
+
+func v2RequirementData(requirements []v2Requirement) []map[string]any {
+	data := make([]map[string]any, 0, len(requirements))
+	for _, requirement := range requirements {
+		entry := map[string]any{
+			"description":          requirement.Description,
+			"minimum_deadline":     requirement.Deadline,
+			"awaiting_action_from": requirement.AwaitingFrom,
+		}
+		if requirement.ID != "" {
+			entry["id"] = requirement.ID
+		}
+		if len(requirement.ErrorCodes) > 0 {
+			entry["error_codes"] = requirement.ErrorCodes
+		}
+		if len(requirement.Restricts) > 0 {
+			entry["restricts_capabilities"] = requirement.Restricts
+		}
+		if requirement.Reference != "" {
+			entry["reference"] = requirement.Reference
+		}
+		data = append(data, entry)
+	}
+	return data
 }

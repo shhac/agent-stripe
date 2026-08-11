@@ -37,6 +37,7 @@ var stripeIDKinds = []stripeIDKind{
 	{Kind: "refund", Display: "refund", Prefixes: []string{"re_"}, GetCommand: "agent-stripe refunds get", InvestigateCommand: "agent-stripe investigate refund", APIPath: "/v1/refunds"},
 	{Kind: "transfer", Display: "transfer", Prefixes: []string{"tr_"}, GetCommand: "agent-stripe transfers get", InvestigateCommand: "agent-stripe investigate outgoing-payment", APIPath: "/v1/transfers"},
 	{Kind: "payout", Display: "payout", Prefixes: []string{"po_"}, GetCommand: "agent-stripe payouts get", InvestigateCommand: "agent-stripe investigate payout-failure", APIPath: "/v1/payouts"},
+	{Kind: "account_person", Display: "v2 account person", Prefixes: []string{"person_"}, InvestigateCommand: "agent-stripe accounts-v2 persons get <account-id>", ResolveObject: objectV2Person},
 	{Kind: "account", Display: "account", Prefixes: []string{"acct_"}, GetCommand: "agent-stripe accounts get", InvestigateCommand: "agent-stripe investigate account-health", APIPath: "/v1/accounts"},
 	{Kind: "event", Display: "event", Prefixes: []string{"evt_"}, GetCommand: "agent-stripe events get", InvestigateCommand: "agent-stripe investigate webhook-event", APIPath: "/v1/events"},
 	{Kind: "price", Display: "price", Prefixes: []string{"price_"}, GetCommand: "agent-stripe prices get", APIPath: "/v1/prices"},

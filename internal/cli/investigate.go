@@ -57,6 +57,7 @@ var investigationCommands = []investigationCommandFactory{
 	newInvestigateTimeline,
 	newInvestigateOutgoingPayment,
 	newInvestigateAccountHealth,
+	newInvestigateAccountEvents,
 	newInvestigateLedger,
 	newInvestigateFraudReview,
 	newInvestigateRefund,
@@ -77,8 +78,10 @@ OUTPUT
 RESOLUTION AND CONTEXT
   agent-stripe investigate resolve <stripe-id-or-invoice-number>
   agent-stripe investigate customer-context --customer cus_... [--limit 5]
-  Resolve identifies likely object type and next commands. Customer context gathers customer, payment methods,
-  subscriptions, invoices, payment intents, charges, disputes, and refunds.
+  Resolve identifies likely object type and next commands. For an acct_ ID it also names which account
+  namespace the ID belongs to (Connect v1 or Accounts v2), which the prefix alone cannot tell you.
+  Customer context gathers customer, payment methods, subscriptions, invoices, payment intents, charges,
+  disputes, and refunds.
 
 CUSTOMER CARD LAST4
   agent-stripe investigate customer-card-payment --customer cus_... --last4 4242 [--limit 25]
@@ -90,7 +93,8 @@ WEBHOOKS AND DISPUTES
   agent-stripe investigate webhook-delivery we_...
   agent-stripe investigate dispute-response dp_...
   agent-stripe investigate dispute-impact dp_...|ch_...|cus_...
-  Webhook-event fetches the event and underlying object. Dispute-response summarizes due date, reason, status,
+  Webhook-event fetches the event and underlying object; it accepts v2 core event IDs too, following the
+  thin event's related_object to current state. Dispute-response summarizes due date, reason, status,
   related charge, customer, and PaymentIntent. Use webhook-delivery for pending_webhooks and endpoint config.
   Use dispute-impact when the question is revenue exposure or customer/account impact.
 
@@ -125,8 +129,20 @@ FAILED CUSTOMER PAYMENTS
   Pulls PaymentIntent/Charge/Invoice evidence plus related disputes and refunds.
   Checkout-session follows Checkout -> line items -> resulting payment/subscription. Timeline creates ordered customer context.
 
+CONNECTED ACCOUNTS (CONNECT v1 AND ACCOUNTS v2 / UA2)
+  agent-stripe investigate account-health acct_... [--namespace auto|v1|v2]
+  agent-stripe investigate account-events acct_... [--limit 20]
+  Stripe has two connected-account models sharing the acct_ prefix. account-health defaults to
+  --namespace auto: it reads /v2/core/accounts first and falls back to /v1/accounts when Stripe says the
+  ID is not a v2 account, then names the namespace that answered in a finding.
+  v2 findings report per-configuration capability status (merchant.card_payments,
+  merchant.stripe_balance.payouts, recipient.bank_accounts.local) and requirement entries with
+  awaiting_action_from plus the capabilities each entry restricts. A v2 account has no
+  charges_enabled/payouts_enabled, and those are never reported for one.
+  account-events reads /v2/core/events, the only place Accounts v2 capability and requirement changes
+  appear. Those events are thin, so any object shown with them is current state, not point-in-time.
+
 CONNECT MONEY MOVEMENT
-  agent-stripe investigate account-health acct_...
   agent-stripe investigate outgoing-payment tr_...
   agent-stripe investigate outgoing-payment po_...
   agent-stripe investigate outgoing-payment acct_...
@@ -135,8 +151,9 @@ CONNECT MONEY MOVEMENT
   agent-stripe investigate payout-failure po_...
   agent-stripe investigate refund-recovery re_...
   agent-stripe investigate refund-recovery trr_... --transfer tr_...
-  Use account-health for connected account blockers, ledger for reconciliation, refund for customer-visible refund state,
-  and refund-recovery for refund funding or transfer reversal recovery.
+  Use ledger for reconciliation, refund for customer-visible refund state, and refund-recovery for refund
+  funding or transfer reversal recovery. These endpoints are /v1 for both account namespaces, and a v2
+  account ID is accepted by them, so they need no namespace choice.
 
 RISK AND FRAUD
   agent-stripe investigate fraud-review issfr_...|ch_...|pi_...
