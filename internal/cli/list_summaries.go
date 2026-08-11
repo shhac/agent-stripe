@@ -41,17 +41,7 @@ func paymentIntentListSummary(pi map[string]any) map[string]any {
 	copyExpandableID(summary, pi, "latest_charge")
 	copyString(summary, pi, "invoice")
 	copyString(summary, pi, "capture_method")
-	if lastErr, ok := pi["last_payment_error"].(map[string]any); ok {
-		out := map[string]any{}
-		copyString(out, lastErr, "code")
-		copyString(out, lastErr, "decline_code")
-		copyString(out, lastErr, "type")
-		copyString(out, lastErr, "payment_method_type")
-		copyString(out, lastErr, "message")
-		if len(out) > 0 {
-			summary["last_payment_error"] = out
-		}
-	}
+	copySubset(summary, pi, "last_payment_error", "code", "decline_code", "type", "payment_method_type", "message")
 	return summary
 }
 
@@ -84,16 +74,7 @@ func chargeListSummary(charge map[string]any) map[string]any {
 			summary["payment_method_details"] = out
 		}
 	}
-	if outcome, ok := charge["outcome"].(map[string]any); ok {
-		out := map[string]any{}
-		copyString(out, outcome, "type")
-		copyString(out, outcome, "network_status")
-		copyString(out, outcome, "risk_level")
-		copyString(out, outcome, "seller_message")
-		if len(out) > 0 {
-			summary["outcome"] = out
-		}
-	}
+	copySubset(summary, charge, "outcome", "type", "network_status", "risk_level", "seller_message")
 	return summary
 }
 
@@ -190,14 +171,7 @@ func eventListSummary(event map[string]any) map[string]any {
 	copyBool(summary, event, "livemode")
 	copyString(summary, event, "api_version")
 	copyString(summary, event, "account")
-	if request, ok := event["request"].(map[string]any); ok {
-		out := map[string]any{}
-		copyString(out, request, "id")
-		copyString(out, request, "idempotency_key")
-		if len(out) > 0 {
-			summary["request"] = out
-		}
-	}
+	copySubset(summary, event, "request", "id", "idempotency_key")
 	if data, ok := event["data"].(map[string]any); ok {
 		if object, ok := data["object"].(map[string]any); ok {
 			out := map[string]any{}

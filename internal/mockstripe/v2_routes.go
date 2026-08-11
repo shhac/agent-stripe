@@ -3,6 +3,7 @@ package mockstripe
 import (
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -168,22 +169,23 @@ func v2AccountWithIncludes(account map[string]any, include []string) map[string]
 func filterByAppliedConfigurations(items []map[string]any, wanted []string) []map[string]any {
 	filtered := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		applied := map[string]bool{}
-		for _, value := range anyStrings(item["applied_configurations"]) {
-			applied[value] = true
-		}
-		matchesAll := true
-		for _, want := range wanted {
-			if !applied[want] {
-				matchesAll = false
-				break
-			}
-		}
-		if matchesAll {
+		if hasAllConfigurations(item, wanted) {
 			filtered = append(filtered, item)
 		}
 	}
 	return filtered
+}
+
+// hasAllConfigurations matches Stripe's filter semantics: an account must carry
+// every requested configuration, not any of them.
+func hasAllConfigurations(item map[string]any, wanted []string) bool {
+	applied := anyStrings(item["applied_configurations"])
+	for _, want := range wanted {
+		if !slices.Contains(applied, want) {
+			return false
+		}
+	}
+	return true
 }
 
 func filterByRelatedObjectID(items []map[string]any, objectID string) []map[string]any {

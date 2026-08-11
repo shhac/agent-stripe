@@ -77,19 +77,7 @@ func normalizeValue(value any, path string, opts evidenceOptions, seen map[strin
 	case []any:
 		return normalizeSlice(v, path, opts, seen)
 	case string:
-		if shouldTruncate(path, v, opts) {
-			shown := opts.maxString
-			if shown > len(v) {
-				shown = len(v)
-			}
-			return normalizeResult{value: v[:shown] + "...", truncated: []truncatedNote{{
-				Path:          path,
-				OriginalBytes: len(v),
-				ShownBytes:    shown,
-				ExpandHint:    "--expand-field " + path + " or --full",
-			}}}
-		}
-		return normalizeResult{value: v}
+		return normalizeString(v, path, opts)
 	default:
 		return normalizeResult{value: value}
 	}
@@ -110,6 +98,19 @@ func normalizeNestedEntity(item map[string]any, path string, opts evidenceOption
 	child, children := normalizeRecord(entityRecord(object, item), opts, seen)
 	result.records = append([]evidenceRecord{child}, children...)
 	return result
+}
+
+func normalizeString(value, path string, opts evidenceOptions) normalizeResult {
+	if !shouldTruncate(path, value, opts) {
+		return normalizeResult{value: value}
+	}
+	shown := min(opts.maxString, len(value))
+	return normalizeResult{value: value[:shown] + "...", truncated: []truncatedNote{{
+		Path:          path,
+		OriginalBytes: len(value),
+		ShownBytes:    shown,
+		ExpandHint:    "--expand-field " + path + " or --full",
+	}}}
 }
 
 func normalizeMap(item map[string]any, path string, opts evidenceOptions, seen map[string]bool) normalizeResult {
