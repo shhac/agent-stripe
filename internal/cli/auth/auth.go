@@ -39,6 +39,7 @@ func registerAdd(parent *cobra.Command) {
 	var apiKey string
 	var contextValue string
 	var apiVersion string
+	var v2APIVersion string
 	var form bool
 
 	cmd := &cobra.Command{
@@ -66,8 +67,11 @@ func registerAdd(parent *cobra.Command) {
 			if apiVersion == "" {
 				apiVersion = config.DefaultAPIVersion
 			}
+			if v2APIVersion == "" {
+				v2APIVersion = config.DefaultV2APIVersion
+			}
 			credentialType := credential.Type(apiKey)
-			if err := config.StoreProfile(alias, config.Profile{Context: contextValue, APIVersion: apiVersion, CredentialType: credentialType}); err != nil {
+			if err := config.StoreProfile(alias, config.Profile{Context: contextValue, APIVersion: apiVersion, V2APIVersion: v2APIVersion, CredentialType: credentialType}); err != nil {
 				return err
 			}
 
@@ -77,6 +81,7 @@ func registerAdd(parent *cobra.Command) {
 				"storage":         storage,
 				"context":         contextValue,
 				"api_version":     apiVersion,
+				"v2_api_version":  v2APIVersion,
 				"credential_type": credentialType,
 			}, "")
 			return nil
@@ -84,7 +89,8 @@ func registerAdd(parent *cobra.Command) {
 	}
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "Stripe restricted, secret, or organization API key (required)")
 	cmd.Flags().StringVar(&contextValue, "context", "", "Default Stripe-Context for this profile")
-	cmd.Flags().StringVar(&apiVersion, "api-version", config.DefaultAPIVersion, "Default Stripe API version")
+	cmd.Flags().StringVar(&apiVersion, "api-version", config.DefaultAPIVersion, "Default Stripe API version for /v1 requests")
+	cmd.Flags().StringVar(&v2APIVersion, "v2-api-version", config.DefaultV2APIVersion, "Default Stripe API version for /v2 requests (Accounts v2, v2 core events)")
 	cmd.Flags().BoolVar(&form, "form", false, "Prompt for the API key via a native OS dialog (LLM never sees the input)")
 	parent.AddCommand(cmd)
 }
@@ -160,11 +166,12 @@ func registerList(parent *cobra.Command) {
 			profiles := make([]map[string]any, 0, len(cfg.Profiles))
 			for alias, profile := range cfg.Profiles {
 				item := map[string]any{
-					"profile":     alias,
-					"default":     alias == cfg.DefaultProfile,
-					"context":     profile.Context,
-					"api_version": profile.APIVersion,
-					"credential":  "keychain",
+					"profile":        alias,
+					"default":        alias == cfg.DefaultProfile,
+					"context":        profile.Context,
+					"api_version":    profile.APIVersion,
+					"v2_api_version": profile.V2APIVersion,
+					"credential":     "keychain",
 				}
 				addCredentialType(item, profile)
 				addCredentialTypeHint(item, item["credential_type"].(string), profile.CredentialType == "", alias)

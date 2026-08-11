@@ -15,23 +15,35 @@ import (
 
 const defaultBaseURL = "https://api.stripe.com"
 
+// IsV2Path reports whether a request path targets Stripe's /v2 namespace. The
+// two namespaces differ in auth header, API version train, and array encoding,
+// so the path prefix — not a per-call flag — is what selects the transport.
+func IsV2Path(path string) bool {
+	return strings.HasPrefix(path, "/v2/")
+}
+
 type Client struct {
-	baseURL    string
-	apiKey     string
-	context    string
-	apiVersion string
-	maxRetries int
-	http       *http.Client
-	debug      bool
-	redaction  output.RedactionOptions
+	baseURL      string
+	apiKey       string
+	context      string
+	apiVersion   string
+	v2APIVersion string
+	maxRetries   int
+	http         *http.Client
+	debug        bool
+	redaction    output.RedactionOptions
 }
 
 type Options struct {
-	APIKey     string
-	Context    string
-	APIVersion string
-	BaseURL    string
-	MaxRetries int
+	APIKey  string
+	Context string
+	// APIVersion is sent as Stripe-Version for /v1 requests, V2APIVersion for
+	// /v2 requests. Stripe versions the namespaces on separate release trains,
+	// and /v2 requires the header on every request.
+	APIVersion   string
+	V2APIVersion string
+	BaseURL      string
+	MaxRetries   int
 }
 
 func NewClient(opts Options) *Client {
@@ -40,12 +52,13 @@ func NewClient(opts Options) *Client {
 		baseURL = defaultBaseURL
 	}
 	return &Client{
-		baseURL:    strings.TrimRight(baseURL, "/"),
-		apiKey:     opts.APIKey,
-		context:    opts.Context,
-		apiVersion: opts.APIVersion,
-		maxRetries: nonNegative(opts.MaxRetries),
-		http:       &http.Client{},
+		baseURL:      strings.TrimRight(baseURL, "/"),
+		apiKey:       opts.APIKey,
+		context:      opts.Context,
+		apiVersion:   opts.APIVersion,
+		v2APIVersion: opts.V2APIVersion,
+		maxRetries:   nonNegative(opts.MaxRetries),
+		http:         &http.Client{},
 	}
 }
 
@@ -84,7 +97,14 @@ func (c *Client) do(ctx context.Context, method, path string, form url.Values) (
 		}
 
 		if resp.status >= 400 {
-			return nil, classifyHTTPError(resp.status, resp.requestID, resp.rateLimitedReason, c.maxRetries, resp.body)
+			return nil, classifyHTTPError(httpErrorInput{
+				status:            resp.status,
+				requestID:         resp.requestID,
+				rateLimitedReason: resp.rateLimitedReason,
+				maxRetries:        c.maxRetries,
+				body:              resp.body,
+				v2:                IsV2Path(path),
+			})
 		}
 
 		return json.RawMessage(resp.body), nil
@@ -142,17 +162,28 @@ func (c *Client) buildRequest(ctx context.Context, method, path string, form url
 		return nil, agenterrors.Wrap(err, agenterrors.FixableByAgent)
 	}
 
-	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(c.apiKey+":")))
+	if IsV2Path(path) {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	} else {
+		req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(c.apiKey+":")))
+	}
 	if form != nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	}
 	if c.context != "" {
 		req.Header.Set("Stripe-Context", c.context)
 	}
-	if c.apiVersion != "" {
-		req.Header.Set("Stripe-Version", c.apiVersion)
+	if version := c.versionFor(path); version != "" {
+		req.Header.Set("Stripe-Version", version)
 	}
 	return req, nil
+}
+
+func (c *Client) versionFor(path string) string {
+	if IsV2Path(path) {
+		return c.v2APIVersion
+	}
+	return c.apiVersion
 }
 
 func buildPath(base string, params url.Values) string {

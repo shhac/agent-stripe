@@ -39,7 +39,8 @@ func newRootCmd(version string) *cobra.Command {
 	pf.StringVar(&globals.APIKey, "api-key", "", "API key override; never printed or persisted")
 	pf.StringVar(&globals.BaseURL, "base-url", "", "Stripe API base URL override for tests")
 	pf.IntVar(&globals.MaxRetries, "max-retries", 2, "Maximum automatic retries for transient Stripe 429 responses")
-	pf.StringVar(&globals.APIVersion, "api-version", "", "Stripe API version header override")
+	pf.StringVar(&globals.APIVersion, "api-version", "", "Stripe API version header override for /v1 requests")
+	pf.StringVar(&globals.V2APIVersion, "v2-api-version", "", "Stripe API version header override for /v2 requests (Accounts v2, v2 core events)")
 	_ = pf.MarkHidden("base-url")
 
 	registerUsageCommand(root)

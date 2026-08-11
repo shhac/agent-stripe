@@ -15,6 +15,7 @@ func registerUpdate(parent *cobra.Command) {
 	var apiKey string
 	var contextValue string
 	var apiVersion string
+	var v2APIVersion string
 	var clearContext bool
 	var setDefault bool
 	var form bool
@@ -28,6 +29,7 @@ func registerUpdate(parent *cobra.Command) {
 				apiKey:       apiKey,
 				contextValue: contextValue,
 				apiVersion:   apiVersion,
+				v2APIVersion: v2APIVersion,
 				clearContext: clearContext,
 				setDefault:   setDefault,
 				form:         form,
@@ -46,7 +48,8 @@ func registerUpdate(parent *cobra.Command) {
 	cmd.Flags().StringVar(&apiKey, "api-key", "", "Replacement Stripe restricted or secret API key")
 	cmd.Flags().StringVar(&contextValue, "context", "", "Default Stripe-Context for this profile")
 	cmd.Flags().BoolVar(&clearContext, "clear-context", false, "Clear this profile's default Stripe-Context")
-	cmd.Flags().StringVar(&apiVersion, "api-version", "", "Default Stripe API version")
+	cmd.Flags().StringVar(&apiVersion, "api-version", "", "Default Stripe API version for /v1 requests")
+	cmd.Flags().StringVar(&v2APIVersion, "v2-api-version", "", "Default Stripe API version for /v2 requests (Accounts v2, v2 core events)")
 	cmd.Flags().BoolVar(&setDefault, "default", false, "Make this the default profile")
 	cmd.Flags().BoolVar(&form, "form", false, "Prompt for the replacement API key via a native OS dialog")
 	parent.AddCommand(cmd)
@@ -56,22 +59,25 @@ type authUpdateOptions struct {
 	apiKey       string
 	contextValue string
 	apiVersion   string
+	v2APIVersion string
 	clearContext bool
 	setDefault   bool
 	form         bool
 }
 
 type authUpdateRequest struct {
-	alias          string
-	apiKey         string
-	contextValue   string
-	apiVersion     string
-	contextChanged bool
-	versionChanged bool
-	clearContext   bool
-	setDefault     bool
-	keyRequested   bool
-	form           bool
+	alias            string
+	apiKey           string
+	contextValue     string
+	apiVersion       string
+	v2APIVersion     string
+	contextChanged   bool
+	versionChanged   bool
+	v2VersionChanged bool
+	clearContext     bool
+	setDefault       bool
+	keyRequested     bool
+	form             bool
 }
 
 type authUpdateResult struct {
@@ -84,20 +90,22 @@ type authUpdateResult struct {
 
 func newAuthUpdateRequest(cmd *cobra.Command, alias string, opts authUpdateOptions) (authUpdateRequest, error) {
 	req := authUpdateRequest{
-		alias:          alias,
-		apiKey:         opts.apiKey,
-		contextValue:   opts.contextValue,
-		apiVersion:     opts.apiVersion,
-		contextChanged: cmd.Flags().Changed("context"),
-		versionChanged: cmd.Flags().Changed("api-version"),
-		clearContext:   opts.clearContext,
-		setDefault:     opts.setDefault,
-		keyRequested:   cmd.Flags().Changed("api-key") || opts.form,
-		form:           opts.form,
+		alias:            alias,
+		apiKey:           opts.apiKey,
+		contextValue:     opts.contextValue,
+		apiVersion:       opts.apiVersion,
+		v2APIVersion:     opts.v2APIVersion,
+		contextChanged:   cmd.Flags().Changed("context"),
+		versionChanged:   cmd.Flags().Changed("api-version"),
+		v2VersionChanged: cmd.Flags().Changed("v2-api-version"),
+		clearContext:     opts.clearContext,
+		setDefault:       opts.setDefault,
+		keyRequested:     cmd.Flags().Changed("api-key") || opts.form,
+		form:             opts.form,
 	}
-	if !req.contextChanged && !req.versionChanged && !req.clearContext && !req.setDefault && !req.keyRequested {
+	if !req.contextChanged && !req.versionChanged && !req.v2VersionChanged && !req.clearContext && !req.setDefault && !req.keyRequested {
 		return authUpdateRequest{}, agenterrors.New("no profile updates requested", agenterrors.FixableByAgent).
-			WithHint("Use --api-key, --form, --context, --clear-context, --api-version, or --default")
+			WithHint("Use --api-key, --form, --context, --clear-context, --api-version, --v2-api-version, or --default")
 	}
 	if req.clearContext && req.contextChanged {
 		return authUpdateRequest{}, agenterrors.New("--context and --clear-context cannot be used together", agenterrors.FixableByAgent)
@@ -133,6 +141,9 @@ func applyAuthUpdate(ctx context.Context, req authUpdateRequest) (authUpdateResu
 		}
 		if req.versionChanged {
 			profile.APIVersion = req.apiVersion
+		}
+		if req.v2VersionChanged {
+			profile.V2APIVersion = req.v2APIVersion
 		}
 		if req.keyRequested {
 			profile.CredentialType = credentialType
@@ -175,12 +186,13 @@ func replacementAPIKey(ctx context.Context, req authUpdateRequest) (string, erro
 
 func (r authUpdateResult) output() map[string]any {
 	fields := map[string]any{
-		"status":      "updated",
-		"profile":     r.alias,
-		"default":     r.isDefault,
-		"context":     r.profile.Context,
-		"api_version": r.profile.APIVersion,
-		"credential":  "keychain",
+		"status":         "updated",
+		"profile":        r.alias,
+		"default":        r.isDefault,
+		"context":        r.profile.Context,
+		"api_version":    r.profile.APIVersion,
+		"v2_api_version": r.profile.V2APIVersion,
+		"credential":     "keychain",
 	}
 	addCredentialType(fields, r.profile)
 	if r.keyRequested {

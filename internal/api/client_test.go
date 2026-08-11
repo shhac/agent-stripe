@@ -35,7 +35,7 @@ func TestDecodeList(t *testing.T) {
 func TestClassifyHTTPErrorIncludesStripeHints(t *testing.T) {
 	body := []byte(`{"error":{"message":"No such payment_intent","code":"resource_missing","request_log_url":"https://dashboard.stripe.com/test/logs/req_123"}}`)
 
-	err := classifyHTTPError(404, "req_123", "", 0, body)
+	err := classifyHTTPError(httpErrorInput{status: 404, requestID: "req_123", body: body})
 	if err.FixableBy != agenterrors.FixableByAgent {
 		t.Fatalf("FixableBy = %q", err.FixableBy)
 	}

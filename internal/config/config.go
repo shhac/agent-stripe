@@ -11,6 +11,11 @@ import (
 
 const DefaultAPIVersion = "2025-06-30.basil"
 
+// DefaultV2APIVersion is sent as Stripe-Version for /v2 requests. Stripe
+// versions the two namespaces on separate trains — the v1 default predates the
+// Accounts v2 endpoints — and /v2 requires the header on every request.
+const DefaultV2APIVersion = "2026-07-29.dahlia"
+
 type Config struct {
 	DefaultProfile string             `json:"default_profile,omitempty"`
 	Defaults       Defaults           `json:"defaults,omitempty"`
@@ -25,6 +30,7 @@ type Defaults struct {
 type Profile struct {
 	Context        string `json:"context,omitempty"`
 	APIVersion     string `json:"api_version,omitempty"`
+	V2APIVersion   string `json:"v2_api_version,omitempty"`
 	CredentialType string `json:"credential_type,omitempty"`
 }
 
@@ -141,9 +147,7 @@ func defaultConfig() *Config {
 }
 
 func StoreProfile(alias string, profile Profile) error {
-	if profile.APIVersion == "" {
-		profile.APIVersion = DefaultAPIVersion
-	}
+	profile = withVersionDefaults(profile)
 	return update(func(cfg *Config) error {
 		cfg.Profiles[alias] = profile
 		if cfg.DefaultProfile == "" {
@@ -183,13 +187,19 @@ func UpdateProfile(alias string, apply func(Profile) Profile) error {
 		if !ok {
 			return fmt.Errorf("profile %q is not configured", alias)
 		}
-		profile = apply(profile)
-		if profile.APIVersion == "" {
-			profile.APIVersion = DefaultAPIVersion
-		}
-		cfg.Profiles[alias] = profile
+		cfg.Profiles[alias] = withVersionDefaults(apply(profile))
 		return nil
 	})
+}
+
+func withVersionDefaults(profile Profile) Profile {
+	if profile.APIVersion == "" {
+		profile.APIVersion = DefaultAPIVersion
+	}
+	if profile.V2APIVersion == "" {
+		profile.V2APIVersion = DefaultV2APIVersion
+	}
+	return profile
 }
 
 func SetDefaultValue(key string, value int) error {

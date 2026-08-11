@@ -129,6 +129,7 @@ func configView(cfg *appconfig.Config) map[string]any {
 		profiles[alias] = map[string]any{
 			"context":         profile.Context,
 			"api_version":     profile.APIVersion,
+			"v2_api_version":  profile.V2APIVersion,
 			"credential":      "keychain",
 			"credential_type": credentialType,
 		}

@@ -27,3 +27,17 @@ func AddExpand(params url.Values, expand []string) {
 		}
 	}
 }
+
+// AddIndexed encodes an array parameter the way Stripe's /v2 namespace requires
+// it: include[0]=a&include[1]=b. The unindexed /v1 form is rejected there, even
+// for a single value.
+func AddIndexed(params url.Values, key string, values []string) {
+	index := 0
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		params.Set(key+"["+strconv.Itoa(index)+"]", value)
+		index++
+	}
+}

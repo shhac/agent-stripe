@@ -31,12 +31,13 @@ func GetEntities(flags *GlobalFlags, args []string, getOne func(ctx context.Cont
 type GlobalFlags struct {
 	libcli.Globals // Format, TimeoutMS, Debug
 
-	Profile    string
-	Context    string
-	APIKey     string
-	BaseURL    string
-	MaxRetries int
-	APIVersion string
+	Profile      string
+	Context      string
+	APIKey       string
+	BaseURL      string
+	MaxRetries   int
+	APIVersion   string
+	V2APIVersion string
 }
 
 type GlobalsFunc = func() *GlobalFlags
@@ -130,6 +131,47 @@ func WriteRawList(raw json.RawMessage, format string, redaction output.Redaction
 	}
 	WritePaginatedList(items, pagination, format)
 	return nil
+}
+
+// WriteRawV2List renders a /v2 list envelope through the same NDJSON +
+// @pagination contract as a v1 list. The v2 envelope has no has_more and no
+// cursor IDs, so the next-page token is lifted out of next_page_url and
+// reported as next_page — the value --page takes.
+func WriteRawV2List(raw json.RawMessage, format string, redaction output.RedactionOptions) error {
+	list, err := api.DecodeV2List(raw)
+	if err != nil {
+		return err
+	}
+	items := make([]any, 0, len(list.Data))
+	for _, item := range list.Data {
+		decoded, err := redactedRawListItem(item, redaction)
+		if err != nil {
+			return err
+		}
+		items = append(items, decoded)
+	}
+	WritePaginatedList(items, V2Pagination(list), format)
+	return nil
+}
+
+func V2Pagination(list *api.V2ListResponse) *output.Pagination {
+	if !list.HasMore() {
+		return nil
+	}
+	return &output.Pagination{
+		HasMore:  true,
+		NextPage: list.NextPageToken(),
+	}
+}
+
+func GetRawV2List(flags *GlobalFlags, path string, params url.Values) error {
+	return WithClient(flags, func(ctx context.Context, client *api.Client) error {
+		raw, err := client.Get(ctx, path, params)
+		if err != nil {
+			return err
+		}
+		return WriteRawV2List(raw, flags.Format, RedactionOptions(flags))
+	})
 }
 
 func redactedRawListItem(item json.RawMessage, redaction output.RedactionOptions) (any, error) {

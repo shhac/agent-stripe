@@ -75,8 +75,9 @@ func resolvedDirectProfile(alias string, flags *GlobalFlags, apiKey, source stri
 	return &ResolvedProfile{
 		Alias: alias,
 		Profile: config.Profile{
-			Context:    firstNonEmpty(flags.Context, os.Getenv("STRIPE_CONTEXT")),
-			APIVersion: firstNonEmpty(flags.APIVersion, os.Getenv("STRIPE_API_VERSION"), config.DefaultAPIVersion),
+			Context:      firstNonEmpty(flags.Context, os.Getenv("STRIPE_CONTEXT")),
+			APIVersion:   firstNonEmpty(flags.APIVersion, os.Getenv("STRIPE_API_VERSION"), config.DefaultAPIVersion),
+			V2APIVersion: firstNonEmpty(flags.V2APIVersion, os.Getenv("STRIPE_V2_API_VERSION"), config.DefaultV2APIVersion),
 		},
 		APIKey:           apiKey,
 		CredentialSource: source,
@@ -91,8 +92,14 @@ func applyProfileOverrides(profile config.Profile, flags *GlobalFlags) config.Pr
 	if flags.APIVersion != "" {
 		profile.APIVersion = flags.APIVersion
 	}
+	if flags.V2APIVersion != "" {
+		profile.V2APIVersion = flags.V2APIVersion
+	}
 	if profile.APIVersion == "" {
 		profile.APIVersion = config.DefaultAPIVersion
+	}
+	if profile.V2APIVersion == "" {
+		profile.V2APIVersion = config.DefaultV2APIVersion
 	}
 	return profile
 }
@@ -117,6 +124,7 @@ func WithResolvedClient(flags *GlobalFlags, resolved *ResolvedProfile, fn func(c
 			"credential_source": resolved.CredentialSource,
 			"context":           resolved.Profile.Context,
 			"api_version":       resolved.Profile.APIVersion,
+			"v2_api_version":    resolved.Profile.V2APIVersion,
 			"base_url":          resolvedBaseURL(resolved.BaseURL),
 			"timeout_ms":        flags.TimeoutMS,
 			"max_retries":       flags.MaxRetries,
@@ -126,11 +134,12 @@ func WithResolvedClient(flags *GlobalFlags, resolved *ResolvedProfile, fn func(c
 	defer cancel()
 
 	client := api.NewClient(api.Options{
-		APIKey:     resolved.APIKey,
-		Context:    resolved.Profile.Context,
-		APIVersion: resolved.Profile.APIVersion,
-		BaseURL:    resolved.BaseURL,
-		MaxRetries: flags.MaxRetries,
+		APIKey:       resolved.APIKey,
+		Context:      resolved.Profile.Context,
+		APIVersion:   resolved.Profile.APIVersion,
+		V2APIVersion: resolved.Profile.V2APIVersion,
+		BaseURL:      resolved.BaseURL,
+		MaxRetries:   flags.MaxRetries,
 	})
 	client.SetDebug(flags.Debug)
 	client.SetDebugRedaction(RedactionOptions(flags))
