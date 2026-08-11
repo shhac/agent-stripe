@@ -44,10 +44,20 @@ func (i investigator) listRelated(label, path string, params url.Values) []map[s
 	return items
 }
 
-// addRelatedList is listRelated plus recording, for the callers that want the
-// collection in the evidence stream as well as in hand.
+// addRelatedList records a related collection under a caller-chosen object
+// label. It fetches without auto-emitting, because the label is the point: the
+// alternative is i.list streaming each item under its own `object` field and
+// the caller adding it again under a different name, which emits the object
+// twice. Stripe's dotted object names are where the two disagree — a Radar
+// warning arrives as `radar.early_fraud_warning`, while this CLI calls that
+// object `early_fraud_warning` in its ID kinds, its command aliases and its
+// evidence stream.
 func (i investigator) addRelatedList(object, path string, params url.Values) []map[string]any {
-	items := i.listRelated(object, path, params)
+	items, err := i.fetchList(path, params)
+	if err != nil {
+		i.add(relatedListWarning(object, path, err))
+		return nil
+	}
 	i.addList(object, items)
 	return items
 }

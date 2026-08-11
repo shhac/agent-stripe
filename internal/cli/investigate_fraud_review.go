@@ -52,8 +52,6 @@ func (i investigator) fraudReview(id string) error {
 
 func (i investigator) fraudReviewForCharge(charge map[string]any) {
 	i.add(entityRecord("charge", charge))
-	if warnings := i.listRelated("early fraud warnings", "/v1/radar/early_fraud_warnings", valuesWithLimit(10, "charge", mapString(charge, "id"))); warnings != nil {
-		i.addList("early_fraud_warning", warnings)
-	}
+	i.addRelatedList("early_fraud_warning", "/v1/radar/early_fraud_warnings", valuesWithLimit(10, "charge", mapString(charge, "id")))
 	i.relatedDisputesAndRefunds(nil, charge)
 }
