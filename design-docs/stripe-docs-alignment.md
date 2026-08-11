@@ -1,6 +1,6 @@
 # Stripe Docs Alignment
 
-This file records checks against Stripe's public API docs so agent-stripe stays close to the API's real shape. Last checked: 2026-05-31.
+This file records checks against Stripe's public API docs so agent-stripe stays close to the API's real shape. Last checked: 2026-08-11.
 
 ## Expandable fields
 
@@ -20,13 +20,28 @@ Sources:
 - https://docs.stripe.com/context
 - https://docs.stripe.com/api/connected-accounts
 
+## API v2 namespace
+
+The `/v2` namespace is a different transport, not just more endpoints. Requests and responses are JSON, `Authorization: Bearer` is the documented auth header, `Stripe-Version` is required on every request, arrays in query strings must use indexed bracket notation (`include[0]=...`), and `expand` is not supported — sparse fields are opted into with `include`.
+
+agent-stripe routes on the path prefix: `/v2/...` requests get Bearer auth and the v2 API version; `/v1/...` requests keep Basic auth and the v1 API version. Because the namespaces move on different version trains, the profile stores `api_version` and `v2_api_version` separately.
+
+Sources:
+- https://docs.stripe.com/api-v2-overview
+- https://docs.stripe.com/api-includable-response-values
+
 ## Pagination
 
-Stripe list endpoints use `limit`, `starting_after`, and `ending_before`. Search endpoints use `limit`, `page`, and `next_page`. Resource list commands expose both list cursors; search commands expose `--page`.
+Stripe v1 list endpoints use `limit`, `starting_after`, and `ending_before`. Search endpoints use `limit`, `page`, and `next_page`. Resource list commands expose both list cursors; search commands expose `--page`.
+
+v2 list endpoints paginate differently: request a `page` token and read `next_page_url` / `previous_page_url` from the response, with no `has_more`. agent-stripe decodes those into the same `@pagination` record by extracting the `page` token from `next_page_url`, so `--page <token>` works the same way an agent already expects, and keeps the raw URL alongside it.
+
+v2 lists are eventually consistent by default, where v1 top-level lists are immediately consistent. Investigations should not treat a v2 list as read-after-write proof.
 
 Sources:
 - https://docs.stripe.com/api/pagination
 - https://docs.stripe.com/search
+- https://docs.stripe.com/api-v2-overview#list-pagination
 
 ## Search
 
@@ -54,6 +69,27 @@ Sources:
 - https://docs.stripe.com/api/invoices/create_preview
 - https://docs.stripe.com/api/subscription_items/list
 - https://docs.stripe.com/api/checkout/sessions/line_items
+
+## Accounts v1 and Accounts v2
+
+Stripe now has two connected-account models sharing the `acct_` prefix. A v2 account ID can be passed to v1 Accounts endpoints and comes back v1-shaped; a v1-only account ID passed to a v2 endpoint fails with `v1_account_instead_of_v2_account` or `account_not_yet_compatible_with_v2`. Platforms without UA2 enabled get `accounts_v2_access_blocked` or `non_connect_platform_accounts_v2_access_blocked`.
+
+A `v2.core.account` has no `charges_enabled`, `payouts_enabled`, `details_submitted`, `type`, or `capabilities` map. Enablement lives in nested per-configuration capability leaves, and outstanding information lives in `requirements.entries[]` rather than `requirements.currently_due[]`. Any reader that mixes the two shapes reports false blockers, so agent-stripe keeps the summaries and findings for each shape strictly separate and dispatches on `object`.
+
+Sources:
+- https://docs.stripe.com/connect/accounts-v2
+- https://docs.stripe.com/api/v2/core/accounts/object
+- https://docs.stripe.com/api/v2/core/accounts/retrieve
+
+## v2 core events
+
+`/v2/core/events` is a separate event stream from `/v1/events`, retains 30 days, and only emits thin events: no snapshot payload, just `related_object.{id,type,url}` plus `type`, `created`, and `reason`. UA2 capability and requirement transitions (`v2.core.account[configuration.merchant].capability_status_updated`, `v2.core.account[requirements].updated`) appear only here.
+
+Because a thin event carries no snapshot, following `related_object.url` returns *current* state, not the state at event time. Investigation output labels that explicitly rather than implying a point-in-time snapshot.
+
+Sources:
+- https://docs.stripe.com/api/v2/core/events/list
+- https://docs.stripe.com/api/v2/core/accounts/event-types
 
 ## Connect reversals
 

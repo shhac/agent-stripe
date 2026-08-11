@@ -17,6 +17,12 @@ Commands excluded from multi-get (take no id arg, so multi does not apply): `bal
 
 Some list commands return compact summaries by default because their Stripe objects can carry bulky nested payloads or sensitive person/payment details. Use `--full` on that list command for full redacted objects, or use `get <id>` for one focused object. On compact list commands, `--expand` requires `--full`.
 
+## Null On /v2 Surfaces
+
+`/v2` responses are sparse: `configuration`, `identity`, `requirements`, `future_requirements`, and `defaults` on a v2 account are `null` unless requested with `include`. `null` therefore means "not requested" as often as it means "not set".
+
+`accounts-v2 get` requests every include by default, so a `null` there is genuine. `accounts-v2 list` cannot request any (Stripe's list endpoint has no `include`), so those fields are always `null` in list output — use `get` before concluding anything about capabilities or requirements.
+
 ## Evidence Records
 
 Investigation commands emit `entity` and `finding` records:
@@ -77,6 +83,8 @@ Stored profile API keys are never exposed by `--expose`.
 
 Common default-redacted fields include client secrets, token/secret/password-like keys, customer email/name/phone, receipt and invoice URLs, card fingerprints, IINs, authorization codes, network transaction IDs, and request-log URLs. Card `last4`, brand, funding, expiration month/year, navigable Stripe IDs, and ordinary metadata remain visible unless a metadata key looks secret-like.
 
+Accounts v2 identity data is treated the same way: `contact_email`, `contact_phone`, `date_of_birth`, and person name fields (`given_name`, `surname`, `legal_name`, `name`) are redacted on `v2.core.account` and `v2.core.account_person` objects. A v2 account's `display_name` is a business label, not a person, so it stays visible — as do country, entity type, relationship flags (owner, representative, percent ownership, title), and `id_numbers[].type` (Stripe never returns the values).
+
 ## Truncation
 
 Investigation commands truncate long strings by default. Truncated entity records include `truncated_fields` with the path, byte counts, and an expansion hint.
@@ -98,7 +106,9 @@ List NDJSON output includes an `@pagination` record when Stripe reports more res
 {"@pagination":{"has_more":true,"next_page":"..."}}
 ```
 
-Use `--starting-after` / `--ending-before` for list endpoints, and `--page` for search endpoints.
+Use `--starting-after` / `--ending-before` for `/v1` list endpoints, and `--page` for search endpoints.
+
+`/v2` lists (`accounts-v2`, `accounts-v2 persons`, `events-v2`) have no cursor IDs and no `has_more` of their own. Stripe returns a `next_page_url`; the CLI lifts the token out of it and reports it the same way, so `@pagination.next_page` is the value to pass back as `--page <token>`. v2 lists are also eventually consistent by default, unlike v1 top-level lists — do not treat one as read-after-write proof.
 
 ## Errors
 

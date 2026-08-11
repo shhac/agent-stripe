@@ -11,7 +11,7 @@ The first version biases toward read-first investigation:
 - list and retrieve common billing, payment, Connect, catalog, and event objects
 - search supported Stripe Search resources
 - inspect disputes, refunds, payouts, transfers, and connected-account requirements
-- inspect platform/connected accounts
+- inspect platform/connected accounts in both Stripe account namespaces: Connect v1 (`/v1/accounts`) and Accounts v2 / UA2 (`/v2/core/accounts`)
 - provide a GET-only raw API escape hatch for endpoints not yet wrapped
 - use safe Stripe read-like helpers where needed for investigation, such as invoice previews
 
@@ -29,7 +29,7 @@ Profiles store non-secret metadata in `${XDG_CONFIG_HOME}/agent-stripe/config.js
 
 - alias
 - default `Stripe-Context`
-- default Stripe API version
+- default Stripe API version for `/v1` requests, and a separate default for `/v2` requests (the namespaces are versioned on different release trains; see `accounts-v2.md`)
 - optional global defaults such as `timeout_ms` and `max_retries`
 - non-secret credential classification: `rk_live`, `rk_test`, `sk_live`, `sk_test`, `pk_live`, `pk_test`, or `unknown`
 
@@ -107,6 +107,8 @@ agent-stripe payment-links list|get
 agent-stripe checkout-sessions list|get|line-items
 agent-stripe early-fraud-warnings list|get
 agent-stripe accounts self|list|get
+agent-stripe accounts-v2 get|list|persons
+agent-stripe events-v2 list|get
 
 agent-stripe investigate usage
 agent-stripe investigate resolve <stripe-id-or-invoice-number>
@@ -131,7 +133,8 @@ agent-stripe investigate payment-method-readiness cus_...|pm_...
 agent-stripe investigate setup seti_...|pm_...|cus_...
 agent-stripe investigate timeline cus_...
 agent-stripe investigate outgoing-payment tr_...|po_...|acct_...
-agent-stripe investigate account-health acct_...
+agent-stripe investigate account-health acct_... [--namespace auto|v1|v2]
+agent-stripe investigate account-events acct_...
 agent-stripe investigate ledger ch_...|pi_...|re_...|tr_...|po_...|txn_...|fee_...
 agent-stripe investigate refund re_...|ch_...|pi_...
 agent-stripe investigate payout-failure po_...
@@ -144,7 +147,9 @@ agent-stripe usage
 agent-stripe api get <path>
 ```
 
-The compact-summary list commands preserve navigation IDs and operational status while leaving bulky or sensitive full-object details to `get <id>` or explicit `list --full`. This currently covers customers, payment methods, PaymentIntents, charges, invoices, subscriptions, setup intents, Checkout Sessions, Payment Links, Events, and connected accounts. `accounts list` is intentionally compact rather than a raw Account-object dump: it preserves navigation IDs and operational enablement/requirements/capability counts, while leaving KYC/profile/settings/external-account details to `accounts get <acct_id>` or `accounts list --full`.
+The compact-summary list commands preserve navigation IDs and operational status while leaving bulky or sensitive full-object details to `get <id>` or explicit `list --full`. This currently covers customers, payment methods, PaymentIntents, charges, invoices, subscriptions, setup intents, Checkout Sessions, Payment Links, Events, connected accounts, v2 accounts, v2 account persons, and v2 core events. `accounts list` is intentionally compact rather than a raw Account-object dump: it preserves navigation IDs and operational enablement/requirements/capability counts, while leaving KYC/profile/settings/external-account details to `accounts get <acct_id>` or `accounts list --full`.
+
+`accounts` and `accounts-v2` are deliberately separate command groups rather than one auto-detecting group. Both namespaces use the `acct_` prefix, so an ID cannot select the namespace, and silently retrying the other namespace would make it unclear which object model the output came from. Auto-detection lives only in `investigate`, where the caller is asking a question rather than naming an endpoint. See `accounts-v2.md`.
 
 ## Stripe docs checked
 
@@ -156,3 +161,6 @@ The compact-summary list commands preserve navigation IDs and operational status
 - Events: API v1 events include snapshot payloads, Connect events can identify the connected account, and events are retrievable for 30 days.
 - PaymentIntent search: search is eventually consistent and should not be used for strict read-after-write flows.
 - Disputes: disputes can be listed by PaymentIntent or charge, useful during incident investigation.
+- API v2 namespace: JSON encoding, Bearer auth, a required `Stripe-Version` header, indexed array query parameters, and `page`/`next_page_url` pagination.
+- Accounts v2: configurations, nested capabilities, requirement entries with capability impact, sparse `include` responses, and the documented v1/v2 interop error codes.
+- v2 core events: thin events with `related_object`, 30-day retention, and account event types that only exist in the v2 namespace.

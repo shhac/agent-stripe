@@ -7,17 +7,19 @@ agent-stripe invoices usage
 agent-stripe subscriptions usage
 agent-stripe payments usage
 agent-stripe connect usage
+agent-stripe accounts-v2 usage
+agent-stripe events-v2 usage
 agent-stripe investigate usage
 ```
 
 ## Auth And Config
 
-- `agent-stripe auth add <profile> --form [--context <ctx>] [--api-version <version>]` - LLM-safe setup. The user types the API key into a native OS dialog.
-- `agent-stripe auth add <profile> --api-key <key> [--context <ctx>] [--api-version <version>]` - direct setup when the key is already in the user's shell, not chat.
+- `agent-stripe auth add <profile> --form [--context <ctx>] [--api-version <version>] [--v2-api-version <version>]` - LLM-safe setup. The user types the API key into a native OS dialog.
+- `agent-stripe auth add <profile> --api-key <key> [--context <ctx>] [--api-version <version>] [--v2-api-version <version>]` - direct setup when the key is already in the user's shell, not chat.
 - `agent-stripe auth check [profile]` - verify the active or named profile and refresh stored `credential_type` metadata when possible.
 - `agent-stripe auth list` - list profile metadata without secrets, including `credential_type` and hints for missing, unrecognized, or publishable keys.
 - `agent-stripe auth default <profile>` - set the default profile.
-- `agent-stripe auth update <profile> [--api-key <key>|--form] [--context <ctx>|--clear-context] [--api-version <version>] [--default]` - replace a stored key or edit non-secret profile metadata.
+- `agent-stripe auth update <profile> [--api-key <key>|--form] [--context <ctx>|--clear-context] [--api-version <version>] [--v2-api-version <version>] [--default]` - replace a stored key or edit non-secret profile metadata.
 - `agent-stripe auth remove <profile>` - remove a stored profile.
 - `agent-stripe config path|show|get|set|unset` - inspect or edit non-secret config.
 
@@ -43,7 +45,9 @@ agent-stripe investigate usage
 - `agent-stripe application-fees list|get`
 - `agent-stripe payment-links list|get`
 - `agent-stripe early-fraud-warnings list|get`
-- `agent-stripe accounts self|list|get` - `accounts list` returns compact status summaries by default; use `accounts list --full` for full redacted Account objects.
+- `agent-stripe accounts self|list|get` - Connect v1 accounts. `accounts list` returns compact status summaries by default; use `accounts list --full` for full redacted Account objects.
+- `agent-stripe accounts-v2 get|list|persons|usage` - Accounts v2 (UA2). See "Accounts v2" below.
+- `agent-stripe events-v2 list|get|usage` - v2 core (thin) events. See "Accounts v2" below.
 
 Most list commands accept `--limit`, `--created-gte`, `--created-lte`, `--starting-after`, and `--ending-before`. List commands with compact defaults also accept `--full` for full redacted Stripe objects; when such a command supports `--expand`, use `--full` with `--expand`. Search commands accept `--query`, `--limit`, and `--page`.
 
@@ -79,7 +83,8 @@ Commands excluded from multi-get (take no id arg, so multi does not apply): `bal
 - `agent-stripe investigate setup seti_...|pm_...|cus_...` - SetupIntent status and reusable payment method evidence.
 - `agent-stripe investigate timeline cus_...` - chronological customer activity context.
 - `agent-stripe investigate outgoing-payment <tr_id|po_id|acct_id>` - Connect transfer, payout, or account readiness issue.
-- `agent-stripe investigate account-health acct_...` - connected account requirements/capability blockers.
+- `agent-stripe investigate account-health acct_... [--namespace auto|v1|v2]` - connected account requirements/capability blockers, in whichever account namespace the ID belongs to.
+- `agent-stripe investigate account-events acct_... [--limit N] [--type <event-type>]` - recent Accounts v2 capability, requirement, and identity changes from the v2 event stream.
 - `agent-stripe investigate ledger ch_...|pi_...|re_...|tr_...|po_...|txn_...|fee_...` - balance transaction and reconciliation evidence.
 - `agent-stripe investigate refund <re_id|ch_id|pi_id>` - refund state and related movement.
 - `agent-stripe investigate payout-failure po_...` - payout failure plus balance transaction.
@@ -88,21 +93,44 @@ Commands excluded from multi-get (take no id arg, so multi does not apply): `bal
 
 For a chooser table and per-investigation details, see [investigations.md](investigations.md).
 
+## Accounts v2 (UA2)
+
+Connect v1 and Accounts v2 are separate object models that share the `acct_` prefix. `accounts` is v1-only and `accounts-v2` is v2-only; neither falls back to the other, so output is never ambiguous about which model it came from. Use `investigate resolve` or `investigate account-health` when the namespace is unknown.
+
+```bash
+agent-stripe accounts-v2 get acct_... [--include requirements]
+agent-stripe accounts-v2 list [--applied-configuration merchant|customer|recipient] [--closed] [--limit N] [--page <token>] [--full]
+agent-stripe accounts-v2 persons list acct_... [--limit N] [--page <token>] [--full]
+agent-stripe accounts-v2 persons get acct_... person_...
+agent-stripe events-v2 list [--object-id acct_...] [--type <event-type>] [--created-gte <rfc3339>] [--created-lte <rfc3339>] [--limit N] [--page <token>] [--full]
+agent-stripe events-v2 get evt_...
+```
+
+- **Includes.** Stripe returns `null` for `configuration`, `identity`, `requirements`, `future_requirements`, and `defaults` unless requested. `accounts-v2 get` requests all seven include values by default; `--include` narrows it and rejects unknown values. The list endpoint supports no includes at all, so those fields are always `null` there.
+- **Capabilities** are nested per configuration and at uneven depths (`merchant.card_payments`, `merchant.stripe_balance.payouts`, `recipient.bank_accounts.local`). Summaries and findings flatten them to `configuration.capability` with their `status` and `status_details` codes.
+- **Requirements** are `requirements.entries[]`, each with `description`, `minimum_deadline.status` (`past_due` / `currently_due` / `eventually_due`), `awaiting_action_from` (`user` or `stripe`), `errors[].code`, and `impact.restricts_capabilities[]`.
+- **Persons** carry identity PII. Names, dates of birth, and contact fields are redacted by default; `persons list` summaries omit them entirely and keep the relationship (owner, representative, percent ownership, title).
+- **Pagination** is token-based: read `@pagination.next_page` and pass it back as `--page`.
+- **API version.** `/v2` requests use `--v2-api-version` (profile `v2_api_version`), separate from the v1 `--api-version`. Pin a `.preview` train only when an endpoint or field is preview-only; a `/v2` 400 hint says so.
+- **Interop errors.** `v1_account_instead_of_v2_account` and `account_not_yet_compatible_with_v2` mean the ID is a Connect v1 account; `accounts_v2_access_blocked` and `non_connect_platform_accounts_v2_access_blocked` mean the platform is not on UA2. All four hints name the v1 command to use instead.
+
 ## Raw Read-Only API
 
 Use when a needed read endpoint has no first-class command yet:
 
 ```bash
 agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
+agent-stripe api get /v2/core/accounts/acct_... --query include[0]=requirements
 ```
 
-Only GET is exposed.
+Only GET is exposed. `/v2` paths automatically use Bearer auth and the v2 API version, but you must write the indexed array form (`include[0]=...`) yourself — `/v2` rejects the v1 `include[]`/`expand[]` style. Prefer the wrapped `accounts-v2` and `events-v2` commands: they validate includes, summarize output, and translate pagination.
 
 ## Global Flags
 
 - `-p, --profile <alias>` - Stripe profile alias.
 - `--context <Stripe-Context>` - organization or related-account request context.
-- `--api-version <version>` - Stripe API version override.
+- `--api-version <version>` - Stripe API version override for `/v1` requests.
+- `--v2-api-version <version>` - Stripe API version override for `/v2` requests (Accounts v2, v2 core events).
 - `-f, --format json|yaml|jsonl` - output format.
 - `--expose <path,key>` - reveal redacted Stripe response fields by path or key; comma-separated/repeatable.
 - `-t, --timeout <ms>` - request timeout.

@@ -117,7 +117,6 @@ Question: "A payment from me to a business I work with went wrong."
 agent-stripe investigate outgoing-payment tr_...
 agent-stripe investigate outgoing-payment po_...
 agent-stripe investigate outgoing-payment acct_...
-agent-stripe investigate account-health acct_...
 agent-stripe investigate ledger tr_...
 ```
 
@@ -129,6 +128,37 @@ agent-stripe investigate refund-recovery trr_... --transfer tr_...
 ```
 
 Use `--context` when the incident is scoped to a connected account or organization related-account path.
+
+## Connected Account Cannot Take Payments Or Get Paid
+
+Question: "This business says they can't accept cards / haven't been paid out. Why?"
+
+```bash
+agent-stripe investigate account-health acct_...
+```
+
+Do not assume which account model the ID uses — Connect v1 and Accounts v2 share the `acct_` prefix, and `account-health` resolves that for you and says which namespace answered.
+
+If it answered with Accounts v2, the blocker is a capability whose status is not `active` (for example `merchant.card_payments`, `merchant.stripe_balance.payouts`) plus the requirement entries that restrict it. Report which entries are `awaiting_action_from: user` — those are the ones anyone can act on — and which are with Stripe. A v2 account has no `charges_enabled` / `payouts_enabled`; never phrase a v2 answer in those terms.
+
+If it answered with Connect v1, `charges_enabled` / `payouts_enabled` plus `requirements.currently_due` are the answer.
+
+Question: "What changed on this account recently?"
+
+```bash
+agent-stripe investigate account-events acct_...
+```
+
+Accounts v2 capability and requirement changes exist only in the v2 event stream, so `events list` will not show them. The events are thin — the account state shown alongside them is current, not point-in-time.
+
+Question: "Who is on this account's identity, and what is missing?"
+
+```bash
+agent-stripe accounts-v2 get acct_... --include requirements
+agent-stripe accounts-v2 persons list acct_...
+```
+
+A requirement entry with `reference.resource` pointing at a `person_...` ID tells you which person the missing information belongs to. Person names, dates of birth, and contact details are redacted by default; ask before using `--expose`.
 
 For customer-visible refund state:
 

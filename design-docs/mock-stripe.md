@@ -37,6 +37,20 @@ The mock should cover the read-first command surface and the safe read-like POST
 - `GET /v1/accounts`
 - `GET /v1/accounts/:id`
 
+It also covers the `/v2` (UA2) surface the CLI wraps:
+
+- `GET /v2/core/accounts`, `GET /v2/core/accounts/:id`
+- `GET /v2/core/accounts/:id/persons`, `GET /v2/core/accounts/:id/persons/:person_id`
+- `GET /v2/core/events`, `GET /v2/core/events/:id`
+
+The v2 routes reproduce the parts of the v2 transport that command code has to get right, not just the JSON bodies:
+
+- `Authorization: Bearer <key>` is accepted on `/v2` (and required — a Basic-only client is rejected), while `/v1` keeps Basic.
+- Indexed array parameters (`include[0]`, `applied_configurations[0]`, `types[0]`) are parsed; the non-indexed form is also accepted so a hand-written request still works.
+- Sparse responses: `configuration`, `identity`, `requirements`, `future_requirements`, and `defaults` are `null` unless named in `include`.
+- Pagination returns `next_page_url` with a `page` token and no `has_more`.
+- A v1-only fixture account returns 400 `v1_account_instead_of_v2_account` from `/v2/core/accounts/:id`, so namespace fallback is exercised end to end.
+
 The mock intentionally rejects missing credentials and unsupported methods. Most Stripe-shaped endpoints are GET-only; `POST /v1/invoices/create_preview` is allowed because it is the API shape Stripe uses for previewing a future invoice and is central to subscription investigations.
 
 ## CLI wiring
@@ -69,6 +83,9 @@ Fixtures should be intentionally small but incident-shaped:
 - a `payment_intent.succeeded` event
 - a dispute needing response
 - a connected account missing an external account
+- v2 accounts covering the states that change triage: a fully active merchant/customer account, a merchant account with `card_payments` restricted and past-due requirement entries that name the capabilities they restrict, and a recipient-only account with an eventually-due requirement
+- v2 account persons including a representative with an outstanding verification error
+- v2 core events for capability status, requirements, and identity updates on those accounts
 - subscription renewal, past-due, cancellation, missing payment method, and expiring-card cases
 - invoice line items, subscription items, prices, and products with metadata
 - refunds, transfer reversals, payouts, balance transactions, application fees, payment links, Checkout Sessions, SetupIntents, and early fraud warnings

@@ -222,6 +222,30 @@ agent-stripe investigate refund-recovery trr_... --transfer tr_...
 These distinguish Transfers, Payouts, connected Accounts, Refunds, and Transfer Reversals. For transfer reversals, Stripe nests the reversal under its parent transfer, so the command requires `--transfer` when given only a `trr_` ID.
 Use `ledger` when finance/support needs amount, fee, net, and balance transaction evidence.
 
+Money-movement objects (transfers, payouts, balance transactions, application fees) live in `/v1` for both account namespaces, and a v2 account ID is accepted by those v1 endpoints, so these workflows are unchanged by UA2.
+
+## Connected Account Health And UA2
+
+Commands:
+
+```bash
+agent-stripe investigate account-health acct_...
+agent-stripe investigate account-health acct_... --namespace v1
+agent-stripe investigate account-health acct_... --namespace v2
+agent-stripe investigate account-events acct_... [--limit 20]
+```
+
+`account-health` answers "why can't this account take payments or get paid". The `acct_` prefix does not say which account model applies, so `--namespace auto` (the default) retrieves the v2 account with every `include`, and falls back to `/v1/accounts` on the documented interop errors (`v1_account_instead_of_v2_account`, `account_not_yet_compatible_with_v2`, `accounts_v2_access_blocked`, `non_connect_platform_accounts_v2_access_blocked`) or a 404. A finding names the namespace that answered so follow-up commands target the right one.
+
+```text
+acct_ -> v2 account (+ includes) -> capability leaves + requirement entries -> persons -> recent transfers
+      \-> v1 account (fallback)  -> charges_enabled/payouts_enabled + requirements arrays -> recent transfers
+```
+
+The two shapes are read by separate code paths. The v2 finding never reads `charges_enabled`/`payouts_enabled` (a v2 account has neither), and reports restricted capabilities as `configuration.capability` with their `status_details` codes, requirement entries bucketed by `minimum_deadline.status`, and which capabilities each outstanding requirement restricts. The v1 finding is unchanged.
+
+`account-events` covers "what changed on this account, and when". UA2 capability and requirement transitions are emitted only as v2 thin events, so this reads `/v2/core/events?object_id=acct_...` rather than `/v1/events`. Thin events carry no snapshot, so the finding summarizes the event types and times seen and points at the account state fetched alongside it, which is current rather than point-in-time.
+
 ## Webhooks, Disputes, And Fraud
 
 Commands:

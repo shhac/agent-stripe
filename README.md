@@ -7,11 +7,12 @@ Stripe incident triage CLI for AI agents. It is designed for read-heavy investig
 - **Keychain-first credentials**: API keys are stored in macOS Keychain and are never printed back to the caller.
 - **Multi-profile support**: configure aliases for sandbox, live, organization, or holding-account workflows.
 - **Stripe context aware**: supports `Stripe-Context` for organization keys and related-account requests.
+- **Both account namespaces**: Connect v1 (`/v1/accounts`) and Accounts v2 / UA2 (`/v2/core/accounts`), including v2 configurations, capabilities, requirement entries, persons, and v2 core events — with the `/v2` transport (Bearer auth, its own API version, indexed array parameters, token pagination) handled for you.
 - **LLM-shaped output**: lists default to NDJSON, single `get` commands also default to NDJSON (one line; pass `--format json` for the object), sensitive Stripe fields are redacted by default, and errors include `fixable_by` plus hints.
 - **Bounded Stripe retries**: transient Stripe `429` responses retry with exponential backoff and jitter before returning a retryable error.
 - **Read-first triage**: balance, events, PaymentIntents, charges, disputes, accounts, and a GET-only raw API escape hatch.
 - **Subscription investigation**: inspect subscriptions, subscription items, invoices, and payment failures from one command group.
-- **Scenario investigations**: invoice payment evidence, Checkout completion, customer card-last4 lookup, subscription renewal summaries, collection-risk outreach, failed incoming payments, refund/dispute/fraud triage, ledger reconciliation, and Connect money-movement failures.
+- **Scenario investigations**: invoice payment evidence, Checkout completion, customer card-last4 lookup, subscription renewal summaries, collection-risk outreach, failed incoming payments, refund/dispute/fraud triage, ledger reconciliation, Connect money-movement failures, and connected-account health across both account namespaces.
 
 ## Quick Start
 
@@ -41,6 +42,8 @@ make build
 ./agent-stripe investigate checkout-session cs_...
 ./agent-stripe investigate invoice-collection in_...
 ./agent-stripe investigate timeline cus_...
+./agent-stripe investigate account-health acct_...
+./agent-stripe investigate account-events acct_...
 ```
 
 For organization API keys, store the organization key under a profile and provide a `Stripe-Context` value:
@@ -109,6 +112,10 @@ agent-stripe accounts self
 agent-stripe accounts list        # compact connected-account status summaries
 agent-stripe accounts list --full # full Stripe account objects, redacted
 agent-stripe accounts get acct_...
+agent-stripe accounts-v2 get acct_...              # v2 account with every include requested
+agent-stripe accounts-v2 list --applied-configuration merchant
+agent-stripe accounts-v2 persons list acct_...
+agent-stripe events-v2 list --object-id acct_...   # v2 thin events for an account
 agent-stripe api get /v1/payment_intents/pi_... --query expand[]=latest_charge
 agent-stripe payments usage
 agent-stripe connect usage
@@ -119,7 +126,7 @@ agent-stripe config show
 agent-stripe config set max_retries 2
 ```
 
-List commands that commonly carry bulky nested payloads or sensitive person/payment details return compact summaries by default. This includes customers, payment methods, PaymentIntents, charges, invoices, subscriptions, setup intents, Checkout Sessions, Payment Links, Events, and connected accounts. Add `--full` to those list commands when you need the full redacted Stripe object; use `get <id>` for focused inspection. On compact list commands, `--expand` requires `--full`.
+List commands that commonly carry bulky nested payloads or sensitive person/payment details return compact summaries by default. This includes customers, payment methods, PaymentIntents, charges, invoices, subscriptions, setup intents, Checkout Sessions, Payment Links, Events, connected accounts, v2 accounts, v2 account persons, and v2 core events. Add `--full` to those list commands when you need the full redacted Stripe object; use `get <id>` for focused inspection. On compact list commands, `--expand` requires `--full`.
 
 Investigation commands walk common Stripe object graphs and emit evidence records plus findings:
 
@@ -142,11 +149,44 @@ agent-stripe investigate setup seti_...
 agent-stripe investigate timeline cus_...
 agent-stripe investigate outgoing-payment tr_...
 agent-stripe investigate account-health acct_...
+agent-stripe investigate account-events acct_...
 agent-stripe investigate ledger ch_...
 agent-stripe investigate refund re_...
 agent-stripe investigate fraud-review issfr_...
 agent-stripe investigate payout-failure po_...
 agent-stripe investigate refund-recovery trr_... --transfer tr_...
+```
+
+### Connected accounts: Connect v1 and Accounts v2 (UA2)
+
+Stripe has two connected-account models and they share the `acct_` prefix, so an ID alone cannot tell you which applies:
+
+| | Connect v1 | Accounts v2 (UA2) |
+| --- | --- | --- |
+| Endpoint | `/v1/accounts` | `/v2/core/accounts` |
+| Commands | `accounts` | `accounts-v2` |
+| Enablement | `charges_enabled`, `payouts_enabled` | per-capability status inside each configuration |
+| Outstanding info | `requirements.currently_due[]` field names | `requirements.entries[]` with owner, deadline, and restricted capabilities |
+| Events | `/v1/events` snapshots | `/v2/core/events` thin events |
+
+`accounts` and `accounts-v2` each stay in their own namespace and never silently retry the other, so output is always unambiguous. When you don't know which namespace an account is in, ask:
+
+```bash
+agent-stripe investigate resolve acct_...          # names the namespace
+agent-stripe investigate account-health acct_...   # probes v2, falls back to v1, reports which answered
+```
+
+`account-health` reads each model with its own logic — a v2 account has no `charges_enabled`, so it is never reported for one. The v2 finding names restricted capabilities (`merchant.card_payments`, `merchant.stripe_balance.payouts`), which requirement entries are waiting on you rather than on Stripe, and which capabilities each entry is holding back.
+
+A v2 account ID is accepted by the v1 money-movement endpoints, so `transfers`, `payouts`, `balance-transactions`, `application-fees`, and the `ledger` / `outgoing-payment` / `refund-recovery` investigations work for both models unchanged. A v1-only ID sent to `/v2` is rejected with `v1_account_instead_of_v2_account`, and the error hint names the v1 command to use instead.
+
+Two `/v2` details worth knowing, both handled by the wrapped commands: Stripe returns `null` for `configuration`, `identity`, `requirements`, `future_requirements`, and `defaults` unless you request them (`accounts-v2 get` requests all of them by default), and v2 lists paginate by token — read `@pagination.next_page` and pass it back as `--page`.
+
+`/v2` requests use their own `Stripe-Version`, separate from the v1 one, because Stripe versions the namespaces on different release trains:
+
+```bash
+agent-stripe auth add sandbox --form --api-version 2025-06-30.basil --v2-api-version 2026-07-29.dahlia
+agent-stripe accounts-v2 get acct_... --v2-api-version 2026-07-29.preview   # pin a preview train
 ```
 
 Investigation output keeps Stripe-shaped `data` while emitting nested expanded Stripe objects as their own `entity` records. Long strings are truncated by default with `truncated_fields`; use `--expand-field <path>` or `--full` when the hidden content matters. Sensitive fields are still redacted unless explicitly exposed with `--expose`.
