@@ -26,6 +26,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.mux.ServeHTTP(w, r)
 		return
 	}
+	// Stripe's namespaces authenticate differently: /v1 accepts the Basic form
+	// the SDKs send, /v2 is documented as Bearer. The mock enforces the split so
+	// a client that gets it wrong fails here rather than in production.
+	if strings.HasPrefix(r.URL.Path, "/v2/") {
+		if !hasBearerKey(r) {
+			writeV2Error(w, http.StatusUnauthorized, "authentication_error", "api_key_missing", "No Bearer API key provided")
+			return
+		}
+		s.mux.ServeHTTP(w, r)
+		return
+	}
 	if !hasBasicKey(r) {
 		writeStripeError(w, http.StatusUnauthorized, "authentication_error", "api_key_missing", "No API key provided")
 		return
@@ -46,6 +57,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/invoices", s.handleInvoicesList)
 	s.mux.HandleFunc("/v1/transfers", s.handleTransfersList)
 	s.mux.HandleFunc("/v1/transfers/", s.handleTransferGetOrReversal)
+	s.mux.HandleFunc("/v2/core/accounts", s.handleV2Accounts)
+	s.mux.HandleFunc("/v2/core/accounts/", s.handleV2AccountPath)
+	s.mux.HandleFunc("/v2/core/events", s.handleV2Events)
+	s.mux.HandleFunc("/v2/core/events/", s.handleV2Event)
 	for _, resource := range mockResources() {
 		s.registerMockResource(resource)
 	}
@@ -236,7 +251,18 @@ func hasBasicKey(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	key := strings.TrimSuffix(string(raw), ":")
+	return isStripeKey(strings.TrimSuffix(string(raw), ":"))
+}
+
+func hasBearerKey(r *http.Request) bool {
+	header := r.Header.Get("Authorization")
+	if !strings.HasPrefix(header, "Bearer ") {
+		return false
+	}
+	return isStripeKey(strings.TrimPrefix(header, "Bearer "))
+}
+
+func isStripeKey(key string) bool {
 	return strings.HasPrefix(key, "sk_") || strings.HasPrefix(key, "rk_")
 }
 

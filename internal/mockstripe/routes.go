@@ -19,6 +19,12 @@ func Routes() []string {
 		"GET  /v1/transfers",
 		"GET  /v1/transfers/<id>",
 		"GET  /v1/transfers/<id>/reversals/<reversal_id>",
+		"GET  /v2/core/accounts                        (Bearer auth; indexed applied_configurations[i], closed, limit, page)",
+		"GET  /v2/core/accounts/<id>                   (Bearer auth; indexed include[i]; omitted fields are null)",
+		"GET  /v2/core/accounts/<id>/persons",
+		"GET  /v2/core/accounts/<id>/persons/<person_id>",
+		"GET  /v2/core/events                          (Bearer auth; object_id, indexed types[i], limit, page)",
+		"GET  /v2/core/events/<id>",
 	}
 	for _, resource := range mockResources() {
 		routes = append(routes, fmt.Sprintf("GET  %s", resource.path))
