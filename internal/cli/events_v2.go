@@ -40,43 +40,41 @@ func newEventsV2GetCommand(globals shared.GlobalsFunc) *cobra.Command {
 }
 
 func newEventsV2ListCommand(globals shared.GlobalsFunc) *cobra.Command {
-	var limit int
-	var page string
 	var objectID string
 	var types []string
 	var createdGTE string
 	var createdLTE string
-	var full bool
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List v2 core events from the last 30 days",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			params := v2EventListParams(limit, page, objectID, types, createdGTE, createdLTE)
-			if full {
-				return shared.GetRawList(globals(), "/v2/core/events", params)
-			}
-			return getSummarizedList(globals(), "/v2/core/events", params, v2EventListSummary)
+	return newV2ListCommand(globals, v2ListOptions{
+		use:     "list",
+		short:   "List v2 core events from the last 30 days",
+		path:    "/v2/core/events",
+		summary: v2EventListSummary,
+		flags: func(cmd *cobra.Command) {
+			cmd.Flags().StringVar(&objectID, "object-id", "", "Only events related to this object, for example acct_...")
+			cmd.Flags().StringArrayVar(&types, "type", nil, "Event type filter; repeatable, up to 20")
+			cmd.Flags().StringVar(&createdGTE, "created-gte", "", "Created at or after an RFC3339 timestamp")
+			cmd.Flags().StringVar(&createdLTE, "created-lte", "", "Created at or before an RFC3339 timestamp")
 		},
-	}
-	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return")
-	cmd.Flags().StringVar(&page, "page", "", "Page token from a previous @pagination next_page")
-	cmd.Flags().StringVar(&objectID, "object-id", "", "Only events related to this object, for example acct_...")
-	cmd.Flags().StringArrayVar(&types, "type", nil, "Event type filter; repeatable, up to 20")
-	cmd.Flags().StringVar(&createdGTE, "created-gte", "", "Created at or after an RFC3339 timestamp")
-	cmd.Flags().StringVar(&createdLTE, "created-lte", "", "Created at or before an RFC3339 timestamp")
-	cmd.Flags().BoolVar(&full, "full", false, "Return full Stripe objects instead of compact summaries")
-	return cmd
+		params: func(params url.Values) error {
+			addV2EventFilters(params, objectID, types, createdGTE, createdLTE)
+			return nil
+		},
+	})
 }
 
 func v2EventListParams(limit int, page, objectID string, types []string, createdGTE, createdLTE string) url.Values {
 	params := url.Values{}
 	shared.AddLimit(params, limit)
 	shared.AddString(params, "page", page)
+	addV2EventFilters(params, objectID, types, createdGTE, createdLTE)
+	return params
+}
+
+func addV2EventFilters(params url.Values, objectID string, types []string, createdGTE, createdLTE string) {
 	shared.AddString(params, "object_id", objectID)
 	shared.AddIndexed(params, "types", types)
 	shared.AddString(params, "created[gte]", createdGTE)
 	shared.AddString(params, "created[lte]", createdLTE)
-	return params
 }
 
 func v2EventPath(id string) string {

@@ -124,31 +124,31 @@ func toCleanAny(data any, prune bool) (any, bool) {
 	return decoded, true
 }
 
-// NDJSONWriter writes one record per line. It stays local because of the
-// Stripe-shaped pagination trailer below.
+// NDJSONWriter wraps the shared writer rather than reimplementing it. The
+// previous local encoder skipped the library's colorization path, so a
+// colorized `get` sat next to uncolorized lists and investigations even though
+// the CLI registers --color. What is genuinely agent-stripe's is the shape of
+// the pagination trailer, which rides the library's meta-line contract.
 type NDJSONWriter struct {
-	enc *json.Encoder
+	writer *out.NDJSONWriter
 }
 
 func NewNDJSONWriter(w io.Writer) *NDJSONWriter {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	return &NDJSONWriter{enc: enc}
+	return &NDJSONWriter{writer: out.NewNDJSONWriter(w)}
 }
 
 func (n *NDJSONWriter) WriteItem(item any) error {
-	return n.enc.Encode(item)
+	return n.writer.WriteItem(item)
 }
 
-// Pagination is Stripe-shaped (cursor + page hints), so it stays local rather
-// than using out.Pagination.
+// Pagination is Stripe-shaped: has_more plus the cursor or page token to hand
+// back. TotalItems and NextCursor were copied from the library's shape and
+// never set by anything here, so they are gone.
 type Pagination struct {
-	HasMore    bool   `json:"has_more"`
-	TotalItems int    `json:"total_items,omitempty"`
-	NextCursor string `json:"next_cursor,omitempty"`
-	NextPage   string `json:"next_page,omitempty"`
+	HasMore  bool   `json:"has_more"`
+	NextPage string `json:"next_page,omitempty"`
 }
 
 func (n *NDJSONWriter) WritePagination(p *Pagination) error {
-	return n.enc.Encode(map[string]any{"@pagination": p})
+	return n.writer.WriteMetaLine(out.MetaKeyPagination, p)
 }

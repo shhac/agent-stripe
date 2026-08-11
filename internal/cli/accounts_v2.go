@@ -54,20 +54,20 @@ func newAccountsV2GetCommand(globals shared.GlobalsFunc) *cobra.Command {
 }
 
 func newAccountsV2ListCommand(globals shared.GlobalsFunc) *cobra.Command {
-	var limit int
-	var page string
 	var configurations []string
 	var closed bool
-	var full bool
-	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List v2 accounts, newest page first",
-		Long: "List v2 accounts. Stripe's list endpoint does not support include, so configuration,\n" +
+	return newV2ListCommand(globals, v2ListOptions{
+		use:   "list",
+		short: "List v2 accounts, newest page first",
+		long: "List v2 accounts. Stripe's list endpoint does not support include, so configuration,\n" +
 			"identity, and requirements are always null here — use 'accounts-v2 get <id>' for those.",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			params := url.Values{}
-			shared.AddLimit(params, limit)
-			shared.AddString(params, "page", page)
+		path:    "/v2/core/accounts",
+		summary: v2AccountListSummary,
+		flags: func(cmd *cobra.Command) {
+			cmd.Flags().StringArrayVar(&configurations, "applied-configuration", nil, "Only accounts with this configuration; repeatable and AND-ed: customer, merchant, recipient")
+			cmd.Flags().BoolVar(&closed, "closed", false, "Return closed accounts instead of open ones")
+		},
+		params: func(params url.Values) error {
 			if err := validateV2Configurations(configurations); err != nil {
 				return err
 			}
@@ -75,18 +75,9 @@ func newAccountsV2ListCommand(globals shared.GlobalsFunc) *cobra.Command {
 			if closed {
 				params.Set("closed", "true")
 			}
-			if full {
-				return shared.GetRawList(globals(), "/v2/core/accounts", params)
-			}
-			return getSummarizedList(globals(), "/v2/core/accounts", params, v2AccountListSummary)
+			return nil
 		},
-	}
-	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return")
-	cmd.Flags().StringVar(&page, "page", "", "Page token from a previous @pagination next_page")
-	cmd.Flags().StringArrayVar(&configurations, "applied-configuration", nil, "Only accounts with this configuration; repeatable and AND-ed: customer, merchant, recipient")
-	cmd.Flags().BoolVar(&closed, "closed", false, "Return closed accounts instead of open ones")
-	cmd.Flags().BoolVar(&full, "full", false, "Return full Stripe objects instead of compact summaries")
-	return cmd
+	})
 }
 
 func newAccountsV2PersonsCommand(globals shared.GlobalsFunc) *cobra.Command {
@@ -100,31 +91,13 @@ func newAccountsV2PersonsCommand(globals shared.GlobalsFunc) *cobra.Command {
 }
 
 func newAccountsV2PersonsListCommand(globals shared.GlobalsFunc) *cobra.Command {
-	var limit int
-	var page string
-	var full bool
-	cmd := &cobra.Command{
-		Use:   "list <account-id>",
-		Short: "List the persons on a v2 account",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateExpectedStripeID(args[0], "account"); err != nil {
-				return err
-			}
-			params := url.Values{}
-			shared.AddLimit(params, limit)
-			shared.AddString(params, "page", page)
-			path := v2AccountPersonsPath(args[0])
-			if full {
-				return shared.GetRawList(globals(), path, params)
-			}
-			return getSummarizedList(globals(), path, params, v2PersonListSummary)
-		},
-	}
-	cmd.Flags().IntVar(&limit, "limit", 10, "Maximum results to return")
-	cmd.Flags().StringVar(&page, "page", "", "Page token from a previous @pagination next_page")
-	cmd.Flags().BoolVar(&full, "full", false, "Return full Stripe objects instead of compact summaries")
-	return cmd
+	return newV2ListCommand(globals, v2ListOptions{
+		use:     "list <account-id>",
+		short:   "List the persons on a v2 account",
+		summary: v2PersonListSummary,
+		idKind:  "account",
+		pathFor: v2AccountPersonsPath,
+	})
 }
 
 func newAccountsV2PersonsGetCommand(globals shared.GlobalsFunc) *cobra.Command {
