@@ -70,6 +70,9 @@ func commands() [][]string {
 		{"investigate", "incoming-payment", "pi_mock_failed"},
 		{"investigate", "invoice-payment", "in_mock_paid"},
 		{"investigate", "invoice-collection", "cus_mock_123"},
+		// cus_mock_456 owns the past-due invoices, so this reaches the
+		// PaymentIntent and charge lookups behind a failed collection.
+		{"investigate", "invoice-collection", "cus_mock_456"},
 		{"investigate", "invoice-metadata", "in_mock_paid"},
 		{"investigate", "subscription-renewal", "--subscription", "sub_mock_active"},
 		{"investigate", "subscription-items", "--subscription", "sub_mock_active"},

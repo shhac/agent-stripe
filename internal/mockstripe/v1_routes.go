@@ -2,7 +2,6 @@ package mockstripe
 
 import (
 	"net/http"
-	"strings"
 )
 
 // Hand-written /v1 handlers: the endpoints whose shape does not fit the
@@ -42,17 +41,6 @@ func (s *Server) handleBalance(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleInvoiceSearch(w http.ResponseWriter, r *http.Request) {
-	if !requireGet(w, r) {
-		return
-	}
-	if r.URL.Query().Get("query") == "" {
-		writeStripeError(w, http.StatusBadRequest, "invalid_request_error", "parameter_missing", "Missing required param: query")
-		return
-	}
-	writeSearchList(w, "/v1/invoices/search", invoices(), r)
-}
-
 func (s *Server) handleInvoicePreview(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodPost) {
 		return
@@ -80,31 +68,4 @@ func (s *Server) handleInvoicePreview(w http.ResponseWriter, r *http.Request) {
 		"currency":     "usd",
 		"status":       "draft",
 	})
-}
-
-func (s *Server) handleInvoicesList(w http.ResponseWriter, r *http.Request) {
-	if !requireGet(w, r) {
-		return
-	}
-	items := invoices()
-	if subscription := r.URL.Query().Get("subscription"); subscription != "" {
-		items = filterByString(items, "subscription", subscription)
-	}
-	if status := r.URL.Query().Get("status"); status != "" {
-		items = filterByString(items, "status", status)
-	}
-	writeList(w, "/v1/invoices", items, r)
-}
-
-func (s *Server) handleInvoiceGetOrLines(w http.ResponseWriter, r *http.Request) {
-	if !requireGet(w, r) {
-		return
-	}
-	rest := strings.TrimPrefix(r.URL.Path, "/v1/invoices/")
-	if strings.HasSuffix(rest, "/lines") {
-		id := strings.TrimSuffix(rest, "/lines")
-		writeList(w, "/v1/invoices/"+id+"/lines", invoiceLines(id), r)
-		return
-	}
-	writeOneByID(w, invoices(), rest, "invoice")
 }

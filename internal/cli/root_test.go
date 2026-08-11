@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	agentmcp "github.com/shhac/lib-agent-mcp"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -215,5 +216,28 @@ func assertJSONField(t *testing.T, raw, key string, want any) {
 	}
 	if got[key] != want {
 		t.Fatalf("%s = %#v, want %#v in %s", key, got[key], want, raw)
+	}
+}
+
+func TestMCPExposesEveryGroupExceptTheDenyList(t *testing.T) {
+	root := newRootCmd("test")
+
+	// Stated as a deny-list so a new resource is agent-facing by default; the
+	// invariant worth pinning is that credential and config surfaces never are.
+	denied := map[string]bool{"auth": true, "config": true, "usage": true, "completion": true, "help": true}
+	exposed := 0
+	for _, cmd := range root.Commands() {
+		isExposed := cmd.Annotations[agentmcp.AnnotationExpose] == "true"
+		switch {
+		case denied[cmd.Name()] && isExposed:
+			t.Errorf("%s must not be exposed as an MCP tool", cmd.Name())
+		case !denied[cmd.Name()] && cmd.Name() != "mcp" && !cmd.Hidden && !isExposed:
+			t.Errorf("%s should be exposed as an MCP tool", cmd.Name())
+		case isExposed:
+			exposed++
+		}
+	}
+	if exposed < 20 {
+		t.Fatalf("only %d groups exposed; the deny-list is probably too broad", exposed)
 	}
 }

@@ -160,6 +160,20 @@ func mockResources() []mockResource {
 			},
 		},
 		{
+			path:       "/v1/invoices",
+			objectName: "invoice",
+			items:      invoices,
+			searchable: true,
+			filters: []mockFilter{
+				stringFilter("subscription", "subscription"),
+				stringFilter("status", "status"),
+				// The hand-written handler ignored customer, so any test
+				// asserting per-customer invoice scoping passed vacuously.
+				stringFilter("customer", "customer"),
+			},
+			subLists: map[string]func(string) []map[string]any{"lines": invoiceLines},
+		},
+		{
 			path:       "/v1/checkout/sessions",
 			objectName: "checkout.session",
 			items:      checkoutSessions,

@@ -212,3 +212,28 @@ func TestFaultInjectionCountsRepeats(t *testing.T) {
 		}
 	}
 }
+
+func TestInvoiceListScopesByCustomer(t *testing.T) {
+	// The hand-written invoices handler ignored `customer`, so a test asserting
+	// per-customer scoping would have passed against every fixture invoice.
+	server := httptest.NewServer(NewServer())
+	defer server.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, server.URL+"/v1/invoices?customer=cus_nobody", nil)
+	req.SetBasicAuth("sk_test_mock", "")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var list struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(list.Data) != 0 {
+		t.Fatalf("invoices for an unknown customer = %d, want none", len(list.Data))
+	}
+}

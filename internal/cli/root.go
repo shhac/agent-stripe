@@ -81,12 +81,14 @@ func newRootCmd(version string) *cobra.Command {
 	// Expose the whole command tree as an MCP server (added last, so it reflects
 	// the complete tree). --color/--expose are output-shaping, irrelevant to a
 	// tool call, so hide them from the generated schemas.
-	// Opt the agent-facing groups into the MCP tool surface: each becomes one
-	// coarse tool that dispatches its subcommands (with a "help" verb), so the
-	// surface is ~one-tool-per-group instead of one-per-leaf. Credential/config/
-	// usage commands are deliberately left out — they aren't agent tasks.
-	exposeGroups(root,
-		"accounts", "accounts-v2", "api", "application-fees", "balance", "balance-transactions", "charges", "checkout-sessions", "connect", "customers", "disputes", "early-fraud-warnings", "events", "events-v2", "investigate", "invoices", "payment-intents", "payment-links", "payment-methods", "payments", "payouts", "prices", "products", "refunds", "setup-intents", "subscriptions", "transfers")
+	//
+	// Every top-level group is agent-facing except the ones below: credential,
+	// config and reference commands aren't agent tasks. Stated as a deny-list
+	// because the allow-list had to be edited for every new resource and
+	// exposeGroups skips an unmatched name silently, so a rename dropped a tool
+	// from the MCP surface with no signal. Note `mcp` itself is registered after
+	// this call, so it is not a candidate either way.
+	exposeAllGroupsExcept(root, "auth", "config", "usage", "completion", "help")
 
 	root.AddCommand(agentmcp.Command(root, agentmcp.WithHiddenFlags("color", "expose"), agentmcp.WithOAuthKeyringService(credential.MCPKeychainService())))
 
@@ -183,17 +185,18 @@ func RunForTest(version string, args []string) int {
 	return 0
 }
 
-// exposeGroups opts the named top-level commands into the MCP tool surface.
-// A name with no matching command is skipped silently — the list is a curation
-// of agent-facing groups, not a registration check.
-func exposeGroups(root *cobra.Command, names ...string) {
-	want := make(map[string]bool, len(names))
+// exposeAllGroupsExcept opts every top-level command into the MCP tool surface
+// apart from the named ones, so a newly registered group is exposed by default
+// rather than needing to be remembered.
+func exposeAllGroupsExcept(root *cobra.Command, names ...string) {
+	skip := make(map[string]bool, len(names))
 	for _, n := range names {
-		want[n] = true
+		skip[n] = true
 	}
 	for _, c := range root.Commands() {
-		if want[c.Name()] {
-			agentmcp.Expose(c)
+		if skip[c.Name()] || c.Hidden {
+			continue
 		}
+		agentmcp.Expose(c)
 	}
 }

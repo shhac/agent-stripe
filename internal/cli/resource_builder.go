@@ -156,7 +156,11 @@ func writeSummarizedList(flags *shared.GlobalFlags, data []json.RawMessage, pagi
 		if err != nil {
 			return err
 		}
-		items = append(items, item)
+		// Redacted like the --full path. No summary names a masked field today,
+		// so nothing changes now — but the two list paths were free to disagree
+		// about redaction, and the next summary field is the one that would
+		// have leaked.
+		items = append(items, output.Redact(item, shared.RedactionOptions(flags)))
 	}
 	shared.WritePaginatedList(items, pagination, flags.Format)
 	return nil
