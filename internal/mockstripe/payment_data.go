@@ -215,6 +215,25 @@ func duplicateCharges() []map[string]any {
 		charge["created"] = spec.created
 		out = append(out, charge)
 	}
+	// Two unrelated bank transfers of the same value. They have no card last4,
+	// so keying on last4 alone grouped them and described them as a card.
+	for _, spec := range []struct {
+		id      string
+		created int64
+	}{
+		{"ch_mock_ach_a", 1760100000},
+		{"ch_mock_ach_b", 1760100030},
+	} {
+		out = append(out, map[string]any{
+			"id": spec.id, "object": "charge", "created": spec.created,
+			"amount": 2500, "currency": "usd", "status": "succeeded", "paid": true,
+			"customer": "cus_mock_123",
+			"payment_method_details": map[string]any{
+				"type":            "us_bank_account",
+				"us_bank_account": map[string]any{"bank_name": "MOCK BANK", "last4": "6789"},
+			},
+		})
+	}
 	return out
 }
 

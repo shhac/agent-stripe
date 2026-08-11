@@ -134,3 +134,53 @@ func TestWebhookEndpointFindingOmitsHandlesEventWithoutAnEventType(t *testing.T)
 		t.Fatalf("summary should not claim handling: %s", finding.Summary)
 	}
 }
+
+func TestClusterByWindowNeverSpansMoreThanTheWindow(t *testing.T) {
+	// Charges 23h apart chain indefinitely under a rolling comparison: three of
+	// them became one "within 24h" cluster spanning 46h. Anchoring to the first
+	// member makes the window mean what the flag says.
+	charge := func(id string, created int64) map[string]any {
+		return map[string]any{"id": id, "created": float64(created)}
+	}
+	const window = int64(24 * 3600)
+	step := int64(23 * 3600)
+	clusters := clusterByWindow([]map[string]any{
+		charge("ch_1", 0), charge("ch_2", step), charge("ch_3", 2*step), charge("ch_4", 3*step),
+	}, window)
+
+	for _, cluster := range clusters {
+		first, _ := mapInt64(cluster[0], "created")
+		last, _ := mapInt64(cluster[len(cluster)-1], "created")
+		if last-first > window {
+			t.Fatalf("cluster spans %ds, which is more than the %ds window: %#v", last-first, window, cluster)
+		}
+	}
+	if len(clusters) < 2 {
+		t.Fatalf("four charges spanning 69h must not be one cluster: %#v", clusters)
+	}
+}
+
+func TestDuplicateChargeKeySeparatesInstruments(t *testing.T) {
+	card := map[string]any{
+		"amount": float64(2500), "currency": "usd",
+		"payment_method_details": map[string]any{"type": "card", "card": map[string]any{"last4": "4242"}},
+	}
+	bank := map[string]any{
+		"amount": float64(2500), "currency": "usd",
+		"payment_method_details": map[string]any{"type": "us_bank_account"},
+	}
+	otherBank := map[string]any{
+		"amount": float64(2500), "currency": "usd",
+		"payment_method_details": map[string]any{"type": "sepa_debit"},
+	}
+
+	if duplicateChargeKey(card) == duplicateChargeKey(bank) {
+		t.Fatalf("a card and a bank transfer of the same amount must not group")
+	}
+	if duplicateChargeKey(bank) == duplicateChargeKey(otherBank) {
+		t.Fatalf("two different non-card instruments must not group")
+	}
+	if got := describeInstrument(bank); got != "us_bank_account" {
+		t.Fatalf("describeInstrument() = %q, want the method type rather than a card claim", got)
+	}
+}
