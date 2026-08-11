@@ -90,6 +90,11 @@ Commands excluded from multi-get (take no id arg, so multi does not apply): `bal
 - `agent-stripe investigate refund <re_id|ch_id|pi_id>` - refund state and related movement.
 - `agent-stripe investigate payout-failure po_...` - payout failure plus balance transaction.
 - `agent-stripe investigate refund-recovery <re_id|trr_id|ch_id|pi_id> [--transfer tr_...]` - refund and transfer reversal recovery.
+- `agent-stripe investigate duplicate-charge --customer cus_... [--last4 4242] [--window-hours 24] [--limit N]` - repeated charges to one customer inside a time window.
+- `agent-stripe investigate statement-descriptor --descriptor "TEXT" [--customer cus_...] [--limit N]` - identify the charge behind a bank statement line (client-side scan; Stripe search does not index descriptors).
+- `agent-stripe investigate action-required [--customer cus_...] [--limit N]` - payments stalled on customer action (SCA/3DS) rather than failed.
+- `agent-stripe investigate refund-settlement <re_id|ch_id>` - whether a refund has left Stripe, and the acquirer reference the customer's bank can trace.
+- `agent-stripe investigate invoice-total <in_id>` - reconcile lines, discounts, and tax against the total and amount paid.
 - `agent-stripe investigate fraud-review issfr_...|ch_...|pi_...` - Radar early fraud warning and charge risk evidence.
 
 For a chooser table and per-investigation details, see [investigations.md](investigations.md).

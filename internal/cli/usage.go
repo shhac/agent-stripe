@@ -118,6 +118,11 @@ INVESTIGATIONS
   agent-stripe investigate refund <re_id|ch_id|pi_id>
   agent-stripe investigate payout-failure <po_id>
   agent-stripe investigate refund-recovery <re_id|trr_id|ch_id|pi_id> [--transfer <tr_id>]
+  agent-stripe investigate duplicate-charge --customer <cus_id> [--window-hours 24]
+  agent-stripe investigate statement-descriptor --descriptor "FUREVER"
+  agent-stripe investigate action-required [--customer <cus_id>]
+  agent-stripe investigate refund-settlement <re_id|ch_id>
+  agent-stripe investigate invoice-total <in_id>
   agent-stripe investigate fraud-review <issfr_id|ch_id|pi_id>
   Investigation output is evidence NDJSON: entity records plus finding records.
   Nested expanded Stripe objects are emitted as separate entity records and replaced by ID in the parent.

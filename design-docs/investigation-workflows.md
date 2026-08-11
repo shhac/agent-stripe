@@ -273,18 +273,31 @@ agent-stripe investigate fraud-review issfr_...|ch_...|pi_...
 
 Webhook delivery uses event `pending_webhooks` and webhook endpoint configuration. It does not claim per-endpoint delivery-attempt logs when Stripe has not returned them. Fraud review follows Early Fraud Warning or Charge/PaymentIntent to charge outcome, disputes, and refunds.
 
+## Customer Billing Questions
+
+```bash
+agent-stripe investigate duplicate-charge --customer cus_... [--last4 4242] [--window-hours 24]
+agent-stripe investigate statement-descriptor --descriptor "FUREVER" [--customer cus_...]
+agent-stripe investigate action-required [--customer cus_...]
+agent-stripe investigate refund-settlement re_...|ch_...
+agent-stripe investigate invoice-total in_...
+```
+
+Each of these answers a question support actually receives, and each does the reasoning the reader would otherwise do by hand:
+
+- **duplicate-charge** groups by amount, currency, and card last4, then clusters by time. Grouping alone would call two legitimate monthly charges duplicates; the window is what makes the claim mean something. Two different cards for the same amount is a customer retrying, not a double charge, so the card is part of the key.
+- **statement-descriptor** scans client-side because Stripe's charge search does not index `statement_descriptor`. Bank text is truncated and prefixed, so matching is substring in both directions. The scan only sees the page it fetched — the finding says so when it misses, rather than implying the charge does not exist.
+- **action-required** finds payments waiting on the customer rather than failed. The completion URLs are redacted by policy, so the finding reports that a hosted page exists and how to reveal it instead of leaking it into a summary.
+- **refund-settlement** separates Stripe sending the money from the bank posting it, which is the distinction behind "we refunded them and nothing arrived", and surfaces the acquirer reference the customer's bank can trace.
+- **invoice-total** walks the same arithmetic Stripe does and names the first step that disagrees. Printing the fields alone leaves the reader to do the sum, which is the part they got wrong before asking.
+
+Connect refund liability is folded into `refund-recovery` rather than given its own command: it needs the same refund, transfer, and reversal lookups, and splitting them would have meant two commands answering 80% of the same question. It reports whether the transfer was reversed (the connected account absorbed it) and whether the application fee was refunded (the platform gave back its cut).
+
+Two entries from the original list are already covered: subscription quantity/price drift by `subscription-amount-change` and `subscription-items`, and Payment Link issues by `checkout-session` plus `payment-links get`.
+
 ## Improvements To Prioritize
 
 The next likely common triage scenarios:
-
-- Duplicate charge: customer, amount, card last4, and time window to identify repeated PaymentIntents/Charges.
-- Unknown statement descriptor: descriptor to Charge/PaymentIntent/Customer candidates.
-- Refund missing from bank: Refund -> BalanceTransaction -> Charge -> bank/card network status.
-- SCA required: PaymentIntent or Invoice requiring customer action, with hosted invoice/payment links when available.
-- Subscription quantity/price drift: Subscription items -> Price/Product metadata over time.
-- Tax or total mismatch: Invoice line items, discounts, tax amounts, customer tax IDs, and final amount paid.
-- Payment Link issue: Payment Link -> Checkout Sessions -> line items -> resulting PaymentIntent/Subscription.
-- Connect refund liability: Refund with reverse transfer/application fee refund and connected account balance state.
 
 Potential output improvements:
 

@@ -20,6 +20,11 @@ Use this table to choose the smallest investigation that matches the user's ques
 | `entitlement` | `--subscription/--customer/--metadata/--invoice/--checkout-session` | Internal product entitlement mismatch across billing surfaces. | [entitlement](investigation/entitlement.md) |
 | `collection-risk` | `--days N [--limit N]` | Which upcoming subscription customers need payment-method outreach. | [collection-risk](investigation/collection-risk.md) |
 | `subscription-cancel-risk` | `--days N [--limit N]` | Subscriptions ending trial, canceling, or stopping billing soon. | [subscription-cancel-risk](investigation/subscription-cancel-risk.md) |
+| `duplicate-charge` | `--customer cus_... [--last4 4242] [--window-hours 24] [--limit N]` | "We think this customer was charged twice." | [duplicate-charge](investigation/duplicate-charge.md) |
+| `statement-descriptor` | `--descriptor "TEXT" [--customer cus_...] [--limit N]` | "What is this line on my bank statement?" | [statement-descriptor](investigation/statement-descriptor.md) |
+| `action-required` | `[--customer cus_...] [--limit N]` | Payment is stalled on the customer (SCA/3DS), not failed. | [action-required](investigation/action-required.md) |
+| `refund-settlement` | `<re_...\|ch_...>` | "We refunded them and nothing has arrived." | [refund-settlement](investigation/refund-settlement.md) |
+| `invoice-total` | `<in_...>` | "This invoice total isn't what we expected." | [invoice-total](investigation/invoice-total.md) |
 | `incoming-payment` | `<pi_...|ch_...|in_...>` | Customer payment to you failed or needs explanation. | [incoming-payment](investigation/incoming-payment.md) |
 | `checkout-session` | `<cs_...>` | Checkout completion, line items, resulting PI/subscription/invoice. | [checkout-session](investigation/checkout-session.md) |
 | `payment-method-readiness` | `<cus_...|pm_...>` | Saved payment method missing, detached, expiring, or unclear. | [payment-method-readiness](investigation/payment-method-readiness.md) |

@@ -84,6 +84,8 @@ var singleArgInvestigations = []investigationSpec{
 	disputeImpactInvestigation,
 	invoiceCollectionInvestigation,
 	setupInvestigation,
+	refundSettlementInvestigation,
+	invoiceTotalInvestigation,
 }
 
 var investigationCommands = []investigationCommandFactory{
@@ -100,6 +102,9 @@ var investigationCommands = []investigationCommandFactory{
 	newInvestigateAccountHealth,
 	newInvestigateAccountEvents,
 	newInvestigateConnectReadiness,
+	newInvestigateDuplicateCharge,
+	newInvestigateStatementDescriptor,
+	newInvestigateActionRequired,
 	newInvestigateRefundRecovery,
 }
 
@@ -197,6 +202,21 @@ CONNECT MONEY MOVEMENT
   Use ledger for reconciliation, refund for customer-visible refund state, and refund-recovery for refund
   funding or transfer reversal recovery. These endpoints are /v1 for both account namespaces, and a v2
   account ID is accepted by them, so they need no namespace choice.
+
+CUSTOMER BILLING QUESTIONS
+  agent-stripe investigate duplicate-charge --customer cus_... [--last4 4242] [--window-hours 24]
+  agent-stripe investigate statement-descriptor --descriptor "FUREVER" [--customer cus_...]
+  agent-stripe investigate action-required [--customer cus_...]
+  agent-stripe investigate refund-settlement re_...|ch_...
+  agent-stripe investigate invoice-total in_...
+  Duplicate-charge groups a customer's recent charges by amount, currency, and card last4, then
+  reports only groups that fall inside the window — a same-amount charge a month later is a repeat
+  customer, not a duplicate. Statement-descriptor scans recent charges client-side, because Stripe's
+  charge search does not index descriptors; bank text is often truncated, so a fragment matches.
+  Action-required finds payments stalled on the customer (SCA/3DS) rather than failed.
+  Refund-settlement separates "Stripe sent it" from "the bank posted it" and surfaces the acquirer
+  reference the customer's bank can trace. Invoice-total reconciles lines, discounts, and tax against
+  the total and names the step that disagrees.
 
 RISK AND FRAUD
   agent-stripe investigate fraud-review issfr_...|ch_...|pi_...

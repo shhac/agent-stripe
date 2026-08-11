@@ -130,6 +130,9 @@ func invoices() []map[string]any {
 			"paid":               true,
 			"amount_due":         4200,
 			"amount_paid":        4200,
+			"subtotal":           4000,
+			"tax":                200,
+			"total":              4200,
 			"currency":           "usd",
 			"number":             "MOCK-0001",
 			"payment_intent":     "pi_mock_succeeded",
@@ -190,16 +193,58 @@ func invoices() []map[string]any {
 			"hosted_invoice_url": "https://invoices.stripe.example.test/fake/in_mock_missing_pm",
 			"invoice_pdf":        "https://invoices.stripe.example.test/fake/in_mock_missing_pm.pdf",
 		},
+		taxMismatchInvoice(),
+	}
+}
+
+// in_mock_tax_mismatch reconciles at neither step: its lines do not sum to the
+// subtotal and the tax does not bridge subtotal to total.
+func taxMismatchInvoice() map[string]any {
+	return map[string]any{
+		"id":          "in_mock_tax_mismatch",
+		"object":      "invoice",
+		"created":     1760000400,
+		"customer":    "cus_mock_123",
+		"status":      "open",
+		"paid":        false,
+		"currency":    "usd",
+		"number":      "MOCK-0009",
+		"subtotal":    5000,
+		"tax":         500,
+		"total":       6000,
+		"amount_due":  6000,
+		"amount_paid": 0,
+		"total_discount_amounts": []any{
+			map[string]any{"amount": 250, "discount": "di_mock_promo"},
+		},
 	}
 }
 
 func invoiceLines(invoiceID string) []map[string]any {
+	if invoiceID == "in_mock_tax_mismatch" {
+		return []map[string]any{
+			{
+				"id": "il_mock_tax_a", "object": "line_item", "invoice": invoiceID,
+				"amount": 3000, "currency": "usd",
+				"tax_amounts": []any{map[string]any{"amount": 300, "inclusive": false}},
+			},
+			{
+				"id": "il_mock_tax_b", "object": "line_item", "invoice": invoiceID,
+				"amount": 1500, "currency": "usd",
+				"tax_amounts": []any{map[string]any{"amount": 150, "inclusive": false}},
+			},
+		}
+	}
+	return invoiceLinesDefault(invoiceID)
+}
+
+func invoiceLinesDefault(invoiceID string) []map[string]any {
 	return []map[string]any{
 		{
 			"id":       "il_mock_" + invoiceID,
 			"object":   "line_item",
 			"invoice":  invoiceID,
-			"amount":   4200,
+			"amount":   4000,
 			"currency": "usd",
 			"metadata": map[string]string{
 				"internal_product_id": "prod_internal_basic",

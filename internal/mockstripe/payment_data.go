@@ -75,7 +75,7 @@ func paymentIntents() []map[string]any {
 }
 
 func charges() []map[string]any {
-	return []map[string]any{
+	return append([]map[string]any{
 		{
 			"id":                  "ch_mock_succeeded",
 			"object":              "charge",
@@ -162,7 +162,7 @@ func charges() []map[string]any {
 				},
 			},
 		},
-	}
+	}, duplicateCharges()...)
 }
 
 func disputes() []map[string]any {
@@ -185,6 +185,50 @@ func disputes() []map[string]any {
 	}
 }
 
+// duplicateCharges are two identical charges seconds apart on the same card,
+// plus a same-amount charge a month later that must NOT be called a duplicate.
+func duplicateCharges() []map[string]any {
+	base := map[string]any{
+		"object": "charge", "amount": 2500, "currency": "usd", "status": "succeeded",
+		"paid": true, "customer": "cus_mock_123", "payment_intent": "pi_mock_succeeded",
+		"statement_descriptor":            "FUREVER GROOMING",
+		"calculated_statement_descriptor": "FUREVER GROOMING",
+		"payment_method_details": map[string]any{
+			"type": "card",
+			"card": map[string]any{"brand": "visa", "last4": "4242", "fingerprint": "fp_mock_visa"},
+		},
+	}
+	out := []map[string]any{}
+	for _, spec := range []struct {
+		id      string
+		created int64
+	}{
+		{"ch_mock_dupe_a", 1760000000},
+		{"ch_mock_dupe_b", 1760000045},
+		{"ch_mock_dupe_far", 1762592045},
+	} {
+		charge := map[string]any{}
+		for key, value := range base {
+			charge[key] = value
+		}
+		charge["id"] = spec.id
+		charge["created"] = spec.created
+		out = append(out, charge)
+	}
+	return out
+}
+
+// chargeByID keeps fixtures that embed a charge referring to it by ID, so
+// adding a charge cannot silently repoint them the way an index did.
+func chargeByID(id string) map[string]any {
+	for _, charge := range charges() {
+		if charge["id"] == id {
+			return charge
+		}
+	}
+	return nil
+}
+
 func refunds() []map[string]any {
 	return []map[string]any{
 		{
@@ -200,6 +244,27 @@ func refunds() []map[string]any {
 			"balance_transaction": "txn_mock_refund",
 			"transfer":            "tr_mock_failed",
 			"transfer_reversal":   "trr_mock_failed",
+		},
+		{
+			// Sent by Stripe but not yet posted by the bank: the state a
+			// customer reports as "the refund never arrived".
+			"id":                  "re_mock_settled",
+			"object":              "refund",
+			"created":             1760001000,
+			"charge":              "ch_mock_succeeded",
+			"payment_intent":      "pi_mock_succeeded",
+			"amount":              4200,
+			"currency":            "usd",
+			"status":              "succeeded",
+			"balance_transaction": "txn_mock_refund",
+			"destination_details": map[string]any{
+				"type": "card",
+				"card": map[string]any{
+					"reference":        "24692167822600123456789",
+					"reference_status": "available",
+					"reference_type":   "acquirer_reference_number",
+				},
+			},
 		},
 	}
 }

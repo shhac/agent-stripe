@@ -15,7 +15,7 @@ func events() []map[string]any {
 				"idempotency_key": "order_123",
 			},
 			"data": map[string]any{
-				"object": charges()[1],
+				"object": chargeByID("ch_mock_failed"),
 			},
 		},
 		{
