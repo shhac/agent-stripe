@@ -40,7 +40,7 @@ func (i investigator) accountHealth(accountID, namespace string) error {
 		namespace = namespaceAuto
 	}
 	if namespace == namespaceV1 {
-		return i.accountHealthV1(accountID, nil)
+		return i.accountHealthV1(accountID)
 	}
 
 	includes, err := v2AccountIncludeParams(nil)
@@ -52,15 +52,15 @@ func (i investigator) accountHealth(accountID, namespace string) error {
 		if namespace == namespaceV2 || !isNotV2AccountError(err) {
 			return err
 		}
-		return i.accountHealthV1(accountID, []evidenceRecord{v2FallbackFinding(accountID, err)})
+		// Recorded before the v1 read so a streaming reader sees why the
+		// namespace changed before the v1-shaped account arrives.
+		i.add(v2FallbackFinding(accountID, err))
+		return i.accountHealthV1(accountID)
 	}
 	return i.accountHealthV2(accountID, account)
 }
 
-func (i investigator) accountHealthV1(accountID string, prefix []evidenceRecord) error {
-	// The fallback note is emitted before the v1 read so a streaming reader
-	// sees why the namespace changed before the v1-shaped account arrives.
-	i.add(prefix...)
+func (i investigator) accountHealthV1(accountID string) error {
 	account, err := i.get("/v1/accounts/"+url.PathEscape(accountID), url.Values{})
 	if err != nil {
 		return err

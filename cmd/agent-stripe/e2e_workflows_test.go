@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 func TestCLIDuplicateChargeClustersByWindow(t *testing.T) {
 	runner := newMockCLIRunner(t)
@@ -130,4 +134,35 @@ func TestCLIConnectV1PersonNamesAreRedacted(t *testing.T) {
 	assertNotContains(t, out, "Robin", "Vance", "robin.vance@example.com", "+15550102002")
 	// Relationship and verification state stay visible — that is the triage data.
 	assertContains(t, out, `"representative":true`, `verification.document`)
+}
+
+// One object, one record. The fetch helpers record what they fetch under
+// Stripe's own object name; a caller that wanted a different name used to add a
+// second record, and both survived because the collector keys on object+id.
+func TestCLIInvestigationsEmitEachObjectOnce(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	for _, args := range [][]string{
+		{"investigate", "subscription-renewal", "--subscription", "sub_mock_past_due"},
+		{"investigate", "checkout-session", "cs_mock_paid"},
+		{"investigate", "subscription-amount-change", "--subscription", "sub_mock_active"},
+		{"investigate", "customer-context", "--customer", "cus_mock_123"},
+	} {
+		t.Run(strings.Join(args[1:], " "), func(t *testing.T) {
+			seen := map[string]string{}
+			for _, line := range strings.Split(strings.TrimSpace(runner.Run(args...)), "\n") {
+				var record struct {
+					Type   string `json:"type"`
+					Object string `json:"object"`
+					ID     string `json:"id"`
+				}
+				if err := json.Unmarshal([]byte(line), &record); err != nil || record.Type != "entity" {
+					continue
+				}
+				if previous, ok := seen[record.ID]; ok {
+					t.Fatalf("%s emitted twice, as %q and %q", record.ID, previous, record.Object)
+				}
+				seen[record.ID] = record.Object
+			}
+		})
+	}
 }

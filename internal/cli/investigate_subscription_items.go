@@ -32,22 +32,19 @@ func (i investigator) subscriptionItemsEvidence(subscriptionID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(bundle.records...)
 	i.add(subscriptionItemsFinding(subscriptionID, len(bundle.items)))
 	return nil
 }
 
 type subscriptionItemsBundle struct {
-	sub     map[string]any
-	items   []map[string]any
-	records []evidenceRecord
+	sub   map[string]any
+	items []map[string]any
 }
 
 func (i investigator) subscriptionItemsBundle(subscriptionID string) (*subscriptionItemsBundle, error) {
 	if err := validateExpectedStripeID(subscriptionID, "subscription"); err != nil {
 		return nil, err
 	}
-	records := []evidenceRecord{}
 	sub, err := i.get("/v1/subscriptions/"+url.PathEscape(subscriptionID), url.Values{})
 	if err != nil {
 		return nil, err
@@ -67,7 +64,7 @@ func (i investigator) subscriptionItemsBundle(subscriptionID string) (*subscript
 			}
 		}
 	}
-	return &subscriptionItemsBundle{sub: sub, items: items, records: records}, nil
+	return &subscriptionItemsBundle{sub: sub, items: items}, nil
 }
 
 func subscriptionItemsFinding(subscriptionID string, itemCount int) evidenceRecord {

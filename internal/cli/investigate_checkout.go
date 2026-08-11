@@ -27,7 +27,10 @@ func (i investigator) checkoutSession(sessionID string) error {
 }
 
 func (i investigator) checkoutLineItems(sessionID string) {
-	items, err := i.list("/v1/checkout/sessions/"+url.PathEscape(sessionID)+"/line_items", url.Values{"limit": []string{"100"}})
+	// Fetched without auto-recording: Stripe calls these "item", the
+	// investigation calls them "line_item", and letting both labels through
+	// emitted the same object twice.
+	items, err := i.fetchList("/v1/checkout/sessions/"+url.PathEscape(sessionID)+"/line_items", url.Values{"limit": []string{"100"}})
 	if err != nil {
 		i.add(relatedWarning("checkout line items", err))
 		return

@@ -53,11 +53,10 @@ func (i investigator) subscriptionPaymentSummary(sub map[string]any) {
 		}
 	}
 	nextAmount := "unknown"
-	preview, err := i.postForm("/v1/invoices/create_preview", url.Values{"subscription": []string{mapString(sub, "id")}})
+	preview, err := i.postFormAs("invoice_preview", "/v1/invoices/create_preview", url.Values{"subscription": []string{mapString(sub, "id")}})
 	if err != nil {
 		i.add(relatedWarning("upcoming invoice preview", err))
 	} else {
-		i.add(entityRecord("invoice_preview", preview))
 		nextAmount = formatAmount(preview)
 	}
 	i.add(evidenceRecord{

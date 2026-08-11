@@ -33,7 +33,6 @@ func (i investigator) subscriptionAmountChange(subscriptionID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(bundle.records...)
 	i.add(subscriptionItemsFinding(subscriptionID, len(bundle.items)))
 
 	latestInvoice := i.latestInvoiceEvidence(bundle.sub)
@@ -64,12 +63,11 @@ func (i investigator) latestInvoiceEvidence(sub map[string]any) map[string]any {
 }
 
 func (i investigator) invoicePreviewEvidence(subscriptionID string) map[string]any {
-	preview, err := i.postForm("/v1/invoices/create_preview", url.Values{"subscription": []string{subscriptionID}})
+	preview, err := i.postFormAs("invoice_preview", "/v1/invoices/create_preview", url.Values{"subscription": []string{subscriptionID}})
 	if err != nil {
 		i.add(relatedWarning("upcoming invoice preview", err))
 		return nil
 	}
-	i.add(entityRecord("invoice_preview", preview))
 	return preview
 }
 

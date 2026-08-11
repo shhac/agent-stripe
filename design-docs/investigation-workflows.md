@@ -15,6 +15,8 @@ There is one accumulator: the collector. A workflow calls `i.add(...)` where it 
 
 This replaced a threaded slice that was really the collector's own list handed back to callers, alongside a second normalize-and-dedup path used only by the buffered format. The two disagreed: `--format json` emitted a duplicate entity and dropped one that NDJSON showed.
 
+**One object, one record.** The fetch helpers (`get`, `list`, `listV2`) record what they fetch, under Stripe's own `object` name. A caller must not then add the same object again — the collector keys on object *and* ID, so a differently-labelled second add survives as a duplicate rather than being deduped. When an investigation wants a different name (`invoice_preview` for a create_preview result, `line_item` for a Checkout `item`), choose it at the fetch with `postFormAs`/`fetchList`, not afterwards.
+
 Where a workflow needs to know whether a step produced anything, it compares `i.count()` around the step, or tests the domain collection it just fetched — not the length of a records slice, which was always the whole investigation's output.
 
 Related lookups go through `i.fetchRelated` / `i.followRef` / `i.listRelated`, which resolve the API path from the ID prefix and record a warning when the fetch fails. A failed lookup must never read as an absence: "no disputes" and "the dispute call failed" are different answers, and only one of them is safe to act on.

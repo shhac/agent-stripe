@@ -33,8 +33,14 @@ func runWithInvestigator(flags *shared.GlobalFlags, opts *evidenceOptions, fn fu
 	})
 }
 
-func (i investigator) get(path string, params url.Values) (map[string]any, error) {
-	raw, err := i.client.Get(i.ctx, path, params)
+// postFormAs records the result under a caller-chosen label, for the cases
+// where Stripe's own `object` field is not the name the investigation wants —
+// an invoice fetched from create_preview is an "invoice_preview". Choosing the
+// label at the fetch produces one record; labelling afterwards with an explicit
+// add produced two, because the auto-emitted one was already kept under a
+// different key. fetchList is the same idea for a collection.
+func (i investigator) postFormAs(object, path string, params url.Values) (map[string]any, error) {
+	raw, err := i.client.PostForm(i.ctx, path, params)
 	if err != nil {
 		return nil, err
 	}
@@ -42,12 +48,34 @@ func (i investigator) get(path string, params url.Values) (map[string]any, error
 	if err != nil {
 		return nil, err
 	}
-	i.emitEntity(item)
+	i.add(entityRecord(object, item))
 	return item, nil
 }
 
-func (i investigator) postForm(path string, params url.Values) (map[string]any, error) {
-	raw, err := i.client.PostForm(i.ctx, path, params)
+// fetchList retrieves a list without recording its items, for callers that
+// label the records themselves.
+func (i investigator) fetchList(path string, params url.Values) ([]map[string]any, error) {
+	raw, err := i.client.Get(i.ctx, path, params)
+	if err != nil {
+		return nil, err
+	}
+	list, err := api.DecodeList(raw)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list.Data))
+	for _, rawItem := range list.Data {
+		item, err := decodeObject(rawItem)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func (i investigator) get(path string, params url.Values) (map[string]any, error) {
+	raw, err := i.client.Get(i.ctx, path, params)
 	if err != nil {
 		return nil, err
 	}

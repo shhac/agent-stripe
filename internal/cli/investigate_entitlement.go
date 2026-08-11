@@ -65,12 +65,11 @@ func (i investigator) entitlement(q entitlementQuery) error {
 		}
 		for _, sub := range subs {
 			i.add(entityRecord("subscription", sub))
-			bundle, err := i.subscriptionItemsBundle(mapString(sub, "id"))
-			if err != nil {
+			// The bundle records its items, prices and products as it fetches
+			// them; nothing further is needed from the return value here.
+			if _, err := i.subscriptionItemsBundle(mapString(sub, "id")); err != nil {
 				i.add(relatedWarning("subscription items for "+mapString(sub, "id"), err))
-				continue
 			}
-			i.add(bundle.records...)
 		}
 	}
 	if q.invoice != "" {
