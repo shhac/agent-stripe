@@ -86,6 +86,7 @@ var investigationCommands = []investigationCommandFactory{
 	newInvestigateTimeline,
 	newInvestigateAccountHealth,
 	newInvestigateAccountEvents,
+	newInvestigateConnectReadiness,
 	newInvestigateRefundRecovery,
 }
 
@@ -156,6 +157,7 @@ FAILED CUSTOMER PAYMENTS
 CONNECTED ACCOUNTS (CONNECT v1 AND ACCOUNTS v2 / UA2)
   agent-stripe investigate account-health acct_... [--namespace auto|v1|v2]
   agent-stripe investigate account-events acct_... [--limit 20]
+  agent-stripe investigate connect-readiness [--limit 10] [--namespace auto|v1|v2]
   Stripe has two connected-account models sharing the acct_ prefix. account-health defaults to
   --namespace auto: it reads /v2/core/accounts first and falls back to /v1/accounts when Stripe says the
   ID is not a v2 account, then names the namespace that answered in a finding.
@@ -165,6 +167,10 @@ CONNECTED ACCOUNTS (CONNECT v1 AND ACCOUNTS v2 / UA2)
   charges_enabled/payouts_enabled, and those are never reported for one.
   account-events reads /v2/core/events, the only place Accounts v2 capability and requirement changes
   appear. Those events are thin, so any object shown with them is current state, not point-in-time.
+  connect-readiness answers the platform-side question: of my connected accounts, which need action?
+  Neither list endpoint carries capability or requirement detail, so it retrieves each account.
+  To act on a requirement, see what it asks for: 'accounts external-accounts', 'accounts capabilities',
+  'accounts persons list' (v1), 'accounts-v2 persons list' and 'accounts-v2 payout-methods' (v2).
 
 CONNECT MONEY MOVEMENT
   agent-stripe investigate outgoing-payment tr_...

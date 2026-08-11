@@ -61,6 +61,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/v1/invoices", s.handleInvoicesList)
 	s.mux.HandleFunc("/v1/transfers", s.handleTransfersList)
 	s.mux.HandleFunc("/v1/transfers/", s.handleTransferGetOrReversal)
+	s.mux.HandleFunc("/v1/accounts/", s.handleAccountSubresource)
+	s.mux.HandleFunc("/v2/money_management/payout_methods", s.handleV2PayoutMethods)
 	s.mux.HandleFunc("/v2/core/accounts", s.handleV2Accounts)
 	s.mux.HandleFunc("/v2/core/accounts/", s.handleV2AccountPath)
 	s.mux.HandleFunc("/v2/core/events", s.handleV2Events)

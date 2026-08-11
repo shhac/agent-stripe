@@ -182,3 +182,59 @@ func TestCLIInvestigationSummariesCarryNoPersonalData(t *testing.T) {
 	assertNotContains(t, out, "fPrInTdEcLiNeD", "buyer@example.com", "+15550101001")
 	runner.AssertContains(out, "insufficient funds")
 }
+
+func TestCLIAccountSubresourcesAnswerRequirements(t *testing.T) {
+	runner := newMockCLIRunner(t)
+
+	// acct_mock_connected's requirements name "external_account". These are the
+	// commands that say what it actually has and which capability is waiting.
+	external := runner.Run("accounts", "external-accounts", "acct_mock_connected")
+	runner.AssertContains(external, `"id":"ba_mock_closed"`, `"status":"errored"`, `"last4":"6789"`)
+
+	capabilities := runner.Run("accounts", "capabilities", "acct_mock_connected")
+	runner.AssertContains(capabilities, `"id":"transfers"`, `"status":"inactive"`, `"external_account"`)
+
+	persons := runner.Run("accounts", "persons", "list", "acct_mock_connected")
+	runner.AssertContains(persons, `"id":"person_mock_v1_rep"`, `"representative":true`, `verification.document`)
+	assertNotContains(t, persons, "robin.vance@example.com")
+}
+
+func TestCLIAccountPersonsFilterByRelationship(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	out := runner.Run("accounts", "persons", "list", "acct_mock_connected", "--relationship", "director")
+	assertNotContains(t, out, "person_mock_v1_rep")
+
+	bad := runMockCLIErr(t, "accounts", "persons", "list", "acct_mock_connected", "--relationship", "auditor")
+	assertContains(t, bad, `unknown --relationship value`, "representative, owner, director, executive")
+}
+
+func TestCLIV2PayoutMethodsScopeByContext(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	out := runner.Run("accounts-v2", "payout-methods", "acct_mock_v2_recipient")
+	runner.AssertContains(out,
+		`"object":"v2.money_management.payout_method"`,
+		`"last4":"3311"`,
+		`"usage_status"`,
+	)
+}
+
+func TestCLIConnectReadinessSweepsAccounts(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	out := runner.Run("investigate", "connect-readiness", "--limit", "5")
+	runner.AssertContains(out,
+		`inspected connected accounts have blockers (v2)`,
+		`acct_mock_v2_restricted`,
+		`"blocked_count":2`,
+	)
+	// The healthy account must not be reported as blocked.
+	assertNotContains(t, out, `"blocked":["acct_mock_v2_active"`)
+}
+
+func TestCLIConnectReadinessFallsBackToV1(t *testing.T) {
+	runner := newMockCLIRunner(t)
+	// With the v2 account list unavailable, the sweep must fall back rather
+	// than reporting a platform with no accounts.
+	runner.ArmFault("/v2/core/accounts=400")
+	out := runner.Run("investigate", "connect-readiness", "--namespace", "v1", "--limit", "5")
+	runner.AssertContains(out, `(v1)`, `acct_mock_connected`)
+}

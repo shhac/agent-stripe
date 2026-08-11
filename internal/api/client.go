@@ -62,6 +62,17 @@ func NewClient(opts Options) *Client {
 	}
 }
 
+// WithContext returns a copy of the client scoped to a different
+// Stripe-Context. Some /v2 endpoints are addressed by context rather than by a
+// path segment — payout methods belong to the recipient named in the header —
+// so a command needs to override it for one call without disturbing the
+// profile's default.
+func (c *Client) WithContext(stripeContext string) *Client {
+	scoped := *c
+	scoped.context = stripeContext
+	return &scoped
+}
+
 func (c *Client) SetDebug(enabled bool) {
 	c.debug = enabled
 }

@@ -22,6 +22,7 @@ func registerAccountsV2(root *cobra.Command, globals shared.GlobalsFunc) {
 	accounts.AddCommand(newAccountsV2GetCommand(globals))
 	accounts.AddCommand(newAccountsV2ListCommand(globals))
 	accounts.AddCommand(newAccountsV2PersonsCommand(globals))
+	accounts.AddCommand(newAccountsV2PayoutMethodsCommand(globals))
 	accounts.AddCommand(newUsageCommand(accountsV2UsageText))
 	root.AddCommand(accounts)
 }

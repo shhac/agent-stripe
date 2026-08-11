@@ -75,6 +75,18 @@ func FetchItem(ctx context.Context, client *api.Client, flags *GlobalFlags, path
 	return output.Redact(data, RedactionOptions(flags)), nil
 }
 
+// GetRawListInContext is GetRawList for an endpoint addressed by Stripe-Context
+// rather than by a path segment.
+func GetRawListInContext(flags *GlobalFlags, stripeContext, path string, params url.Values) error {
+	return WithClient(flags, func(ctx context.Context, client *api.Client) error {
+		raw, err := client.WithContext(stripeContext).Get(ctx, path, params)
+		if err != nil {
+			return err
+		}
+		return WriteRawList(path, raw, flags.Format, RedactionOptions(flags))
+	})
+}
+
 func GetRawList(flags *GlobalFlags, path string, params url.Values) error {
 	return WithClient(flags, func(ctx context.Context, client *api.Client) error {
 		raw, err := client.Get(ctx, path, params)

@@ -65,9 +65,13 @@ TRIAGE STARTERS
   agent-stripe accounts self
   agent-stripe accounts list [--full]
   agent-stripe accounts get <acct_id>
+  agent-stripe accounts persons list <acct_id> [--relationship representative]
+  agent-stripe accounts capabilities <acct_id>
+  agent-stripe accounts external-accounts <acct_id> [--object bank_account]
   agent-stripe accounts-v2 get <acct_id> [--include requirements]
   agent-stripe accounts-v2 list [--applied-configuration merchant|customer|recipient] [--page <token>]
   agent-stripe accounts-v2 persons list <acct_id>
+  agent-stripe accounts-v2 payout-methods <acct_id>
   agent-stripe accounts-v2 usage
   agent-stripe events-v2 list [--object-id <acct_id>] [--type <v2.core...>]
   agent-stripe events-v2 get <evt_id>
@@ -109,6 +113,7 @@ INVESTIGATIONS
   agent-stripe investigate outgoing-payment <tr_id|po_id|acct_id>
   agent-stripe investigate account-health <acct_id> [--namespace auto|v1|v2]
   agent-stripe investigate account-events <acct_id>
+  agent-stripe investigate connect-readiness [--limit N] [--namespace auto|v1|v2]
   agent-stripe investigate ledger <ch_id|pi_id|re_id|tr_id|po_id|txn_id|fee_id>
   agent-stripe investigate refund <re_id|ch_id|pi_id>
   agent-stripe investigate payout-failure <po_id>

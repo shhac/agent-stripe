@@ -68,6 +68,9 @@ func registerAccounts(root *cobra.Command, globals shared.GlobalsFunc) {
 	cursor.AddFlags(list)
 	list.Flags().BoolVar(&full, "full", false, "Return full Stripe account objects instead of compact summaries")
 	accounts.AddCommand(list)
+	accounts.AddCommand(newAccountsPersonsCommand(globals))
+	accounts.AddCommand(newAccountCapabilitiesCommand(globals))
+	accounts.AddCommand(newAccountExternalAccountsCommand(globals))
 	root.AddCommand(accounts)
 }
 

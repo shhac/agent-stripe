@@ -214,6 +214,34 @@ are on v1 objects. `--expose` remains the explicit opt-in.
 `persons list` summaries go further and omit the PII fields entirely rather
 than emitting them masked, keeping relationship and verification structure.
 
+## Coverage of the Connect + UA2 question set
+
+The commands above answer "what is the state of this account" in both
+namespaces. Three gaps were closed after the first pass, because triage kept
+running out of road at the same three places:
+
+- **What a requirement is asking for.** Requirements name what is missing;
+  nothing showed what exists. `accounts persons list`, `accounts capabilities`,
+  and `accounts external-accounts` cover the v1 sub-resources. External
+  accounts matter for v2 accounts too: Accounts v2 has no external-accounts
+  hash and Stripe directs platforms to the v1 endpoint regardless of namespace.
+  The v1 Capability objects also carry their own requirements, which the
+  Account object's name-to-status map does not.
+- **Where a v2 recipient would actually be paid.** A recipient with an active
+  payout capability and no payout method is a real and invisible state.
+  `accounts-v2 payout-methods` reads `/v2/money_management/payout_methods`,
+  which is addressed by `Stripe-Context` rather than a path segment — the
+  command takes the account ID and scopes the request itself. That surface is
+  preview-only, so it needs `--v2-api-version <preview train>`.
+- **Which accounts need attention at all.** Per-account commands assume you
+  already know which account to ask about. `investigate connect-readiness`
+  sweeps and reports only the blocked ones. It retrieves each account because
+  neither list endpoint carries capability or requirement detail.
+
+Still deliberately absent: everything that writes. Account creation,
+configuration updates, account links and onboarding flows, capability requests,
+and outbound payment creation are all POSTs.
+
 ## Out of scope
 
 Writes. Creating accounts, updating configurations, creating account links, and

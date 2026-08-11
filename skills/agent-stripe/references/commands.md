@@ -45,8 +45,8 @@ agent-stripe investigate usage
 - `agent-stripe application-fees list|get`
 - `agent-stripe payment-links list|get`
 - `agent-stripe early-fraud-warnings list|get`
-- `agent-stripe accounts self|list|get` - Connect v1 accounts. `accounts list` returns compact status summaries by default; use `accounts list --full` for full redacted Account objects.
-- `agent-stripe accounts-v2 get|list|persons|usage` - Accounts v2 (UA2). See "Accounts v2" below.
+- `agent-stripe accounts self|list|get|persons|capabilities|external-accounts` - Connect v1 accounts and their sub-resources. `accounts list` returns compact status summaries by default; use `accounts list --full` for full redacted Account objects.
+- `agent-stripe accounts-v2 get|list|persons|payout-methods|usage` - Accounts v2 (UA2). See "Accounts v2" below.
 - `agent-stripe events-v2 list|get|usage` - v2 core (thin) events. See "Accounts v2" below.
 
 Most list commands accept `--limit`, `--created-gte`, `--created-lte`, `--starting-after`, and `--ending-before`. List commands with compact defaults also accept `--full` for full redacted Stripe objects; when such a command supports `--expand`, use `--full` with `--expand`. Search commands accept `--query`, `--limit`, and `--page`.
@@ -85,6 +85,7 @@ Commands excluded from multi-get (take no id arg, so multi does not apply): `bal
 - `agent-stripe investigate outgoing-payment <tr_id|po_id|acct_id>` - Connect transfer, payout, or account readiness issue.
 - `agent-stripe investigate account-health acct_... [--namespace auto|v1|v2]` - connected account requirements/capability blockers, in whichever account namespace the ID belongs to.
 - `agent-stripe investigate account-events acct_... [--limit N] [--type <event-type>]` - recent Accounts v2 capability, requirement, and identity changes from the v2 event stream.
+- `agent-stripe investigate connect-readiness [--limit N] [--namespace auto|v1|v2]` - sweep connected accounts and report the ones with blockers.
 - `agent-stripe investigate ledger ch_...|pi_...|re_...|tr_...|po_...|txn_...|fee_...` - balance transaction and reconciliation evidence.
 - `agent-stripe investigate refund <re_id|ch_id|pi_id>` - refund state and related movement.
 - `agent-stripe investigate payout-failure po_...` - payout failure plus balance transaction.
@@ -112,6 +113,7 @@ agent-stripe events-v2 get evt_...
 - **Persons** carry identity PII. Names, dates of birth, and contact fields are redacted by default; `persons list` summaries omit them entirely and keep the relationship (owner, representative, percent ownership, title).
 - **Pagination** is token-based: read `@pagination.next_page` and pass it back as `--page`.
 - **API version.** `/v2` requests use `--v2-api-version` (profile `v2_api_version`), separate from the v1 `--api-version`. Pin a `.preview` train only when an endpoint or field is preview-only; a `/v2` 400 hint says so.
+- **Sub-resources.** Requirements say what is missing; these say what exists. `accounts external-accounts` (v1, and the right endpoint for v2 accounts too — Accounts v2 has no external-accounts hash), `accounts capabilities` (v1 Capability objects carry their own requirements), `accounts persons list` / `accounts-v2 persons list`, and `accounts-v2 payout-methods` for a v2 recipient's payout routes. Payout methods are addressed by `Stripe-Context`, so the command takes the account ID and scopes the request itself; the surface is preview-only, so pass `--v2-api-version <preview train>`.
 - **Interop errors.** `v1_account_instead_of_v2_account` and `account_not_yet_compatible_with_v2` mean the ID is a Connect v1 account; `accounts_v2_access_blocked` and `non_connect_platform_accounts_v2_access_blocked` mean the platform is not on UA2. All four hints name the v1 command to use instead.
 
 ## Raw Read-Only API

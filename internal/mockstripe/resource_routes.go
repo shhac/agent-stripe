@@ -11,6 +11,10 @@ type mockResource struct {
 	items      func() []map[string]any
 	searchable bool
 	filters    []mockFilter
+	// subPaths marks a resource whose <path>/ space is served elsewhere because
+	// it has sub-resources (accounts has persons, capabilities, external
+	// accounts), so the table does not claim the pattern.
+	subPaths bool
 }
 
 type mockFilter struct {
@@ -32,7 +36,9 @@ func (s *Server) registerMockResource(resource mockResource) {
 		s.mux.HandleFunc(resource.path+"/search", resource.handleSearch)
 	}
 	s.mux.HandleFunc(resource.path, resource.handleList)
-	s.mux.HandleFunc(resource.path+"/", resource.handleGet)
+	if !resource.subPaths {
+		s.mux.HandleFunc(resource.path+"/", resource.handleGet)
+	}
 }
 
 func (r mockResource) handleList(w http.ResponseWriter, req *http.Request) {
@@ -238,6 +244,7 @@ func mockResources() []mockResource {
 			path:       "/v1/accounts",
 			objectName: "account",
 			items:      accounts,
+			subPaths:   true,
 		},
 	}
 }

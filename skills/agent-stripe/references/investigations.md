@@ -27,6 +27,7 @@ Use this table to choose the smallest investigation that matches the user's ques
 | `timeline` | `<cus_...> [--limit N]` | Need chronological "what happened to this customer?" context. | [timeline](investigation/timeline.md) |
 | `outgoing-payment` | `<tr_...|po_...|acct_...>` | Money from platform to connected business went wrong. | [outgoing-payment](investigation/outgoing-payment.md) |
 | `account-health` | `<acct_...> [--namespace auto\|v1\|v2]` | Connected account capability/requirements blocker, in Connect v1 or Accounts v2. | [account-health](investigation/account-health.md) |
+| `connect-readiness` | `[--limit N] [--namespace auto\|v1\|v2]` | Which connected accounts need attention, platform-wide. | [connect-readiness](investigation/connect-readiness.md) |
 | `account-events` | `<acct_...> [--limit N] [--type <event-type>]` | What recently changed on an Accounts v2 account (capabilities, requirements, identity). | [account-events](investigation/account-events.md) |
 | `ledger` | `<ch_...|pi_...|re_...|tr_...|po_...|txn_...|fee_...>` | Reconcile amount, fee, net, payout/transfer/refund ledger evidence. | [ledger](investigation/ledger.md) |
 | `refund` | `<re_...|ch_...|pi_...>` | Customer-visible refund state. | [refund](investigation/refund.md) |
