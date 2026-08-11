@@ -36,6 +36,10 @@ func newInvestigateEntitlement(globals shared.GlobalsFunc, outputOpts *evidenceO
 	return cmd
 }
 
+func (q entitlementQuery) empty() bool {
+	return q.subscription == "" && q.customer == "" && q.metadata == "" && q.invoice == "" && q.checkoutSession == ""
+}
+
 type entitlementQuery struct {
 	customer        string
 	subscription    string
@@ -46,6 +50,13 @@ type entitlementQuery struct {
 }
 
 func (i investigator) entitlement(q entitlementQuery) error {
+	// Checked up front rather than inferred from "nothing was recorded": an
+	// --invoice naming an invoice with no lines also records nothing, and
+	// telling that caller to supply a selector they did supply is wrong advice.
+	if q.empty() {
+		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "Provide --subscription, --customer, --metadata, --invoice, or --checkout-session to investigate entitlements."})
+		return nil
+	}
 	before := i.count()
 	if q.subscription != "" || q.customer != "" || q.metadata != "" {
 		subs, err := i.findSubscriptions(q.subscription, q.customer, q.metadata, q.limit)
@@ -79,7 +90,7 @@ func (i investigator) entitlement(q entitlementQuery) error {
 		}
 	}
 	if i.count() == before {
-		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "Provide --subscription, --customer, --metadata, --invoice, or --checkout-session to investigate entitlements."})
+		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "The supplied selectors matched no subscription, invoice, or Checkout Session entitlements."})
 		return nil
 	}
 	i.add(evidenceRecord{Type: "finding", Severity: "info", Summary: "Entitlement evidence gathered from subscription items, invoice lines, checkout line items, prices, and products. Prefer product/price metadata for internal product IDs."})

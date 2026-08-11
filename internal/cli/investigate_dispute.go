@@ -20,24 +20,10 @@ func (i investigator) disputeResponse(disputeID string) error {
 		return err
 	}
 	i.add(entityRecord("dispute", dispute))
-	if chargeID := idFromValue(dispute["charge"]); chargeID != "" {
-		charge, err := i.get("/v1/charges/"+url.PathEscape(chargeID), url.Values{})
-		if err == nil {
-			i.add(entityRecord("charge", charge))
-			if customerID := idFromValue(charge["customer"]); customerID != "" {
-				customer, err := i.get("/v1/customers/"+url.PathEscape(customerID), url.Values{})
-				if err == nil {
-					i.add(entityRecord("customer", customer))
-				}
-			}
-		}
+	if charge := i.followRef(dispute, "charge"); charge != nil {
+		i.followRef(charge, "customer")
 	}
-	if piID := idFromValue(dispute["payment_intent"]); piID != "" {
-		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{})
-		if err == nil {
-			i.add(entityRecord("payment_intent", pi))
-		}
-	}
+	i.followRef(dispute, "payment_intent")
 	details := mapAnyMap(dispute, "evidence_details")
 	i.add(evidenceRecord{
 		Type:     "finding",

@@ -188,26 +188,17 @@ func (i investigator) refundStatus(refundID string) error {
 		return err
 	}
 	i.add(entityRecord("refund", refund))
-	if chargeID := idFromValue(refund["charge"]); chargeID != "" {
-		charge, err := i.get("/v1/charges/"+url.PathEscape(chargeID), url.Values{})
-		if err == nil {
-			i.add(entityRecord("charge", charge))
-		}
-	}
-	if piID := idFromValue(refund["payment_intent"]); piID != "" {
-		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{})
-		if err == nil {
-			i.add(entityRecord("payment_intent", pi))
-		}
-	}
+	i.followRef(refund, "charge")
+	i.followRef(refund, "payment_intent")
 	if transferID := idFromValue(refund["transfer"]); transferID != "" {
-		transfer, err := i.get("/v1/transfers/"+url.PathEscape(transferID), url.Values{})
-		if err == nil {
-			i.add(entityRecord("transfer", transfer))
-		}
+		i.fetchRelated("transfer", transferID)
+		// A reversal is nested under its transfer and so has no collection path
+		// of its own; fetchRelated cannot resolve it from the prefix.
 		if reversalID := idFromValue(refund["transfer_reversal"]); reversalID != "" {
 			reversal, err := i.get("/v1/transfers/"+url.PathEscape(transferID)+"/reversals/"+url.PathEscape(reversalID), url.Values{})
-			if err == nil {
+			if err != nil {
+				i.add(relatedWarning("transfer reversal "+reversalID, err))
+			} else {
 				i.add(entityRecord("transfer_reversal", reversal))
 			}
 		}
@@ -225,12 +216,7 @@ func (i investigator) payoutFailure(payoutID string) error {
 		return err
 	}
 	i.add(entityRecord("payout", payout))
-	if txnID := idFromValue(payout["balance_transaction"]); txnID != "" {
-		txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(txnID), url.Values{})
-		if err == nil {
-			i.add(entityRecord("balance_transaction", txn))
-		}
-	}
+	i.followRef(payout, "balance_transaction")
 	i.add(moneyMovementFinding("payout", payout))
 	return nil
 }

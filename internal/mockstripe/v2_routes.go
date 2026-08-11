@@ -20,11 +20,11 @@ func (s *Server) handleV2Accounts(w http.ResponseWriter, r *http.Request) {
 	}
 	query := r.URL.Query()
 	items := v2Accounts()
-	if closed := query.Get("closed"); closed != "" {
-		items = filterByBoolString(items, "closed", closed)
-	} else {
-		items = filterByBoolString(items, "closed", "false")
+	closed := query.Get("closed")
+	if closed == "" {
+		closed = "false"
 	}
+	items = filterByBoolString(items, "closed", closed)
 	if wanted := indexedValues(query, "applied_configurations"); len(wanted) > 0 {
 		items = filterByAppliedConfigurations(items, wanted)
 	}
@@ -40,12 +40,12 @@ func (s *Server) handleV2AccountPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rest := strings.TrimPrefix(r.URL.Path, "/v2/core/accounts/")
-	accountID, personPath, _ := strings.Cut(rest, "/persons")
+	accountID, personPath, hasPersons := strings.Cut(rest, "/persons")
 	if accountID == "" {
 		writeV2Error(w, http.StatusNotFound, "invalid_request_error", "not_found", "No such account")
 		return
 	}
-	if strings.Contains(rest, "/persons") {
+	if hasPersons {
 		s.writeV2Persons(w, r, accountID, strings.Trim(personPath, "/"))
 		return
 	}

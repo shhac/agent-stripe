@@ -55,12 +55,7 @@ func (i investigator) paymentIncidentFromPI(pi map[string]any) error {
 
 func (i investigator) paymentIncidentFromCharge(charge map[string]any) error {
 	i.add(entityRecord("charge", charge))
-	if piID := idFromValue(charge["payment_intent"]); piID != "" {
-		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{})
-		if err == nil {
-			i.add(entityRecord("payment_intent", pi))
-		}
-	}
+	i.followRef(charge, "payment_intent")
 	i.relatedDisputesAndRefunds(nil, charge)
 	i.add(evidenceRecord{
 		Type:     "finding",

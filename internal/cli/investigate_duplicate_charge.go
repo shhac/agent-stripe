@@ -53,7 +53,8 @@ func (i investigator) duplicateCharge(customer, last4 string, windowHours, limit
 		if mapString(charge, "status") == "failed" {
 			continue
 		}
-		groups[duplicateChargeKey(charge)] = append(groups[duplicateChargeKey(charge)], charge)
+		key := duplicateChargeKey(charge)
+		groups[key] = append(groups[key], charge)
 	}
 
 	clusters := 0
