@@ -49,7 +49,6 @@ func (i investigator) actionRequired(customer string, limit int) error {
 			continue
 		}
 		stalled++
-		i.add(entityRecord("payment_intent", pi))
 		invoice := i.followRef(pi, "invoice")
 		i.add(actionRequiredFinding(pi, invoice))
 	}

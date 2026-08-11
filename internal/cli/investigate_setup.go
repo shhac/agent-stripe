@@ -27,22 +27,20 @@ func (i investigator) setup(id string, limit int) error {
 		}
 		setupIntents = append(setupIntents, seti)
 	case strings.HasPrefix(id, "pm_"):
-		pm, err := i.get("/v1/payment_methods/"+url.PathEscape(id), url.Values{})
-		if err != nil {
+		// Fetched for the record, not the value.
+		if _, err := i.get("/v1/payment_methods/"+url.PathEscape(id), url.Values{}); err != nil {
 			return err
 		}
-		i.add(entityRecord("payment_method", pm))
 		found, err := i.list("/v1/setup_intents", valuesWithLimit(limit, "payment_method", id))
 		if err != nil {
 			return err
 		}
 		setupIntents = found
 	default:
-		customer, err := i.get("/v1/customers/"+url.PathEscape(id), url.Values{})
-		if err != nil {
+		// Fetched for the record, not the value.
+		if _, err := i.get("/v1/customers/"+url.PathEscape(id), url.Values{}); err != nil {
 			return err
 		}
-		i.add(entityRecord("customer", customer))
 		found, err := i.list("/v1/setup_intents", valuesWithLimit(limit, "customer", id))
 		if err != nil {
 			return err
@@ -50,10 +48,7 @@ func (i investigator) setup(id string, limit int) error {
 		setupIntents = found
 	}
 	for _, seti := range setupIntents {
-		i.add(entityRecord("setup_intent", seti))
-		if pm := i.followRef(seti, "payment_method"); pm != nil {
-			i.add(entityRecord("payment_method", pm))
-		}
+		i.followRef(seti, "payment_method")
 		i.add(setupFinding(seti))
 	}
 	if len(setupIntents) == 0 {

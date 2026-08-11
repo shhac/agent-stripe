@@ -52,16 +52,13 @@ func (i investigator) disputeImpact(id string, limit int) error {
 }
 
 func (i investigator) disputeImpactRecords(dispute map[string]any) {
-	i.add(entityRecord("dispute", dispute), disputeImpactFinding(dispute))
+	i.add(disputeImpactFinding(dispute))
 	if charge := i.followRef(dispute, "charge"); charge != nil {
-		i.add(entityRecord("charge", charge))
 		if refunds := i.listRelated("refunds", "/v1/refunds", valuesWithLimit(5, "charge", mapString(charge, "id"))); refunds != nil {
 			i.addList("refund", refunds)
 		}
 	}
-	if pi := i.followRef(dispute, "payment_intent"); pi != nil {
-		i.add(entityRecord("payment_intent", pi))
-	}
+	i.followRef(dispute, "payment_intent")
 }
 
 func disputeImpactFinding(dispute map[string]any) evidenceRecord {

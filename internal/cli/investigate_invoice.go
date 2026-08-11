@@ -58,7 +58,6 @@ func (i investigator) invoiceMetadata(invoiceID, number string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("invoice", invoice))
 	pi, err := i.paymentIntentForInvoice(invoice)
 	if err != nil {
 		return err
@@ -67,7 +66,6 @@ func (i investigator) invoiceMetadata(invoiceID, number string) error {
 		i.add(finding("warning", "Invoice has no PaymentIntent."))
 		return nil
 	}
-	i.add(entityRecord("payment_intent", pi))
 	i.add(paymentIntentMetadataFinding(pi))
 	return nil
 }
@@ -92,7 +90,6 @@ func (i investigator) invoicePayment(invoiceID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("invoice", invoice))
 	pi, err := i.paymentIntentForInvoice(invoice)
 	if err != nil {
 		return err
@@ -101,13 +98,9 @@ func (i investigator) invoicePayment(invoiceID string) error {
 		i.add(finding("warning", "Invoice has no PaymentIntent, so no card details are available from a charge."))
 		return nil
 	}
-	i.add(entityRecord("payment_intent", pi))
 	charge, err := i.latestChargeForPaymentIntent(pi)
 	if err != nil {
 		return err
-	}
-	if charge != nil {
-		i.add(entityRecord("charge", charge))
 	}
 	i.add(finding(severityForPayment(pi, charge), invoicePaymentSummary(invoice, pi, charge)))
 	return nil

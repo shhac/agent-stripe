@@ -19,7 +19,6 @@ func (i investigator) disputeResponse(disputeID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("dispute", dispute))
 	if charge := i.followRef(dispute, "charge"); charge != nil {
 		i.followRef(charge, "customer")
 	}

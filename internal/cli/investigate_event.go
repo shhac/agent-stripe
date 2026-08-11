@@ -32,7 +32,6 @@ func (i investigator) webhookEvent(eventID string) error {
 		}
 		return err
 	}
-	i.add(entityRecord("event", event))
 	data := mapAnyMap(event, "data")
 	if underlying, ok := data["object"].(map[string]any); ok {
 		i.add(evidenceRecord{
@@ -60,7 +59,6 @@ func (i investigator) webhookEventV2(eventID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord(objectV2Event, event))
 	eventType := mapString(event, "type")
 	related := mapAnyMap(event, "related_object")
 	relatedID := mapString(related, "id")
@@ -72,9 +70,7 @@ func (i investigator) webhookEventV2(eventID string) error {
 	}
 	summary += " v2 events are thin: they carry no snapshot, so any object shown here is current state, not state at event time."
 
-	if object, ok := i.v2EventRelatedObject(event); ok {
-		i.add(entityRecord(mapString(object, "object"), object))
-	}
+	i.v2EventRelatedObject(event)
 	i.add(evidenceRecord{
 		Type:     "finding",
 		Severity: eventSeverity(eventType),
@@ -106,6 +102,10 @@ func (i investigator) v2EventRelatedObject(event map[string]any) (map[string]any
 	}
 	object, err := i.get(path, params)
 	if err != nil {
+		// Reported rather than swallowed: the related object is the whole
+		// content of a thin event, so a silent failure leaves the report
+		// looking like the event simply had nothing attached.
+		i.add(relatedWarning("related object "+path, err))
 		return nil, false
 	}
 	return object, true

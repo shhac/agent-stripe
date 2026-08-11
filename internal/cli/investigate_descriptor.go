@@ -71,7 +71,7 @@ func (i investigator) statementDescriptor(descriptor, customer string, limit int
 		return nil
 	}
 	for _, charge := range matches {
-		i.add(entityRecord("charge", charge), descriptorMatchFinding(descriptor, charge))
+		i.add(descriptorMatchFinding(descriptor, charge))
 	}
 	return nil
 }

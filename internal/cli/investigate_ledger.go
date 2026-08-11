@@ -33,7 +33,7 @@ func (i investigator) ledger(id string) error {
 		if err != nil {
 			return err
 		}
-		i.add(entityRecord("balance_transaction", txn), ledgerFinding("balance_transaction", txn))
+		i.add(ledgerFinding("balance_transaction", txn))
 		return nil
 	}
 }
@@ -43,7 +43,6 @@ func (i investigator) ledgerFromPaymentIntent(id string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("payment_intent", pi))
 	if charge := i.addLatestCharge(pi); charge != nil {
 		i.ledgerFromCharge(charge)
 	}
@@ -61,10 +60,7 @@ func (i investigator) ledgerFromChargeID(id string) error {
 }
 
 func (i investigator) ledgerFromCharge(charge map[string]any) {
-	i.add(entityRecord("charge", charge))
-	if txn := i.followRef(charge, "balance_transaction"); txn != nil {
-		i.add(entityRecord("balance_transaction", txn))
-	}
+	i.followRef(charge, "balance_transaction")
 	if fees := i.listRelated("application fees", "/v1/application_fees", url.Values{"charge": []string{mapString(charge, "id")}, "limit": []string{"10"}}); fees != nil {
 		i.addList("application_fee", fees)
 	}
@@ -86,10 +82,7 @@ func (i investigator) ledgerFromRefundID(id string) error {
 }
 
 func (i investigator) ledgerFromRefund(refund map[string]any) {
-	i.add(entityRecord("refund", refund))
-	if txn := i.followRef(refund, "balance_transaction"); txn != nil {
-		i.add(entityRecord("balance_transaction", txn))
-	}
+	i.followRef(refund, "balance_transaction")
 	i.add(ledgerFinding("refund", refund))
 }
 
@@ -98,10 +91,7 @@ func (i investigator) ledgerFromSimpleObject(object, path string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord(object, item))
-	if txn := i.followRef(item, "balance_transaction"); txn != nil {
-		i.add(entityRecord("balance_transaction", txn))
-	}
+	i.followRef(item, "balance_transaction")
 	i.add(ledgerFinding(object, item))
 	return nil
 }

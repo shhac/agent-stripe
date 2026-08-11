@@ -22,7 +22,6 @@ func (i investigator) fraudReview(id string) error {
 		if err != nil {
 			return err
 		}
-		i.add(entityRecord("early_fraud_warning", efw))
 		// Dispatch on the payment the warning points at, but keep id as what the
 		// caller passed so the not-found message names their input.
 		paymentID = firstNonEmpty(idFromValue(efw["charge"]), idFromValue(efw["payment_intent"]))
@@ -32,7 +31,6 @@ func (i investigator) fraudReview(id string) error {
 		if err != nil {
 			return err
 		}
-		i.add(entityRecord("payment_intent", pi))
 		if charge := i.addLatestCharge(pi); charge != nil {
 			i.fraudReviewForCharge(charge)
 		}
@@ -51,7 +49,6 @@ func (i investigator) fraudReview(id string) error {
 }
 
 func (i investigator) fraudReviewForCharge(charge map[string]any) {
-	i.add(entityRecord("charge", charge))
 	i.addRelatedList("early_fraud_warning", "/v1/radar/early_fraud_warnings", valuesWithLimit(10, "charge", mapString(charge, "id")))
 	i.relatedDisputesAndRefunds(nil, charge)
 }

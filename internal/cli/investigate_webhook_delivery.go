@@ -35,17 +35,21 @@ func (i investigator) webhookDelivery(id, endpointID string) error {
 		if err != nil {
 			return err
 		}
-		i.add(entityRecord("event", event), webhookEventDeliveryFinding(event))
+		i.add(webhookEventDeliveryFinding(event))
 		if endpointID != "" {
 			endpoint, err := i.get("/v1/webhook_endpoints/"+url.PathEscape(endpointID), url.Values{})
 			if err != nil {
 				return err
 			}
-			i.add(entityRecord("webhook_endpoint", endpoint), webhookEndpointFinding(endpoint, mapString(event, "type")))
+			i.add(webhookEndpointFinding(endpoint, mapString(event, "type")))
 		} else if endpoints := i.listRelated("webhook endpoints", "/v1/webhook_endpoints", url.Values{"limit": []string{"100"}}); endpoints != nil {
+			// Emits the same finding the --endpoint branch does. The filter's
+			// only body used to be an entity add that the fetch had already
+			// made, so matching endpoints produced nothing to distinguish them
+			// from the other 99 this lists.
 			for _, endpoint := range endpoints {
 				if endpointHandlesEvent(endpoint, mapString(event, "type")) {
-					i.add(entityRecord("webhook_endpoint", endpoint))
+					i.add(webhookEndpointFinding(endpoint, mapString(event, "type")))
 				}
 			}
 		}
@@ -55,7 +59,7 @@ func (i investigator) webhookDelivery(id, endpointID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("webhook_endpoint", endpoint), webhookEndpointFinding(endpoint, ""))
+	i.add(webhookEndpointFinding(endpoint, ""))
 	return nil
 }
 

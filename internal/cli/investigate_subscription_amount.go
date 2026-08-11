@@ -52,7 +52,6 @@ func (i investigator) latestInvoiceEvidence(sub map[string]any) map[string]any {
 		i.add(finding("warning", "Could not retrieve latest invoice "+latestInvoiceID+": "+err.Error()))
 		return nil
 	}
-	i.add(entityRecord("invoice", invoice))
 	lines, err := i.list("/v1/invoices/"+url.PathEscape(latestInvoiceID)+"/lines", url.Values{"limit": []string{"100"}})
 	if err != nil {
 		i.add(relatedWarning("invoice lines", err))

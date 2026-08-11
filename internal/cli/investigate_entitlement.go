@@ -64,7 +64,6 @@ func (i investigator) entitlement(q entitlementQuery) error {
 			return err
 		}
 		for _, sub := range subs {
-			i.add(entityRecord("subscription", sub))
 			// The bundle records its items, prices and products as it fetches
 			// them; nothing further is needed from the return value here.
 			if _, err := i.subscriptionItemsBundle(mapString(sub, "id")); err != nil {
@@ -76,11 +75,10 @@ func (i investigator) entitlement(q entitlementQuery) error {
 		if err := validateExpectedStripeID(q.invoice, "invoice"); err != nil {
 			return err
 		}
-		invoice, err := i.get("/v1/invoices/"+url.PathEscape(q.invoice), url.Values{})
-		if err != nil {
+		// Fetched for the record, not the value.
+		if _, err := i.get("/v1/invoices/"+url.PathEscape(q.invoice), url.Values{}); err != nil {
 			return err
 		}
-		i.add(entityRecord("invoice", invoice))
 		i.invoiceLineEntitlements(q.invoice)
 	}
 	if q.checkoutSession != "" {

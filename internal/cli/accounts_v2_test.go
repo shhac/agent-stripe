@@ -100,7 +100,7 @@ func TestV2AccountRequirementsCarryImpactAndOwner(t *testing.T) {
 
 func TestV2AccountHealthFindingUsesV2SignalsOnly(t *testing.T) {
 	account := decodeAccount(t, v2RestrictedAccountJSON)
-	finding := v2AccountHealthFinding(account, 2)
+	finding := v2AccountHealthFinding(account, 2, true)
 
 	if finding.Severity != "warning" {
 		t.Fatalf("Severity = %q, want warning", finding.Severity)
@@ -136,7 +136,7 @@ func TestV2AccountHealthSummaryCountsOnlyUserOwnedRequirements(t *testing.T) {
 	// integrator's: the EIN entry is awaiting Stripe. Reporting the all-entries
 	// deadline counts next to the user-owned headline told the reader to go
 	// collect something nobody can supply.
-	finding := v2AccountHealthFinding(decodeAccount(t, v2RestrictedAccountJSON), 0)
+	finding := v2AccountHealthFinding(decodeAccount(t, v2RestrictedAccountJSON), 0, false)
 
 	if !strings.Contains(finding.Summary, "1 requirement(s) need action from you (1 past due, 0 currently due)") {
 		t.Fatalf("summary should count only user-owned deadlines: %s", finding.Summary)
@@ -156,7 +156,7 @@ func TestV2AccountHealthSummaryWhenOnlyStripeIsBlocking(t *testing.T) {
         {"description": "identity.business_details.id_numbers.us_ein", "awaiting_action_from": "stripe", "minimum_deadline": {"status": "currently_due"}, "errors": []}
       ]}
     }`)
-	finding := v2AccountHealthFinding(account, 0)
+	finding := v2AccountHealthFinding(account, 0, true)
 
 	if !strings.Contains(finding.Summary, "Nothing is outstanding from you; 1 requirement(s) are awaiting Stripe") {
 		t.Fatalf("summary = %s", finding.Summary)
@@ -175,7 +175,7 @@ func TestV2AccountHealthFindingStaysInfoWhenHealthy(t *testing.T) {
       "configuration": {"merchant": {"capabilities": {"card_payments": {"status": "active", "status_details": []}}}},
       "requirements": {"entries": [], "summary": {"minimum_deadline": {"status": "eventually_due"}}}
     }`)
-	finding := v2AccountHealthFinding(account, 0)
+	finding := v2AccountHealthFinding(account, 0, true)
 	if finding.Severity != "info" {
 		t.Fatalf("Severity = %q, want info", finding.Severity)
 	}

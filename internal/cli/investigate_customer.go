@@ -47,7 +47,6 @@ func (i investigator) customerCardPayment(customer, last4 string, limit int) err
 			continue
 		}
 		i.add(
-			entityRecord("charge", charge),
 			customerCardPaymentFinding(customer, last4, charge),
 		)
 		return nil

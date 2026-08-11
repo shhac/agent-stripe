@@ -45,7 +45,6 @@ func (i investigator) refundSettlement(id string) error {
 		return nil
 	}
 	for _, refund := range refunds {
-		i.add(entityRecord("refund", refund))
 		i.followRef(refund, "balance_transaction")
 		charge := i.followRef(refund, "charge")
 		i.add(refundSettlementFinding(refund, charge))

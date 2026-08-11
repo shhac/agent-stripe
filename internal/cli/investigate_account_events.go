@@ -41,7 +41,6 @@ func (i investigator) accountEvents(accountID string, limit int, eventTypes []st
 	}
 	account, accountErr := i.get(v2AccountPath(accountID), includes)
 	if accountErr == nil {
-		i.add(entityRecord(objectV2Account, account))
 	} else if isNotV2AccountError(accountErr) {
 		i.add(v2FallbackFinding(accountID, accountErr))
 	} else {
@@ -53,9 +52,6 @@ func (i investigator) accountEvents(accountID string, limit int, eventTypes []st
 	events, err := i.listV2("/v2/core/events", params)
 	if err != nil {
 		return err
-	}
-	for _, event := range events {
-		i.add(entityRecord(objectV2Event, event))
 	}
 	i.add(accountEventsFinding(accountID, events, account))
 	return nil

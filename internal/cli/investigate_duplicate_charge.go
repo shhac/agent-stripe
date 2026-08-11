@@ -68,9 +68,6 @@ func (i investigator) duplicateCharge(customer, last4 string, windowHours, limit
 				continue
 			}
 			clusters++
-			for _, charge := range cluster {
-				i.add(entityRecord("charge", charge))
-			}
 			i.add(duplicateChargeFinding(customer, cluster))
 		}
 	}

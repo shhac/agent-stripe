@@ -49,19 +49,15 @@ func (i investigator) subscriptionItemsBundle(subscriptionID string) (*subscript
 	if err != nil {
 		return nil, err
 	}
-	i.add(entityRecord("subscription", sub))
 
 	items, err := i.list("/v1/subscription_items", url.Values{"subscription": []string{subscriptionID}, "limit": []string{"100"}})
 	if err != nil {
 		return nil, err
 	}
 	for _, item := range items {
-		i.add(entityRecord("subscription_item", item))
 		price := mapAnyMap(item, "price")
 		if productID := idFromValue(price["product"]); productID != "" {
-			if product, productErr := i.get("/v1/products/"+url.PathEscape(productID), url.Values{}); productErr == nil {
-				i.add(entityRecord("product", product))
-			}
+			i.fetchRelated("product", productID)
 		}
 	}
 	return &subscriptionItemsBundle{sub: sub, items: items}, nil

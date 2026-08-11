@@ -97,7 +97,7 @@ func (i investigator) connectReadinessV2(limit int) (readinessSweep, error) {
 			sweep.unassessed = append(sweep.unassessed, id)
 			continue
 		}
-		finding := v2AccountHealthFinding(account, 0)
+		finding := v2AccountHealthFinding(account, 0, false)
 		if finding.Severity != "warning" {
 			continue
 		}

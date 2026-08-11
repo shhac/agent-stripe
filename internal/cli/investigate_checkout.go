@@ -19,7 +19,6 @@ func (i investigator) checkoutSession(sessionID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("checkout.session", session))
 	i.checkoutLineItems(sessionID)
 	i.relatedCheckoutObjects(session)
 	i.add(checkoutSessionFinding(session))
@@ -37,35 +36,25 @@ func (i investigator) checkoutLineItems(sessionID string) {
 	}
 	for _, item := range items {
 		i.add(entityRecord("line_item", item))
+		// The price is embedded in the line item rather than fetched, so this
+		// add is its only writer.
 		if price := mapAnyMap(item, "price"); len(price) > 0 {
 			i.add(entityRecord("price", price))
-			if product := i.followRef(price, "product"); product != nil {
-				i.add(entityRecord("product", product))
-			}
+			i.followRef(price, "product")
 		}
 	}
 }
 
 func (i investigator) relatedCheckoutObjects(session map[string]any) {
-	if customer := i.followRef(session, "customer"); customer != nil {
-		i.add(entityRecord("customer", customer))
-	}
+	i.followRef(session, "customer")
 	if pi := i.followRef(session, "payment_intent"); pi != nil {
-		i.add(entityRecord("payment_intent", pi))
-		if charge := i.addLatestCharge(pi); charge != nil {
-			i.add(entityRecord("charge", charge))
-		}
+		i.addLatestCharge(pi)
 	}
 	if sub := i.followRef(session, "subscription"); sub != nil {
-		i.add(entityRecord("subscription", sub))
 		i.subscriptionPaymentSummary(sub)
 	}
-	if invoice := i.followRef(session, "invoice"); invoice != nil {
-		i.add(entityRecord("invoice", invoice))
-	}
-	if link := i.followRef(session, "payment_link"); link != nil {
-		i.add(entityRecord("payment_link", link))
-	}
+	i.followRef(session, "invoice")
+	i.followRef(session, "payment_link")
 }
 
 func checkoutSessionFinding(session map[string]any) evidenceRecord {

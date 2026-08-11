@@ -49,14 +49,14 @@ func (i investigator) outgoingPayment(id string) error {
 		if err != nil {
 			return err
 		}
-		i.add(entityRecord("transfer", transfer), moneyMovementFinding("transfer", transfer))
+		i.add(moneyMovementFinding("transfer", transfer))
 		return nil
 	case strings.HasPrefix(id, "po_"):
 		payout, err := i.get("/v1/payouts/"+url.PathEscape(id), url.Values{})
 		if err != nil {
 			return err
 		}
-		i.add(entityRecord("payout", payout), moneyMovementFinding("payout", payout))
+		i.add(moneyMovementFinding("payout", payout))
 		return nil
 	default:
 		return i.accountHealth(id, namespaceAuto)
@@ -73,7 +73,7 @@ func (i investigator) refundRecovery(id, transferID string) error {
 		if err != nil {
 			return err
 		}
-		i.add(entityRecord("refund", refund), moneyMovementFinding("refund", refund))
+		i.add(moneyMovementFinding("refund", refund))
 		i.addConnectRefundLiability(refund)
 		return nil
 	case strings.HasPrefix(id, "trr_"):
@@ -85,7 +85,7 @@ func (i investigator) refundRecovery(id, transferID string) error {
 		if err != nil {
 			return err
 		}
-		i.add(entityRecord("transfer_reversal", reversal), moneyMovementFinding("transfer_reversal", reversal))
+		i.add(moneyMovementFinding("transfer_reversal", reversal))
 		return nil
 	default:
 		return i.incomingPayment(id)
@@ -114,7 +114,6 @@ func (i investigator) addConnectRefundLiability(refund map[string]any) {
 				i.add(relatedWarning("transfer reversal "+reversalID, err))
 			} else {
 				reversal = found
-				i.add(entityRecord("transfer_reversal", reversal))
 			}
 		}
 	}
@@ -187,7 +186,6 @@ func (i investigator) refundStatus(refundID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("refund", refund))
 	i.followRef(refund, "charge")
 	i.followRef(refund, "payment_intent")
 	if transferID := idFromValue(refund["transfer"]); transferID != "" {
@@ -195,11 +193,9 @@ func (i investigator) refundStatus(refundID string) error {
 		// A reversal is nested under its transfer and so has no collection path
 		// of its own; fetchRelated cannot resolve it from the prefix.
 		if reversalID := idFromValue(refund["transfer_reversal"]); reversalID != "" {
-			reversal, err := i.get("/v1/transfers/"+url.PathEscape(transferID)+"/reversals/"+url.PathEscape(reversalID), url.Values{})
-			if err != nil {
+			// Fetched for the record, not the value.
+			if _, err := i.get("/v1/transfers/"+url.PathEscape(transferID)+"/reversals/"+url.PathEscape(reversalID), url.Values{}); err != nil {
 				i.add(relatedWarning("transfer reversal "+reversalID, err))
-			} else {
-				i.add(entityRecord("transfer_reversal", reversal))
 			}
 		}
 	}
@@ -215,7 +211,6 @@ func (i investigator) payoutFailure(payoutID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("payout", payout))
 	i.followRef(payout, "balance_transaction")
 	i.add(moneyMovementFinding("payout", payout))
 	return nil

@@ -160,6 +160,18 @@ func (i investigator) decodeListItems(data []json.RawMessage) ([]map[string]any,
 	return items, nil
 }
 
+// emitEntity is where entity records come from. Fetching an object is what
+// puts it in the evidence stream, so an investigation does not also add it:
+// ~80 call sites used to, and the collector dedups on object plus ID, so those
+// adds were no-ops right up until a caller's label disagreed with the object's
+// own `object` field — then the same object shipped twice under two names.
+//
+// Two kinds of record still need an explicit add. An object that arrives
+// embedded in a parent rather than from its own request was never fetched, so
+// nothing emitted it. And an object whose Stripe `object` field is not the name
+// this CLI uses for it — a checkout line item calls itself "item" — has to be
+// fetched non-emitting via fetchList and added under the name we mean, or the
+// two labels both reach the stream.
 func (i investigator) emitEntity(item map[string]any) {
 	if !isStripeEntity(item) {
 		return

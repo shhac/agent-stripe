@@ -65,20 +65,20 @@ func (i investigator) accountHealthV1(accountID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("account", account), accountHealthFinding(account))
+	i.add(accountHealthFinding(account))
 	i.addAccountTransfers(accountID)
 	return nil
 }
 
 func (i investigator) accountHealthV2(accountID string, account map[string]any) error {
-	i.add(entityRecord(objectV2Account, account))
 	persons, err := i.listV2(v2AccountPersonsPath(accountID), url.Values{})
-	if err == nil {
-		for _, person := range persons {
-			i.add(entityRecord(objectV2Person, person))
-		}
+	if err != nil {
+		// Reported rather than swallowed: a nil persons slice and a genuinely
+		// empty one both render as person_count 0, which reads as "this account
+		// has no persons" when the lookup never succeeded.
+		i.add(relatedListWarning("account persons", v2AccountPersonsPath(accountID), err))
 	}
-	i.add(v2AccountHealthFinding(account, len(persons)))
+	i.add(v2AccountHealthFinding(account, len(persons), err == nil))
 	i.addAccountTransfers(accountID)
 	return nil
 }
@@ -133,7 +133,7 @@ func accountHealthFinding(account map[string]any) evidenceRecord {
 // v2AccountHealthFinding reads only v2 signals. A v2.core.account has no
 // charges_enabled/payouts_enabled — enablement is per-capability, and what is
 // missing is a requirement entry rather than a field name in an array.
-func v2AccountHealthFinding(account map[string]any, personCount int) evidenceRecord {
+func v2AccountHealthFinding(account map[string]any, personCount int, personsKnown bool) evidenceRecord {
 	capabilities := v2AccountCapabilities(account)
 	capabilityRollup := summarizeV2Capabilities(capabilities)
 	requirements := v2AccountRequirements(account, "requirements")
@@ -162,6 +162,7 @@ func v2AccountHealthFinding(account map[string]any, personCount int) evidenceRec
 			"requirements_summary":    v2RequirementSummary(account, "requirements"),
 			"future_requirements":     v2RequirementData(v2AccountRequirements(account, "future_requirements")),
 			"person_count":            personCount,
+			"person_count_known":      personsKnown,
 		},
 	}
 }

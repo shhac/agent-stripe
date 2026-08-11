@@ -32,11 +32,10 @@ func (i investigator) customerContext(customer string, limit int) error {
 	if err := validateExpectedStripeID(customer, "customer"); err != nil {
 		return err
 	}
-	customerObj, err := i.get("/v1/customers/"+url.PathEscape(customer), url.Values{})
-	if err != nil {
+	// Fetched for the record, not the value.
+	if _, err := i.get("/v1/customers/"+url.PathEscape(customer), url.Values{}); err != nil {
 		return err
 	}
-	i.add(entityRecord("customer", customerObj))
 
 	i.addRelatedList("payment_method", "/v1/payment_methods", valuesWithLimit(limit, "customer", customer, "type", "card"))
 	i.addRelatedList("subscription", "/v1/subscriptions", valuesWithLimit(limit, "customer", customer, "status", "all"))

@@ -27,11 +27,10 @@ func (i investigator) paymentMethodReadiness(id string) error {
 		customerID = idFromValue(pm["customer"])
 	} else {
 		customerID = id
-		customer, err := i.get("/v1/customers/"+url.PathEscape(id), url.Values{})
-		if err != nil {
+		// Fetched for the record, not the value.
+		if _, err := i.get("/v1/customers/"+url.PathEscape(id), url.Values{}); err != nil {
 			return err
 		}
-		i.add(entityRecord("customer", customer))
 		methods, err := i.list("/v1/payment_methods", valuesWithLimit(10, "customer", id, "type", "card"))
 		if err != nil {
 			return err
@@ -39,7 +38,6 @@ func (i investigator) paymentMethodReadiness(id string) error {
 		paymentMethods = methods
 	}
 	for _, pm := range paymentMethods {
-		i.add(entityRecord("payment_method", pm))
 		i.add(paymentMethodReadinessFinding(customerID, pm))
 		if setupIntents := i.listRelated("setup intents", "/v1/setup_intents", valuesWithLimit(3, "payment_method", mapString(pm, "id"))); setupIntents != nil {
 			i.addList("setup_intent", setupIntents)

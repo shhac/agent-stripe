@@ -1,6 +1,7 @@
 package output
 
 import (
+	"sort"
 	"strings"
 
 	out "github.com/shhac/lib-agent-output"
@@ -28,7 +29,27 @@ func Redact(data any, opts RedactionOptions) any {
 	if !ok {
 		return data
 	}
-	return out.Redact(cleaned, stripeSecrets(cleaned), opts.Expose)
+	return sortRedactionNotes(out.Redact(cleaned, stripeSecrets(cleaned), opts.Expose))
+}
+
+// sortRedactionNotes puts the @redacted manifest in path order. The library
+// walks a document in field order, which for a Go map is random per run, so two
+// identical invocations printed the same masked object with the manifest
+// entries shuffled. The masked document itself was never affected — encoding
+// /json sorts map keys — but the manifest is a JSON array, so the order it was
+// built in survived into the output and made command output irreproducible:
+// diffing two runs showed changes that were not there.
+func sortRedactionNotes(doc any) any {
+	fields, ok := doc.(map[string]any)
+	if !ok {
+		return doc
+	}
+	notes, ok := fields[out.MetaKeyRedacted].([]RedactionNote)
+	if !ok {
+		return doc
+	}
+	sort.SliceStable(notes, func(a, b int) bool { return notes[a].Path < notes[b].Path })
+	return doc
 }
 
 // stripeSecrets is agent-stripe's redaction POLICY expressed as an

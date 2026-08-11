@@ -33,12 +33,12 @@ func (i investigator) resolve(value string) error {
 		}
 		return i.resolveInvoiceNumber(value)
 	}
-	item, err := i.get(path+"/"+url.PathEscape(value), url.Values{})
-	if err != nil {
+	// Fetched for the record, not the value: the fetch is what streams the
+	// object into the evidence stream, and its error is how a bad ID is caught.
+	if _, err := i.get(path+"/"+url.PathEscape(value), url.Values{}); err != nil {
 		return err
 	}
 	i.add(
-		entityRecord(object, item),
 		evidenceRecord{Type: "finding", Severity: "info", Summary: "Resolved " + value + " as " + object + ".", Command: next + value},
 	)
 	return nil
@@ -56,7 +56,6 @@ func (i investigator) resolveAccount(accountID string) error {
 	account, v2Err := i.get(v2AccountPath(accountID), includes)
 	if v2Err == nil {
 		i.add(
-			entityRecord(objectV2Account, account),
 			evidenceRecord{
 				Type:     "finding",
 				Severity: "info",
@@ -71,12 +70,11 @@ func (i investigator) resolveAccount(accountID string) error {
 	if !isNotV2AccountError(v2Err) {
 		return v2Err
 	}
-	v1Account, err := i.get("/v1/accounts/"+url.PathEscape(accountID), url.Values{})
-	if err != nil {
+	// Fetched for the record, not the value.
+	if _, err := i.get("/v1/accounts/"+url.PathEscape(accountID), url.Values{}); err != nil {
 		return err
 	}
 	i.add(
-		entityRecord("account", v1Account),
 		evidenceRecord{
 			Type:     "finding",
 			Severity: "info",
@@ -95,7 +93,6 @@ func (i investigator) resolveV2Event(eventID string) error {
 	}
 	related := mapAnyMap(event, "related_object")
 	i.add(
-		entityRecord(objectV2Event, event),
 		evidenceRecord{
 			Type:     "finding",
 			Severity: "info",
@@ -121,7 +118,6 @@ func (i investigator) resolveInvoiceNumber(value string) error {
 	}
 	invoice := found[0]
 	i.add(
-		entityRecord("invoice", invoice),
 		evidenceRecord{Type: "finding", Severity: "info", Summary: "Resolved invoice number to invoice " + mapString(invoice, "id") + ".", Command: "agent-stripe investigate invoice-payment " + mapString(invoice, "id")},
 	)
 	return nil

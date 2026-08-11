@@ -22,7 +22,6 @@ func (i investigator) invoiceTotal(invoiceID string) error {
 	if err != nil {
 		return err
 	}
-	i.add(entityRecord("invoice", invoice))
 
 	lines, err := i.list("/v1/invoices/"+url.PathEscape(invoiceID)+"/lines", url.Values{"limit": []string{"100"}})
 	if err != nil {

@@ -41,12 +41,8 @@ func (i investigator) invoiceCollection(id string, limit int) error {
 	}
 
 	for _, invoice := range invoices {
-		i.add(entityRecord("invoice", invoice))
 		if pi := i.addInvoicePaymentIntent(invoice); pi != nil {
-			i.add(entityRecord("payment_intent", pi))
-			if charge := i.addLatestCharge(pi); charge != nil {
-				i.add(entityRecord("charge", charge))
-			}
+			i.addLatestCharge(pi)
 		}
 		i.add(invoiceCollectionFinding(invoice))
 	}

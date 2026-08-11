@@ -40,7 +40,6 @@ func (i investigator) subscriptionRenewal(subscription, customer, metadata strin
 		return nil
 	}
 	for _, sub := range subs {
-		i.add(entityRecord("subscription", sub))
 		i.subscriptionPaymentSummary(sub)
 	}
 	return nil

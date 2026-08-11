@@ -36,13 +36,9 @@ func (i investigator) incomingPayment(id string) error {
 }
 
 func (i investigator) paymentIncidentFromPI(pi map[string]any) error {
-	i.add(entityRecord("payment_intent", pi))
 	charge, err := i.latestChargeForPaymentIntent(pi)
 	if err != nil {
 		return err
-	}
-	if charge != nil {
-		i.add(entityRecord("charge", charge))
 	}
 	i.relatedDisputesAndRefunds(pi, charge)
 	i.add(finding(severityForPayment(pi, charge), paymentFailureSummary(pi, charge)))
@@ -50,7 +46,6 @@ func (i investigator) paymentIncidentFromPI(pi map[string]any) error {
 }
 
 func (i investigator) paymentIncidentFromCharge(charge map[string]any) error {
-	i.add(entityRecord("charge", charge))
 	i.followRef(charge, "payment_intent")
 	i.relatedDisputesAndRefunds(nil, charge)
 	i.add(finding(severityForPayment(nil, charge), paymentFailureSummary(nil, charge)))
@@ -68,16 +63,8 @@ func (i investigator) relatedDisputesAndRefunds(pi, charge map[string]any) {
 	if len(params) == 0 {
 		return
 	}
-	if disputes := i.listRelated("disputes", "/v1/disputes", params); disputes != nil {
-		for _, dispute := range disputes {
-			i.add(entityRecord("dispute", dispute))
-		}
-	}
-	if refunds := i.listRelated("refunds", "/v1/refunds", params); refunds != nil {
-		for _, refund := range refunds {
-			i.add(entityRecord("refund", refund))
-		}
-	}
+	i.listRelated("disputes", "/v1/disputes", params)
+	i.listRelated("refunds", "/v1/refunds", params)
 }
 
 func (i investigator) latestChargeForPaymentIntent(pi map[string]any) (map[string]any, error) {

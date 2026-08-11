@@ -3,6 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -260,5 +261,38 @@ func TestRedactKeepsV2AccountDisplayNameButMasksContact(t *testing.T) {
 	identity, _ := got["identity"].(map[string]any)
 	if identity["country"] != "us" || identity["entity_type"] != "company" {
 		t.Fatalf("identity = %#v, want country/entity_type visible", identity)
+	}
+}
+
+// TestRedactionManifestIsOrdered pins the @redacted array to path order. It was
+// built by walking a Go map, so repeated runs of the same command emitted the
+// same masked object with the manifest shuffled, and diffing two runs of one
+// command showed changes that were not there.
+func TestRedactionManifestIsOrdered(t *testing.T) {
+	person := map[string]any{
+		"object": "person", "id": "person_1",
+		"email": "a@b.c", "phone": "+44", "dob": "1990", "first_name": "A", "last_name": "B",
+	}
+	want := []string{"dob", "email", "first_name", "last_name", "phone"}
+
+	// A single run cannot tell "sorted" from "this map happened to walk in
+	// order", so assert the same order over enough runs that an accidental pass
+	// is vanishingly unlikely.
+	for range 50 {
+		redacted, ok := Redact(person, RedactionOptions{}).(map[string]any)
+		if !ok {
+			t.Fatal("redacted document is not a map")
+		}
+		notes, ok := redacted["@redacted"].([]RedactionNote)
+		if !ok {
+			t.Fatalf("@redacted missing: %#v", redacted)
+		}
+		got := make([]string, 0, len(notes))
+		for _, note := range notes {
+			got = append(got, note.Path)
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("manifest order = %v, want %v", got, want)
+		}
 	}
 }
