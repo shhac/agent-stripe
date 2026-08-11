@@ -33,7 +33,7 @@ func TestInvestigatorGetStreamsDecodedEntity(t *testing.T) {
 			APIKey:  "sk_test_123",
 			BaseURL: server.URL,
 		}),
-		evidence: newEvidenceCollector(newEvidenceStreamer("jsonl", defaultEvidenceOptions())),
+		evidence: newEvidenceCollector("jsonl", defaultEvidenceOptions()),
 	}
 
 	item, err := inv.get("/v1/payment_intents/pi_stream", nil)
@@ -62,17 +62,17 @@ func TestEvidenceCollectorDeduplicatesRecords(t *testing.T) {
 	restore := output.SetWritersForTest(&stdout, &stderr)
 	defer restore()
 
-	collector := newEvidenceCollector(newEvidenceStreamer("jsonl", defaultEvidenceOptions()))
+	collector := newEvidenceCollector("jsonl", defaultEvidenceOptions())
 	entity := entityRecord("payment_intent", map[string]any{
 		"id":     "pi_stream",
 		"object": "payment_intent",
 		"status": "succeeded",
 	})
 	finding := evidenceRecord{Type: "finding", Severity: "info", Summary: "investigation complete"}
-	records := collector.append(nil, entity, finding)
-	records = collector.appendAll(records, []evidenceRecord{entity, finding})
-	if len(records) != 2 {
-		t.Fatalf("collector records = %d, want entity plus finding", len(records))
+	collector.add(entity, finding)
+	collector.add(entity, finding)
+	if got := collector.count(); got != 2 {
+		t.Fatalf("collector records = %d, want entity plus finding", got)
 	}
 
 	lines := ndjsonLines(stdout.String())
@@ -123,10 +123,10 @@ func TestWorkflowFindingsStreamThroughCollector(t *testing.T) {
 			APIKey:  "sk_test_123",
 			BaseURL: server.URL,
 		}),
-		evidence: newEvidenceCollector(newEvidenceStreamer("jsonl", defaultEvidenceOptions())),
+		evidence: newEvidenceCollector("jsonl", defaultEvidenceOptions()),
 	}
 
-	if _, err := inv.invoicePayment("in_stream"); err != nil {
+	if err := inv.invoicePayment("in_stream"); err != nil {
 		t.Fatalf("invoicePayment() error = %v", err)
 	}
 	if !strings.Contains(stdout.String(), `"summary":"Invoice in_stream paid 4200 USD minor units with card ending 4242 through PaymentIntent pi_stream."`) {
@@ -141,8 +141,8 @@ func TestStreamingEvidenceNormalizesBeforeEmit(t *testing.T) {
 
 	opts := defaultEvidenceOptions()
 	opts.maxString = 12
-	collector := newEvidenceCollector(newEvidenceStreamer("jsonl", opts))
-	collector.append(nil, entityRecord("payment_intent", map[string]any{
+	collector := newEvidenceCollector("jsonl", opts)
+	collector.add(entityRecord("payment_intent", map[string]any{
 		"id":            "pi_stream",
 		"object":        "payment_intent",
 		"client_secret": "pi_stream_secret_leak",

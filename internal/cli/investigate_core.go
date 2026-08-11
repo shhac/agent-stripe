@@ -16,55 +16,21 @@ type investigator struct {
 	evidence *evidenceCollector
 }
 
-type investigationOutputOptions struct {
-	full         bool
-	expandFields []string
-	maxString    int
-}
-
-func runInvestigation(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(context.Context, *api.Client, *evidenceCollector) ([]evidenceRecord, error)) error {
+func runInvestigation(flags *shared.GlobalFlags, opts *evidenceOptions, fn func(context.Context, *api.Client, *evidenceCollector) error) error {
 	return shared.WithClient(flags, func(ctx context.Context, client *api.Client) error {
-		evidenceOpts := outputOpts.evidenceOptions(flags)
-		stream := newEvidenceStreamer(flags.Format, evidenceOpts)
-		collector := newEvidenceCollector(stream)
-		records, err := fn(ctx, client, collector)
-		if err != nil {
+		collector := newEvidenceCollector(flags.Format, opts.withRedaction(flags))
+		if err := fn(ctx, client, collector); err != nil {
 			return err
 		}
-		if len(collector.records) > 0 {
-			records = collector.records
-		}
-		if stream != nil {
-			return nil
-		}
-		writeEvidence(records, flags.Format, evidenceOpts)
+		collector.flush()
 		return nil
 	})
 }
 
-func runWithInvestigator(flags *shared.GlobalFlags, outputOpts *investigationOutputOptions, fn func(investigator) ([]evidenceRecord, error)) error {
-	return runInvestigation(flags, outputOpts, func(ctx context.Context, client *api.Client, evidence *evidenceCollector) ([]evidenceRecord, error) {
+func runWithInvestigator(flags *shared.GlobalFlags, opts *evidenceOptions, fn func(investigator) error) error {
+	return runInvestigation(flags, opts, func(ctx context.Context, client *api.Client, evidence *evidenceCollector) error {
 		return fn(investigator{ctx: ctx, client: client, evidence: evidence})
 	})
-}
-
-func (opts *investigationOutputOptions) evidenceOptions(flags *shared.GlobalFlags) evidenceOptions {
-	redaction := shared.RedactionOptions(flags)
-	if opts == nil {
-		evidenceOpts := defaultEvidenceOptions()
-		evidenceOpts.redaction = redaction
-		return evidenceOpts
-	}
-	evidenceOpts := evidenceOptions{
-		full:         opts.full,
-		expandFields: opts.expandFields,
-		maxString:    opts.maxString,
-		redaction:    redaction,
-	}
-	if evidenceOpts.maxString <= 0 {
-		evidenceOpts.maxString = defaultMaxString
-	}
-	return evidenceOpts
 }
 
 func (i investigator) get(path string, params url.Values) (map[string]any, error) {
@@ -102,16 +68,7 @@ func (i investigator) list(path string, params url.Values) ([]map[string]any, er
 	if err != nil {
 		return nil, err
 	}
-	items := make([]map[string]any, 0, len(list.Data))
-	for _, rawItem := range list.Data {
-		item, err := decodeObject(rawItem)
-		if err != nil {
-			return nil, err
-		}
-		i.emitEntity(item)
-		items = append(items, item)
-	}
-	return items, nil
+	return i.decodeListItems(list.Data)
 }
 
 // listV2 is list for the /v2 list envelope, which has no has_more and no
@@ -126,8 +83,12 @@ func (i investigator) listV2(path string, params url.Values) ([]map[string]any, 
 	if err != nil {
 		return nil, err
 	}
-	items := make([]map[string]any, 0, len(list.Data))
-	for _, rawItem := range list.Data {
+	return i.decodeListItems(list.Data)
+}
+
+func (i investigator) decodeListItems(data []json.RawMessage) ([]map[string]any, error) {
+	items := make([]map[string]any, 0, len(data))
+	for _, rawItem := range data {
 		item, err := decodeObject(rawItem)
 		if err != nil {
 			return nil, err
@@ -142,28 +103,28 @@ func (i investigator) emitEntity(item map[string]any) {
 	if !isStripeEntity(item) {
 		return
 	}
-	i.emitEvidence(entityRecord(mapString(item, "object"), item))
+	i.add(entityRecord(mapString(item, "object"), item))
 }
 
-func (i investigator) appendEvidence(records []evidenceRecord, newRecords ...evidenceRecord) []evidenceRecord {
-	if i.evidence == nil {
-		return append(records, newRecords...)
-	}
-	return i.evidence.append(records, newRecords...)
+// add records evidence. There is one accumulator — the collector — so a
+// workflow adds records where it finds them rather than threading a slice
+// through its call graph.
+func (i investigator) add(records ...evidenceRecord) {
+	i.evidence.add(records...)
 }
 
-func (i investigator) appendEvidenceAll(records []evidenceRecord, newRecords []evidenceRecord) []evidenceRecord {
-	if i.evidence == nil {
-		return append(records, newRecords...)
-	}
-	return i.evidence.appendAll(records, newRecords)
+func (i investigator) addList(object string, items []map[string]any) {
+	i.evidence.addList(object, items)
 }
 
-func (i investigator) emitEvidence(record evidenceRecord) {
-	if i.evidence == nil {
-		return
-	}
-	i.evidence.emit(record)
+// count reports how many records this investigation has produced so far, so a
+// step can ask whether it found anything by comparing counts around itself.
+func (i investigator) count() int {
+	return i.evidence.count()
+}
+
+func (i investigator) since(mark int) []evidenceRecord {
+	return i.evidence.since(mark)
 }
 
 func decodeObject(raw json.RawMessage) (map[string]any, error) {

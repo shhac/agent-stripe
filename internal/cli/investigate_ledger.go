@@ -9,22 +9,22 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateLedger(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateLedger(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ledger <charge-id|payment-intent-id|refund-id|transfer-id|payout-id|balance-transaction-id|application-fee-id>",
 		Short: "Gather balance transactions and related money-movement objects",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.ledger(args[0])
 			})
 		},
 	}
 }
 
-func (i investigator) ledger(id string) ([]evidenceRecord, error) {
+func (i investigator) ledger(id string) error {
 	if err := validateAllowedStripeID(id, "charge", "payment_intent", "refund", "transfer", "payout", "balance_transaction", "application_fee"); err != nil {
-		return nil, err
+		return err
 	}
 	switch {
 	case strings.HasPrefix(id, "pi_"):
@@ -42,81 +42,85 @@ func (i investigator) ledger(id string) ([]evidenceRecord, error) {
 	default:
 		txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		return i.appendEvidence(nil, entityRecord("balance_transaction", txn), ledgerFinding("balance_transaction", txn)), nil
+		i.add(entityRecord("balance_transaction", txn), ledgerFinding("balance_transaction", txn))
+		return nil
 	}
 }
 
-func (i investigator) ledgerFromPaymentIntent(id string) ([]evidenceRecord, error) {
+func (i investigator) ledgerFromPaymentIntent(id string) error {
 	pi, err := i.get("/v1/payment_intents/"+url.PathEscape(id), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records := i.appendEvidence(nil, entityRecord("payment_intent", pi))
+	i.add(entityRecord("payment_intent", pi))
 	if charge, err := i.latestChargeForPaymentIntent(pi); err == nil && charge != nil {
-		records = i.appendEvidenceAll(records, i.ledgerFromCharge(charge))
+		i.ledgerFromCharge(charge)
 	}
-	return i.appendEvidence(records, ledgerFinding("payment_intent", pi)), nil
+	i.add(ledgerFinding("payment_intent", pi))
+	return nil
 }
 
-func (i investigator) ledgerFromChargeID(id string) ([]evidenceRecord, error) {
+func (i investigator) ledgerFromChargeID(id string) error {
 	charge, err := i.get("/v1/charges/"+url.PathEscape(id), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return i.ledgerFromCharge(charge), nil
+	i.ledgerFromCharge(charge)
+	return nil
 }
 
-func (i investigator) ledgerFromCharge(charge map[string]any) []evidenceRecord {
-	records := i.appendEvidence(nil, entityRecord("charge", charge))
+func (i investigator) ledgerFromCharge(charge map[string]any) {
+	i.add(entityRecord("charge", charge))
 	if txnID := idFromValue(charge["balance_transaction"]); txnID != "" {
 		if txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(txnID), url.Values{}); err == nil {
-			records = i.appendEvidence(records, entityRecord("balance_transaction", txn))
+			i.add(entityRecord("balance_transaction", txn))
 		}
 	}
 	if fees, err := i.list("/v1/application_fees", url.Values{"charge": []string{mapString(charge, "id")}, "limit": []string{"10"}}); err == nil {
-		records = i.appendListRecords(records, "application_fee", fees)
+		i.addList("application_fee", fees)
 	}
 	if refunds, err := i.list("/v1/refunds", url.Values{"charge": []string{mapString(charge, "id")}, "limit": []string{"10"}}); err == nil {
 		for _, refund := range refunds {
-			records = i.appendEvidenceAll(records, i.ledgerFromRefund(refund))
+			i.ledgerFromRefund(refund)
 		}
 	}
-	return i.appendEvidence(records, ledgerFinding("charge", charge))
+	i.add(ledgerFinding("charge", charge))
 }
 
-func (i investigator) ledgerFromRefundID(id string) ([]evidenceRecord, error) {
+func (i investigator) ledgerFromRefundID(id string) error {
 	refund, err := i.get("/v1/refunds/"+url.PathEscape(id), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return i.ledgerFromRefund(refund), nil
+	i.ledgerFromRefund(refund)
+	return nil
 }
 
-func (i investigator) ledgerFromRefund(refund map[string]any) []evidenceRecord {
-	records := i.appendEvidence(nil, entityRecord("refund", refund))
+func (i investigator) ledgerFromRefund(refund map[string]any) {
+	i.add(entityRecord("refund", refund))
 	if txnID := idFromValue(refund["balance_transaction"]); txnID != "" {
 		if txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(txnID), url.Values{}); err == nil {
-			records = i.appendEvidence(records, entityRecord("balance_transaction", txn))
+			i.add(entityRecord("balance_transaction", txn))
 		}
 	}
-	return i.appendEvidence(records, ledgerFinding("refund", refund))
+	i.add(ledgerFinding("refund", refund))
 }
 
-func (i investigator) ledgerFromSimpleObject(object, path string) ([]evidenceRecord, error) {
+func (i investigator) ledgerFromSimpleObject(object, path string) error {
 	item, err := i.get(path, url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records := i.appendEvidence(nil, entityRecord(object, item))
+	i.add(entityRecord(object, item))
 	if txnID := idFromValue(item["balance_transaction"]); txnID != "" {
 		if txn, err := i.get("/v1/balance_transactions/"+url.PathEscape(txnID), url.Values{}); err == nil {
-			records = i.appendEvidence(records, entityRecord("balance_transaction", txn))
+			i.add(entityRecord("balance_transaction", txn))
 		}
 	}
-	records = i.appendEvidence(records, ledgerFinding(object, item))
-	return records, nil
+	i.add(ledgerFinding(object, item))
+	return nil
 }
 
 func ledgerFinding(object string, item map[string]any) evidenceRecord {

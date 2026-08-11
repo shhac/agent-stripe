@@ -10,14 +10,14 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateWebhookDelivery(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateWebhookDelivery(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var endpoint string
 	cmd := &cobra.Command{
 		Use:   "webhook-delivery <event-id|webhook-endpoint-id>",
 		Short: "Explain webhook delivery health from event pending_webhooks and endpoint config",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.webhookDelivery(args[0], endpoint)
 			})
 		},
@@ -26,38 +26,37 @@ func newInvestigateWebhookDelivery(globals shared.GlobalsFunc, outputOpts *inves
 	return cmd
 }
 
-func (i investigator) webhookDelivery(id, endpointID string) ([]evidenceRecord, error) {
+func (i investigator) webhookDelivery(id, endpointID string) error {
 	if err := validateAllowedStripeID(id, "event", "webhook_endpoint"); err != nil {
-		return nil, err
+		return err
 	}
-	records := []evidenceRecord{}
 	if strings.HasPrefix(id, "evt_") {
 		event, err := i.get("/v1/events/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		records = i.appendEvidence(records, entityRecord("event", event), webhookEventDeliveryFinding(event))
+		i.add(entityRecord("event", event), webhookEventDeliveryFinding(event))
 		if endpointID != "" {
 			endpoint, err := i.get("/v1/webhook_endpoints/"+url.PathEscape(endpointID), url.Values{})
 			if err != nil {
-				return nil, err
+				return err
 			}
-			records = i.appendEvidence(records, entityRecord("webhook_endpoint", endpoint), webhookEndpointFinding(endpoint, mapString(event, "type")))
+			i.add(entityRecord("webhook_endpoint", endpoint), webhookEndpointFinding(endpoint, mapString(event, "type")))
 		} else if endpoints, err := i.list("/v1/webhook_endpoints", url.Values{"limit": []string{"100"}}); err == nil {
 			for _, endpoint := range endpoints {
 				if endpointHandlesEvent(endpoint, mapString(event, "type")) {
-					records = i.appendEvidence(records, entityRecord("webhook_endpoint", endpoint))
+					i.add(entityRecord("webhook_endpoint", endpoint))
 				}
 			}
 		}
-		return records, nil
+		return nil
 	}
 	endpoint, err := i.get("/v1/webhook_endpoints/"+url.PathEscape(id), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records = i.appendEvidence(records, entityRecord("webhook_endpoint", endpoint), webhookEndpointFinding(endpoint, ""))
-	return records, nil
+	i.add(entityRecord("webhook_endpoint", endpoint), webhookEndpointFinding(endpoint, ""))
+	return nil
 }
 
 func webhookEventDeliveryFinding(event map[string]any) evidenceRecord {

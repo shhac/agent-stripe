@@ -8,7 +8,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateCustomerContext(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateCustomerContext(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var customer string
 	var limit int
 	cmd := &cobra.Command{
@@ -18,7 +18,7 @@ func newInvestigateCustomerContext(globals shared.GlobalsFunc, outputOpts *inves
 			if err := shared.RequireFlag("customer", customer, "Provide a Customer ID such as cus_..."); err != nil {
 				return err
 			}
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.customerContext(customer, limit)
 			})
 		},
@@ -28,27 +28,25 @@ func newInvestigateCustomerContext(globals shared.GlobalsFunc, outputOpts *inves
 	return cmd
 }
 
-func (i investigator) customerContext(customer string, limit int) ([]evidenceRecord, error) {
+func (i investigator) customerContext(customer string, limit int) error {
 	if err := validateExpectedStripeID(customer, "customer"); err != nil {
-		return nil, err
+		return err
 	}
-	records := []evidenceRecord{}
 	customerObj, err := i.get("/v1/customers/"+url.PathEscape(customer), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records = i.appendEvidence(records, entityRecord("customer", customerObj))
+	i.add(entityRecord("customer", customerObj))
 
-	records, _ = i.appendRelatedList(records, "payment_method", "/v1/payment_methods", valuesWithLimit(limit, "customer", customer, "type", "card"))
-	records, _ = i.appendRelatedList(records, "subscription", "/v1/subscriptions", valuesWithLimit(limit, "customer", customer, "status", "all"))
-	records, _ = i.appendRelatedList(records, "invoice", "/v1/invoices", valuesWithLimit(limit, "customer", customer))
-	records, _ = i.appendRelatedList(records, "payment_intent", "/v1/payment_intents", valuesWithLimit(limit, "customer", customer))
-	records, charges := i.appendRelatedList(records, "charge", "/v1/charges", valuesWithLimit(limit, "customer", customer))
-	for _, charge := range charges {
-		records, _ = i.appendRelatedList(records, "dispute", "/v1/disputes", valuesWithLimit(limit, "charge", mapString(charge, "id")))
-		records, _ = i.appendRelatedList(records, "refund", "/v1/refunds", valuesWithLimit(limit, "charge", mapString(charge, "id")))
+	i.addRelatedList("payment_method", "/v1/payment_methods", valuesWithLimit(limit, "customer", customer, "type", "card"))
+	i.addRelatedList("subscription", "/v1/subscriptions", valuesWithLimit(limit, "customer", customer, "status", "all"))
+	i.addRelatedList("invoice", "/v1/invoices", valuesWithLimit(limit, "customer", customer))
+	i.addRelatedList("payment_intent", "/v1/payment_intents", valuesWithLimit(limit, "customer", customer))
+	for _, charge := range i.addRelatedList("charge", "/v1/charges", valuesWithLimit(limit, "customer", customer)) {
+		i.addRelatedList("dispute", "/v1/disputes", valuesWithLimit(limit, "charge", mapString(charge, "id")))
+		i.addRelatedList("refund", "/v1/refunds", valuesWithLimit(limit, "charge", mapString(charge, "id")))
 	}
-	records = i.appendEvidence(records, evidenceRecord{
+	i.add(evidenceRecord{
 		Type:     "finding",
 		Severity: "info",
 		Summary:  "Customer context gathered. Use entity records for recent payment methods, subscriptions, invoices, payment intents, charges, disputes, and refunds.",
@@ -56,13 +54,15 @@ func (i investigator) customerContext(customer string, limit int) ([]evidenceRec
 			"customer": customer,
 		},
 	})
-	return records, nil
+	return nil
 }
 
-func (i investigator) appendRelatedList(records []evidenceRecord, object, path string, params url.Values) ([]evidenceRecord, []map[string]any) {
+// addRelatedList fetches a related collection and records it, reporting a
+// fetch failure as a warning instead of silently returning partial evidence.
+func (i investigator) addRelatedList(object, path string, params url.Values) []map[string]any {
 	items, err := i.list(path, params)
 	if err != nil {
-		return i.appendEvidence(records, evidenceRecord{
+		i.add(evidenceRecord{
 			Type:     "finding",
 			Severity: "warning",
 			Summary:  "Could not gather " + object + " context from " + path + "; continuing with available evidence.",
@@ -71,16 +71,11 @@ func (i investigator) appendRelatedList(records []evidenceRecord, object, path s
 				"path":   path,
 				"error":  err.Error(),
 			},
-		}), nil
+		})
+		return nil
 	}
-	return i.appendListRecords(records, object, items), items
-}
-
-func (i investigator) appendListRecords(records []evidenceRecord, object string, items []map[string]any) []evidenceRecord {
-	for _, item := range items {
-		records = i.appendEvidence(records, entityRecord(object, item))
-	}
-	return records
+	i.addList(object, items)
+	return items
 }
 
 func relatedWarning(name string, err error) evidenceRecord {

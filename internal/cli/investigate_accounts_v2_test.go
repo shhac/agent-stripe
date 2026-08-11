@@ -46,10 +46,12 @@ func TestAccountHealthReadsV2AccountWhenAvailable(t *testing.T) {
 	server := v2AccountServer(t)
 	defer server.Close()
 
-	records, err := testInvestigator(server).accountHealth("acct_v2", namespaceAuto)
+	inv := testInvestigator(server)
+	err := inv.accountHealth("acct_v2", namespaceAuto)
 	if err != nil {
 		t.Fatalf("accountHealth() error = %v", err)
 	}
+	records := inv.records()
 	assertRecordObject(t, records, objectV2Account, "acct_v2")
 	assertRecordObject(t, records, objectV2Person, "person_1")
 	finding := findFinding(records, "Accounts v2 account acct_v2")
@@ -75,7 +77,7 @@ func TestAccountHealthNamespaceV2DoesNotFallBack(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := testInvestigator(server).accountHealth("acct_v1_only", namespaceV2); err == nil {
+	if err := testInvestigator(server).accountHealth("acct_v1_only", namespaceV2); err == nil {
 		t.Fatalf("accountHealth(--namespace v2) error = nil, want the v2 error surfaced")
 	}
 	if v1Reads != 0 {
@@ -98,10 +100,12 @@ func TestAccountHealthNamespaceV1SkipsTheV2Probe(t *testing.T) {
 	}))
 	defer server.Close()
 
-	records, err := testInvestigator(server).accountHealth("acct_v1", namespaceV1)
+	inv := testInvestigator(server)
+	err := inv.accountHealth("acct_v1", namespaceV1)
 	if err != nil {
 		t.Fatalf("accountHealth() error = %v", err)
 	}
+	records := inv.records()
 	if v2Reads != 0 {
 		t.Fatalf("v2 reads = %d, want 0 when the namespace is pinned to v1", v2Reads)
 	}
@@ -119,7 +123,7 @@ func TestAccountHealthSurfacesNonNamespaceErrors(t *testing.T) {
 
 	// A 401 is not "this is a v1 account": retrying against v1 would hide a
 	// credential problem behind a second identical failure.
-	_, err := testInvestigator(server).accountHealth("acct_any", namespaceAuto)
+	err := testInvestigator(server).accountHealth("acct_any", namespaceAuto)
 	if err == nil || !strings.Contains(err.Error(), "Authentication failed") {
 		t.Fatalf("accountHealth() error = %v, want the auth error surfaced", err)
 	}
@@ -129,10 +133,12 @@ func TestAccountEventsSummarizesV2ThinEvents(t *testing.T) {
 	server := v2AccountServer(t)
 	defer server.Close()
 
-	records, err := testInvestigator(server).accountEvents("acct_v2", 20, nil)
+	inv := testInvestigator(server)
+	err := inv.accountEvents("acct_v2", 20, nil)
 	if err != nil {
 		t.Fatalf("accountEvents() error = %v", err)
 	}
+	records := inv.records()
 	assertRecordObject(t, records, objectV2Event, "evt_test_1")
 	finding := findFinding(records, "Account acct_v2 has 2 v2 event(s)")
 	if finding == nil {
@@ -160,10 +166,12 @@ func TestAccountEventsExplainsEmptyResultForV1Accounts(t *testing.T) {
 	}))
 	defer server.Close()
 
-	records, err := testInvestigator(server).accountEvents("acct_v1_only", 20, nil)
+	inv := testInvestigator(server)
+	err := inv.accountEvents("acct_v1_only", 20, nil)
 	if err != nil {
 		t.Fatalf("accountEvents() error = %v", err)
 	}
+	records := inv.records()
 	if findFinding(records, "Account acct_v1_only is not an Accounts v2 account") == nil {
 		t.Fatalf("records = %#v, want the namespace note", records)
 	}
@@ -176,10 +184,12 @@ func TestResolveNamesTheAccountNamespace(t *testing.T) {
 	server := v2AccountServer(t)
 	defer server.Close()
 
-	records, err := testInvestigator(server).resolve("acct_v2")
+	inv := testInvestigator(server)
+	err := inv.resolve("acct_v2")
 	if err != nil {
 		t.Fatalf("resolve() error = %v", err)
 	}
+	records := inv.records()
 	finding := findFinding(records, "Resolved acct_v2 as an Accounts v2 account")
 	if finding == nil {
 		t.Fatalf("records = %#v, want a namespace-aware resolution", records)
@@ -205,10 +215,12 @@ func TestWebhookEventFollowsV2ThinEventRelatedObject(t *testing.T) {
 	}))
 	defer server.Close()
 
-	records, err := testInvestigator(server).webhookEvent("evt_test_1")
+	inv := testInvestigator(server)
+	err := inv.webhookEvent("evt_test_1")
 	if err != nil {
 		t.Fatalf("webhookEvent() error = %v", err)
 	}
+	records := inv.records()
 	assertRecordObject(t, records, objectV2Event, "evt_test_1")
 	assertRecordObject(t, records, objectV2Account, "acct_v2_restricted")
 	if findFinding(records, "Event evt_test_1 is v2.core.account[requirements].updated") == nil {

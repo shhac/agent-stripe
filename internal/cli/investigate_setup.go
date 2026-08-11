@@ -10,14 +10,14 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateSetup(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateSetup(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "setup <setup-intent-id|payment-method-id|customer-id>",
 		Short: "Explain saved-payment setup status and reusable payment method readiness",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.setup(args[0], limit)
 			})
 		},
@@ -26,55 +26,54 @@ func newInvestigateSetup(globals shared.GlobalsFunc, outputOpts *investigationOu
 	return cmd
 }
 
-func (i investigator) setup(id string, limit int) ([]evidenceRecord, error) {
+func (i investigator) setup(id string, limit int) error {
 	if err := validateAllowedStripeID(id, "setup_intent", "payment_method", "customer"); err != nil {
-		return nil, err
+		return err
 	}
-	records := []evidenceRecord{}
 	setupIntents := []map[string]any{}
 	switch {
 	case strings.HasPrefix(id, "seti_"):
 		seti, err := i.get("/v1/setup_intents/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
 		setupIntents = append(setupIntents, seti)
 	case strings.HasPrefix(id, "pm_"):
 		pm, err := i.get("/v1/payment_methods/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		records = i.appendEvidence(records, entityRecord("payment_method", pm))
+		i.add(entityRecord("payment_method", pm))
 		found, err := i.list("/v1/setup_intents", valuesWithLimit(limit, "payment_method", id))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		setupIntents = found
 	default:
 		customer, err := i.get("/v1/customers/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		records = i.appendEvidence(records, entityRecord("customer", customer))
+		i.add(entityRecord("customer", customer))
 		found, err := i.list("/v1/setup_intents", valuesWithLimit(limit, "customer", id))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		setupIntents = found
 	}
 	for _, seti := range setupIntents {
-		records = i.appendEvidence(records, entityRecord("setup_intent", seti))
+		i.add(entityRecord("setup_intent", seti))
 		if pmID := idFromValue(seti["payment_method"]); pmID != "" {
 			if pm, err := i.get("/v1/payment_methods/"+url.PathEscape(pmID), url.Values{}); err == nil {
-				records = i.appendEvidence(records, entityRecord("payment_method", pm))
+				i.add(entityRecord("payment_method", pm))
 			}
 		}
-		records = i.appendEvidence(records, setupFinding(seti))
+		i.add(setupFinding(seti))
 	}
 	if len(setupIntents) == 0 {
-		records = i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "No SetupIntents found for " + id + "."})
+		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No SetupIntents found for " + id + "."})
 	}
-	return records, nil
+	return nil
 }
 
 func setupFinding(seti map[string]any) evidenceRecord {

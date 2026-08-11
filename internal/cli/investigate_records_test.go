@@ -1,6 +1,22 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/shhac/agent-stripe/internal/output"
+)
+
+// collectNormalized runs records through the collector, which is now the only
+// normalization path, and returns what it kept.
+func collectNormalized(records ...evidenceRecord) []evidenceRecord {
+	return collectNormalizedWith(defaultEvidenceOptions(), records...)
+}
+
+func collectNormalizedWith(opts evidenceOptions, records ...evidenceRecord) []evidenceRecord {
+	collector := newEvidenceCollector(string(output.FormatJSON), opts)
+	collector.add(records...)
+	return collector.records
+}
 
 func TestNormalizeEvidenceExtractsNestedStripeEntities(t *testing.T) {
 	charge := map[string]any{
@@ -18,7 +34,7 @@ func TestNormalizeEvidenceExtractsNestedStripeEntities(t *testing.T) {
 		},
 	}
 
-	records := normalizeEvidence([]evidenceRecord{entityRecord("charge", charge)}, defaultEvidenceOptions())
+	records := collectNormalized(entityRecord("charge", charge))
 
 	if len(records) != 3 {
 		t.Fatalf("expected parent plus two extracted records, got %d: %#v", len(records), records)
@@ -55,7 +71,7 @@ func TestNormalizeEvidenceDeduplicatesExtractedEntities(t *testing.T) {
 		},
 	}
 
-	records := normalizeEvidence([]evidenceRecord{entityRecord("charge", charge)}, defaultEvidenceOptions())
+	records := collectNormalized(entityRecord("charge", charge))
 
 	if len(records) != 2 {
 		t.Fatalf("expected parent plus one extracted customer, got %d: %#v", len(records), records)
@@ -73,14 +89,16 @@ func TestNormalizeEvidenceDeduplicatesExtractedEntities(t *testing.T) {
 }
 
 func TestNormalizeEvidenceTruncatesExpandableFieldsButKeepsIDs(t *testing.T) {
-	records := normalizeEvidence([]evidenceRecord{entityRecord("payment_intent", map[string]any{
-		"id":          "pi_1234567890",
-		"object":      "payment_intent",
-		"description": "abcdefghijklmnopqrstuvwxyz",
-		"metadata": map[string]any{
-			"notes": "abcdefghijklmnopqrstuvwxyz",
-		},
-	})}, evidenceOptions{maxString: 10, expandFields: []string{"metadata"}})
+	records := collectNormalizedWith(
+		evidenceOptions{maxString: 10, expandFields: []string{"metadata"}},
+		entityRecord("payment_intent", map[string]any{
+			"id":          "pi_1234567890",
+			"object":      "payment_intent",
+			"description": "abcdefghijklmnopqrstuvwxyz",
+			"metadata": map[string]any{
+				"notes": "abcdefghijklmnopqrstuvwxyz",
+			},
+		}))
 
 	data := records[0].Data
 	if got := data["id"]; got != "pi_1234567890" {
@@ -102,11 +120,13 @@ func TestNormalizeEvidenceTruncatesExpandableFieldsButKeepsIDs(t *testing.T) {
 }
 
 func TestNormalizeEvidenceFullSkipsTruncation(t *testing.T) {
-	records := normalizeEvidence([]evidenceRecord{entityRecord("payment_intent", map[string]any{
-		"id":          "pi_123",
-		"object":      "payment_intent",
-		"description": "abcdefghijklmnopqrstuvwxyz",
-	})}, evidenceOptions{full: true, maxString: 10})
+	records := collectNormalizedWith(
+		evidenceOptions{full: true, maxString: 10},
+		entityRecord("payment_intent", map[string]any{
+			"id":          "pi_123",
+			"object":      "payment_intent",
+			"description": "abcdefghijklmnopqrstuvwxyz",
+		}))
 
 	if got := records[0].Data["description"]; got != "abcdefghijklmnopqrstuvwxyz" {
 		t.Fatalf("description = %#v, want full string", got)

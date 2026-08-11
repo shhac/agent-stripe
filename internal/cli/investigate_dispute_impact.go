@@ -10,14 +10,14 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateDisputeImpact(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateDisputeImpact(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "dispute-impact <dispute-id|charge-id|customer-id>",
 		Short: "Summarize dispute exposure and related payment/refund evidence",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.disputeImpact(args[0], limit)
 			})
 		},
@@ -26,60 +26,58 @@ func newInvestigateDisputeImpact(globals shared.GlobalsFunc, outputOpts *investi
 	return cmd
 }
 
-func (i investigator) disputeImpact(id string, limit int) ([]evidenceRecord, error) {
+func (i investigator) disputeImpact(id string, limit int) error {
 	if err := validateAllowedStripeID(id, "dispute", "charge", "customer"); err != nil {
-		return nil, err
+		return err
 	}
 	disputes := []map[string]any{}
 	switch {
 	case strings.HasPrefix(id, "dp_"):
 		dispute, err := i.get("/v1/disputes/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
 		disputes = append(disputes, dispute)
 	case strings.HasPrefix(id, "ch_"):
 		found, err := i.list("/v1/disputes", valuesWithLimit(10, "charge", id))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		disputes = found
 	default:
 		charges, err := i.list("/v1/charges", valuesWithLimit(limit, "customer", id))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, charge := range charges {
 			found, _ := i.list("/v1/disputes", valuesWithLimit(10, "charge", mapString(charge, "id")))
 			disputes = append(disputes, found...)
 		}
 	}
-	records := []evidenceRecord{}
 	for _, dispute := range disputes {
-		records = i.appendEvidenceAll(records, i.disputeImpactRecords(dispute))
+		i.disputeImpactRecords(dispute)
 	}
-	if len(records) == 0 {
-		records = i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "info", Summary: "No dispute exposure found for " + id + "."})
+	if len(disputes) == 0 {
+		i.add(evidenceRecord{Type: "finding", Severity: "info", Summary: "No dispute exposure found for " + id + "."})
 	}
-	return records, nil
+	return nil
 }
 
-func (i investigator) disputeImpactRecords(dispute map[string]any) []evidenceRecord {
-	records := i.appendEvidence(nil, entityRecord("dispute", dispute), disputeImpactFinding(dispute))
+func (i investigator) disputeImpactRecords(dispute map[string]any) {
+	i.add(entityRecord("dispute", dispute), disputeImpactFinding(dispute))
 	if chargeID := idFromValue(dispute["charge"]); chargeID != "" {
 		if charge, err := i.get("/v1/charges/"+url.PathEscape(chargeID), url.Values{}); err == nil {
-			records = i.appendEvidence(records, entityRecord("charge", charge))
+			i.add(entityRecord("charge", charge))
 			if refunds, err := i.list("/v1/refunds", valuesWithLimit(5, "charge", chargeID)); err == nil {
-				records = i.appendListRecords(records, "refund", refunds)
+				i.addList("refund", refunds)
 			}
 		}
 	}
 	if piID := idFromValue(dispute["payment_intent"]); piID != "" {
 		if pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{}); err == nil {
-			records = i.appendEvidence(records, entityRecord("payment_intent", pi))
+			i.add(entityRecord("payment_intent", pi))
 		}
 	}
-	return records
 }
 
 func disputeImpactFinding(dispute map[string]any) evidenceRecord {

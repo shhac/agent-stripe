@@ -9,7 +9,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateSubscriptionItems(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateSubscriptionItems(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var subscription string
 	cmd := &cobra.Command{
 		Use:   "subscription-items",
@@ -18,7 +18,7 @@ func newInvestigateSubscriptionItems(globals shared.GlobalsFunc, outputOpts *inv
 			if err := shared.RequireFlag("subscription", subscription, "Provide a Subscription ID such as sub_..."); err != nil {
 				return err
 			}
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.subscriptionItemsEvidence(subscription)
 			})
 		},
@@ -27,14 +27,14 @@ func newInvestigateSubscriptionItems(globals shared.GlobalsFunc, outputOpts *inv
 	return cmd
 }
 
-func (i investigator) subscriptionItemsEvidence(subscriptionID string) ([]evidenceRecord, error) {
+func (i investigator) subscriptionItemsEvidence(subscriptionID string) error {
 	bundle, err := i.subscriptionItemsBundle(subscriptionID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records := i.appendEvidenceAll(nil, bundle.records)
-	records = i.appendEvidence(records, subscriptionItemsFinding(subscriptionID, len(bundle.items)))
-	return records, nil
+	i.add(bundle.records...)
+	i.add(subscriptionItemsFinding(subscriptionID, len(bundle.items)))
+	return nil
 }
 
 type subscriptionItemsBundle struct {
@@ -52,18 +52,18 @@ func (i investigator) subscriptionItemsBundle(subscriptionID string) (*subscript
 	if err != nil {
 		return nil, err
 	}
-	records = i.appendEvidence(records, entityRecord("subscription", sub))
+	i.add(entityRecord("subscription", sub))
 
 	items, err := i.list("/v1/subscription_items", url.Values{"subscription": []string{subscriptionID}, "limit": []string{"100"}})
 	if err != nil {
 		return nil, err
 	}
 	for _, item := range items {
-		records = i.appendEvidence(records, entityRecord("subscription_item", item))
+		i.add(entityRecord("subscription_item", item))
 		price := mapAnyMap(item, "price")
 		if productID := idFromValue(price["product"]); productID != "" {
 			if product, productErr := i.get("/v1/products/"+url.PathEscape(productID), url.Values{}); productErr == nil {
-				records = i.appendEvidence(records, entityRecord("product", product))
+				i.add(entityRecord("product", product))
 			}
 		}
 	}

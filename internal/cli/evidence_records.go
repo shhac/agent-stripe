@@ -36,115 +36,98 @@ type truncatedNote struct {
 
 const defaultMaxString = 800
 
-func writeEvidence(records []evidenceRecord, format string, opts evidenceOptions) {
-	records = normalizeEvidence(records, opts)
-	f := output.ResolveFormat(format, output.FormatNDJSON)
-	if f == output.FormatNDJSON {
-		w := output.NewNDJSONWriter(output.Stdout())
-		for _, record := range records {
-			_ = w.WriteItem(record)
-		}
-		return
-	}
-	items := make([]any, len(records))
-	for idx, record := range records {
-		items[idx] = record
-	}
-	shared.WritePaginatedList(items, nil, format)
-}
-
-type evidenceStreamer struct {
-	writer  *output.NDJSONWriter
-	opts    evidenceOptions
-	seen    map[string]bool
-	emitted map[string]bool
-}
-
+// evidenceCollector is the single accumulator for an investigation. Every
+// record enters through add, is normalized and deduped exactly once, and is
+// then either streamed immediately (NDJSON) or buffered for one envelope at the
+// end. Investigations used to also thread a []evidenceRecord slice through
+// their call graph, but that slice was the collector's own list handed back to
+// them, so the two mechanisms could — and did — disagree: the buffered path
+// emitted a duplicate entity and dropped an auto-emitted one that the streaming
+// path showed.
 type evidenceCollector struct {
-	stream  *evidenceStreamer
-	seen    map[string]bool
-	records []evidenceRecord
+	writer    *output.NDJSONWriter
+	format    string
+	opts      evidenceOptions
+	extracted map[string]bool
+	emitted   map[string]bool
+	records   []evidenceRecord
 }
 
-func newEvidenceCollector(stream *evidenceStreamer) *evidenceCollector {
-	return &evidenceCollector{
-		stream: stream,
-		seen:   map[string]bool{},
-	}
-}
-
-func (c *evidenceCollector) append(records []evidenceRecord, newRecords ...evidenceRecord) []evidenceRecord {
-	if c == nil {
-		return append(records, newRecords...)
-	}
-	for _, record := range newRecords {
-		c.add(record)
-	}
-	return c.records
-}
-
-func (c *evidenceCollector) appendAll(records []evidenceRecord, newRecords []evidenceRecord) []evidenceRecord {
-	if c == nil {
-		return append(records, newRecords...)
-	}
-	for _, record := range newRecords {
-		c.add(record)
-	}
-	return c.records
-}
-
-func (c *evidenceCollector) add(record evidenceRecord) {
-	if key := evidenceRecordKey(record); key != "" {
-		if c.seen[key] {
-			return
-		}
-		c.seen[key] = true
-	}
-	c.records = append(c.records, record)
-	c.emit(record)
-}
-
-func (c *evidenceCollector) emit(record evidenceRecord) {
-	if c == nil || c.stream == nil {
-		return
-	}
-	c.stream.emit(record)
-}
-
-func newEvidenceStreamer(format string, opts evidenceOptions) *evidenceStreamer {
-	if output.ResolveFormat(format, output.FormatNDJSON) != output.FormatNDJSON {
-		return nil
-	}
+func newEvidenceCollector(format string, opts evidenceOptions) *evidenceCollector {
 	if opts.maxString <= 0 {
 		opts.maxString = defaultMaxString
 	}
-	return &evidenceStreamer{
-		writer:  output.NewNDJSONWriter(output.Stdout()),
-		opts:    opts,
-		seen:    map[string]bool{},
-		emitted: map[string]bool{},
+	collector := &evidenceCollector{
+		format:    format,
+		opts:      opts,
+		extracted: map[string]bool{},
+		emitted:   map[string]bool{},
+	}
+	if output.ResolveFormat(format, output.FormatNDJSON) == output.FormatNDJSON {
+		collector.writer = output.NewNDJSONWriter(output.Stdout())
+	}
+	return collector
+}
+
+// add normalizes each record and keeps it unless an identical one was already
+// kept. Normalization lifts nested Stripe objects into their own records; those
+// go through the same dedup as their parent.
+func (c *evidenceCollector) add(records ...evidenceRecord) {
+	for _, record := range records {
+		normalized, extracted := normalizeRecord(record, c.opts, c.extracted)
+		c.keep(normalized)
+		for _, child := range extracted {
+			c.keep(child)
+		}
 	}
 }
 
-func (s *evidenceStreamer) emit(record evidenceRecord) {
-	if s == nil {
-		return
-	}
-	normalized, extracted := normalizeRecord(record, s.opts, s.seen)
-	s.write(normalized)
-	for _, child := range extracted {
-		s.write(child)
+// addList adds one entity record per item of a Stripe list response.
+func (c *evidenceCollector) addList(object string, items []map[string]any) {
+	for _, item := range items {
+		c.add(entityRecord(object, item))
 	}
 }
 
-func (s *evidenceStreamer) write(record evidenceRecord) {
+// count reports how many records have been kept, so a workflow can ask "did the
+// step I just ran produce anything" by comparing counts around it.
+func (c *evidenceCollector) count() int {
+	return len(c.records)
+}
+
+// since returns the records kept after mark, so a step can post-process just
+// the evidence it produced (the timeline sorts its own slice of it).
+func (c *evidenceCollector) since(mark int) []evidenceRecord {
+	if mark < 0 || mark > len(c.records) {
+		return nil
+	}
+	return c.records[mark:]
+}
+
+func (c *evidenceCollector) keep(record evidenceRecord) {
 	if key := evidenceRecordKey(record); key != "" {
-		if s.emitted[key] {
+		if c.emitted[key] {
 			return
 		}
-		s.emitted[key] = true
+		c.emitted[key] = true
 	}
-	_ = s.writer.WriteItem(record)
+	c.records = append(c.records, record)
+	if c.writer != nil {
+		_ = c.writer.WriteItem(record)
+	}
+}
+
+// flush writes the buffered records for the non-streaming formats. NDJSON has
+// already been written record by record, so it is a no-op there.
+func (c *evidenceCollector) flush() {
+	if c.writer != nil {
+		return
+	}
+	items := make([]any, len(c.records))
+	for idx, record := range c.records {
+		items[idx] = record
+	}
+	shared.WritePaginatedList(items, nil, c.format)
 }
 
 func evidenceRecordKey(record evidenceRecord) string {

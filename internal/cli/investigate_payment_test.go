@@ -8,11 +8,15 @@ import (
 	"testing"
 
 	"github.com/shhac/agent-stripe/internal/api"
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 func TestLatestChargeForPaymentIntentUsesExpandedCharge(t *testing.T) {
 	expanded := map[string]any{"id": "ch_expanded", "object": "charge"}
-	got, err := (investigator{}).latestChargeForPaymentIntent(map[string]any{
+	// An already-expanded charge needs no fetch, so a client-less investigator
+	// with a collector is enough.
+	inv := investigator{evidence: newEvidenceCollector(string(output.FormatJSON), defaultEvidenceOptions())}
+	got, err := inv.latestChargeForPaymentIntent(map[string]any{
 		"id":            "pi_expanded",
 		"object":        "payment_intent",
 		"latest_charge": expanded,
@@ -42,10 +46,12 @@ func TestIncomingPaymentFromPaymentIntentCollectsRelatedEvidence(t *testing.T) {
 	}))
 	defer server.Close()
 
-	records, err := testInvestigator(server).incomingPayment("pi_failed")
+	inv := testInvestigator(server)
+	err := inv.incomingPayment("pi_failed")
 	if err != nil {
 		t.Fatalf("incomingPayment() error = %v", err)
 	}
+	records := inv.records()
 	assertRecordObject(t, records, "payment_intent", "pi_failed")
 	assertRecordObject(t, records, "charge", "ch_failed")
 	assertRecordObject(t, records, "dispute", "dp_failed")
@@ -56,6 +62,9 @@ func TestIncomingPaymentFromPaymentIntentCollectsRelatedEvidence(t *testing.T) {
 	}
 }
 
+// testInvestigator gives the investigator a real collector in buffering mode,
+// so a test reads the evidence from inv.records() rather than from a return
+// value. Production always supplies a collector too — there is no nil case.
 func testInvestigator(server *httptest.Server) investigator {
 	return investigator{
 		ctx: context.Background(),
@@ -63,7 +72,12 @@ func testInvestigator(server *httptest.Server) investigator {
 			APIKey:  "sk_test_123",
 			BaseURL: server.URL,
 		}),
+		evidence: newEvidenceCollector(string(output.FormatJSON), defaultEvidenceOptions()),
 	}
+}
+
+func (i investigator) records() []evidenceRecord {
+	return i.evidence.records
 }
 
 func assertRecordObject(t *testing.T, records []evidenceRecord, object, id string) {

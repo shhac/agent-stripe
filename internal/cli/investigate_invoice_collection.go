@@ -10,14 +10,14 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateInvoiceCollection(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateInvoiceCollection(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "invoice-collection <invoice-id|customer-id|subscription-id>",
 		Short: "Explain failed or pending invoice collection and retry state",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.invoiceCollection(args[0], limit)
 			})
 		},
@@ -26,47 +26,46 @@ func newInvestigateInvoiceCollection(globals shared.GlobalsFunc, outputOpts *inv
 	return cmd
 }
 
-func (i investigator) invoiceCollection(id string, limit int) ([]evidenceRecord, error) {
+func (i investigator) invoiceCollection(id string, limit int) error {
 	if err := validateAllowedStripeID(id, "invoice", "customer", "subscription"); err != nil {
-		return nil, err
+		return err
 	}
 	invoices := []map[string]any{}
 	switch {
 	case strings.HasPrefix(id, "in_"):
 		invoice, err := i.get("/v1/invoices/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
 		invoices = append(invoices, invoice)
 	case strings.HasPrefix(id, "sub_"):
 		found, err := i.list("/v1/invoices", valuesWithLimit(limit, "subscription", id))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		invoices = found
 	default:
 		found, err := i.list("/v1/invoices", valuesWithLimit(limit, "customer", id))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		invoices = found
 	}
 
-	records := []evidenceRecord{}
 	for _, invoice := range invoices {
-		records = i.appendEvidence(records, entityRecord("invoice", invoice))
+		i.add(entityRecord("invoice", invoice))
 		if pi, err := i.paymentIntentForInvoice(invoice); err == nil && pi != nil {
-			records = i.appendEvidence(records, entityRecord("payment_intent", pi))
+			i.add(entityRecord("payment_intent", pi))
 			if charge, err := i.latestChargeForPaymentIntent(pi); err == nil && charge != nil {
-				records = i.appendEvidence(records, entityRecord("charge", charge))
+				i.add(entityRecord("charge", charge))
 			}
 		}
-		records = i.appendEvidence(records, invoiceCollectionFinding(invoice))
+		i.add(invoiceCollectionFinding(invoice))
 	}
-	if len(records) == 0 {
-		records = i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "No invoices matched the supplied collection target."})
+	if len(invoices) == 0 {
+		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No invoices matched the supplied collection target."})
 	}
-	return records, nil
+	return nil
 }
 
 func invoiceCollectionFinding(invoice map[string]any) evidenceRecord {

@@ -18,7 +18,7 @@ const (
 	namespaceV2   = "v2"
 )
 
-func newInvestigateAccountHealth(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateAccountHealth(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var namespace string
 	cmd := &cobra.Command{
 		Use:   "account-health <account-id>",
@@ -31,7 +31,7 @@ func newInvestigateAccountHealth(globals shared.GlobalsFunc, outputOpts *investi
 			if err := validateNamespace(namespace); err != nil {
 				return err
 			}
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.accountHealth(args[0], namespace)
 			})
 		},
@@ -49,9 +49,9 @@ func validateNamespace(namespace string) error {
 		WithHint("Use auto (default), v1 for Connect v1 accounts, or v2 for Accounts v2")
 }
 
-func (i investigator) accountHealth(accountID, namespace string) ([]evidenceRecord, error) {
+func (i investigator) accountHealth(accountID, namespace string) error {
 	if err := validateExpectedStripeID(accountID, "account"); err != nil {
-		return nil, err
+		return err
 	}
 	if namespace == "" {
 		namespace = namespaceAuto
@@ -62,12 +62,12 @@ func (i investigator) accountHealth(accountID, namespace string) ([]evidenceReco
 
 	includes, err := v2AccountIncludeParams(nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	account, err := i.get(v2AccountPath(accountID), includes)
 	if err != nil {
 		if namespace == namespaceV2 || !isNotV2AccountError(err) {
-			return nil, err
+			return err
 		}
 		return i.accountHealthV1(accountID, []evidenceRecord{v2FallbackFinding(accountID, err)})
 	}
@@ -102,38 +102,41 @@ func v2FallbackFinding(accountID string, err error) evidenceRecord {
 	}
 }
 
-func (i investigator) accountHealthV1(accountID string, prefix []evidenceRecord) ([]evidenceRecord, error) {
+func (i investigator) accountHealthV1(accountID string, prefix []evidenceRecord) error {
 	// The fallback note is emitted before the v1 read so a streaming reader
 	// sees why the namespace changed before the v1-shaped account arrives.
-	records := i.appendEvidenceAll(nil, prefix)
+	i.add(prefix...)
 	account, err := i.get("/v1/accounts/"+url.PathEscape(accountID), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records = i.appendEvidence(records, entityRecord("account", account), accountHealthFinding(account))
-	return i.appendAccountTransfers(records, accountID), nil
+	i.add(entityRecord("account", account), accountHealthFinding(account))
+	i.addAccountTransfers(accountID)
+	return nil
 }
 
-func (i investigator) accountHealthV2(accountID string, account map[string]any) ([]evidenceRecord, error) {
-	records := i.appendEvidence(nil, entityRecord(objectV2Account, account))
+func (i investigator) accountHealthV2(accountID string, account map[string]any) error {
+	i.add(entityRecord(objectV2Account, account))
 	persons, err := i.listV2(v2AccountPersonsPath(accountID), url.Values{})
 	if err == nil {
 		for _, person := range persons {
-			records = i.appendEvidence(records, entityRecord(objectV2Person, person))
+			i.add(entityRecord(objectV2Person, person))
 		}
 	}
-	records = i.appendEvidence(records, v2AccountHealthFinding(account, len(persons)))
-	return i.appendAccountTransfers(records, accountID), nil
+	i.add(v2AccountHealthFinding(account, len(persons)))
+	i.addAccountTransfers(accountID)
+	return nil
 }
 
-// appendAccountTransfers is shared by both namespaces: transfers live in /v1
-// for v1 and v2 accounts alike, and a v2 account ID is accepted there.
-func (i investigator) appendAccountTransfers(records []evidenceRecord, accountID string) []evidenceRecord {
+// addAccountTransfers is shared by both namespaces: transfers live in /v1 for
+// v1 and v2 accounts alike, and a v2 account ID is accepted there.
+func (i investigator) addAccountTransfers(accountID string) {
 	transfers, err := i.list("/v1/transfers", valuesWithLimit(5, "destination", accountID))
 	if err != nil {
-		return records
+		i.add(relatedWarning("transfers to the account", err))
+		return
 	}
-	return i.appendListRecords(records, "transfer", transfers)
+	i.addList("transfer", transfers)
 }
 
 func accountHealthFinding(account map[string]any) evidenceRecord {

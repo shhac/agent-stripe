@@ -9,7 +9,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var customer string
 	var last4 string
 	var limit int
@@ -23,7 +23,7 @@ func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *i
 			if err := shared.RequireFlag("last4", last4, "Use the final four digits the customer supplied"); err != nil {
 				return err
 			}
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.customerCardPayment(customer, last4, limit)
 			})
 		},
@@ -34,26 +34,28 @@ func newInvestigateCustomerCardPayment(globals shared.GlobalsFunc, outputOpts *i
 	return cmd
 }
 
-func (i investigator) customerCardPayment(customer, last4 string, limit int) ([]evidenceRecord, error) {
+func (i investigator) customerCardPayment(customer, last4 string, limit int) error {
 	if err := validateExpectedStripeID(customer, "customer"); err != nil {
-		return nil, err
+		return err
 	}
 	params := url.Values{"customer": []string{customer}}
 	shared.AddLimit(params, limit)
 	charges, err := i.list("/v1/charges", params)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, charge := range charges {
 		if cardLast4(charge) != last4 {
 			continue
 		}
-		return i.appendEvidence(nil,
+		i.add(
 			entityRecord("charge", charge),
 			customerCardPaymentFinding(customer, last4, charge),
-		), nil
+		)
+		return nil
 	}
-	return i.appendEvidence(nil, customerCardPaymentNotFound(customer, last4, limit)), nil
+	i.add(customerCardPaymentNotFound(customer, last4, limit))
+	return nil
 }
 
 func customerCardPaymentFinding(customer, last4 string, charge map[string]any) evidenceRecord {

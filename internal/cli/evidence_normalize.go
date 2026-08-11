@@ -4,28 +4,26 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shhac/agent-stripe/internal/cli/shared"
 	"github.com/shhac/agent-stripe/internal/output"
 )
 
-func normalizeEvidence(records []evidenceRecord, opts evidenceOptions) []evidenceRecord {
-	if opts.maxString <= 0 {
-		opts.maxString = defaultMaxString
-	}
-	seen := map[string]bool{}
-	out := make([]evidenceRecord, 0, len(records))
-	for _, record := range records {
-		normalized, extracted := normalizeRecord(record, opts, seen)
-		out = append(out, normalized)
-		out = append(out, extracted...)
-	}
-	return out
-}
-
+// evidenceOptions is bound directly to the investigate persistent flags; the
+// redaction policy is attached per run because it comes from the global flags.
 type evidenceOptions struct {
 	full         bool
 	expandFields []string
 	maxString    int
 	redaction    output.RedactionOptions
+}
+
+func (o *evidenceOptions) withRedaction(flags *shared.GlobalFlags) evidenceOptions {
+	opts := *o
+	opts.redaction = shared.RedactionOptions(flags)
+	if opts.maxString <= 0 {
+		opts.maxString = defaultMaxString
+	}
+	return opts
 }
 
 func defaultEvidenceOptions() evidenceOptions {

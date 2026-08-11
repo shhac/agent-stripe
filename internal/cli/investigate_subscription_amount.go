@@ -10,7 +10,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateSubscriptionAmountChange(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateSubscriptionAmountChange(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var subscription string
 	cmd := &cobra.Command{
 		Use:   "subscription-amount-change",
@@ -19,7 +19,7 @@ func newInvestigateSubscriptionAmountChange(globals shared.GlobalsFunc, outputOp
 			if err := shared.RequireFlag("subscription", subscription, "Provide a Subscription ID such as sub_..."); err != nil {
 				return err
 			}
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.subscriptionAmountChange(subscription)
 			})
 		},
@@ -28,51 +28,53 @@ func newInvestigateSubscriptionAmountChange(globals shared.GlobalsFunc, outputOp
 	return cmd
 }
 
-func (i investigator) subscriptionAmountChange(subscriptionID string) ([]evidenceRecord, error) {
+func (i investigator) subscriptionAmountChange(subscriptionID string) error {
 	bundle, err := i.subscriptionItemsBundle(subscriptionID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records := i.appendEvidenceAll(nil, bundle.records)
-	records = i.appendEvidence(records, subscriptionItemsFinding(subscriptionID, len(bundle.items)))
+	i.add(bundle.records...)
+	i.add(subscriptionItemsFinding(subscriptionID, len(bundle.items)))
 
-	latestInvoice, latestInvoiceRecords := i.latestInvoiceEvidence(bundle.sub)
-	records = i.appendEvidenceAll(records, latestInvoiceRecords)
+	latestInvoice := i.latestInvoiceEvidence(bundle.sub)
+	preview := i.invoicePreviewEvidence(subscriptionID)
 
-	preview, previewRecords := i.invoicePreviewEvidence(subscriptionID)
-	records = i.appendEvidenceAll(records, previewRecords)
-
-	records = i.appendEvidence(records, subscriptionAmountFinding(subscriptionID, latestInvoice, preview, bundle.items))
-	return records, nil
+	i.add(subscriptionAmountFinding(subscriptionID, latestInvoice, preview, bundle.items))
+	return nil
 }
 
-func (i investigator) latestInvoiceEvidence(sub map[string]any) (map[string]any, []evidenceRecord) {
+func (i investigator) latestInvoiceEvidence(sub map[string]any) map[string]any {
 	latestInvoiceID := idFromValue(sub["latest_invoice"])
 	if latestInvoiceID == "" {
-		return nil, nil
+		return nil
 	}
 	invoice, err := i.get("/v1/invoices/"+url.PathEscape(latestInvoiceID), url.Values{})
 	if err != nil {
-		return nil, []evidenceRecord{{
+		i.add(evidenceRecord{
 			Type:     "finding",
 			Severity: "warning",
 			Summary:  "Could not retrieve latest invoice " + latestInvoiceID + ": " + err.Error(),
-		}}
+		})
+		return nil
 	}
-	records := i.appendEvidence(nil, entityRecord("invoice", invoice))
+	i.add(entityRecord("invoice", invoice))
 	lines, err := i.list("/v1/invoices/"+url.PathEscape(latestInvoiceID)+"/lines", url.Values{"limit": []string{"100"}})
-	if err == nil {
-		records = i.appendListRecords(records, "line_item", lines)
+	if err != nil {
+		i.add(relatedWarning("invoice lines", err))
+		return invoice
 	}
-	return invoice, records
+	i.addList("line_item", lines)
+	return invoice
 }
 
-func (i investigator) invoicePreviewEvidence(subscriptionID string) (map[string]any, []evidenceRecord) {
+func (i investigator) invoicePreviewEvidence(subscriptionID string) map[string]any {
 	preview, err := i.postForm("/v1/invoices/create_preview", url.Values{"subscription": []string{subscriptionID}})
 	if err != nil {
-		return nil, nil
+		i.add(relatedWarning("upcoming invoice preview", err))
+		return nil
 	}
-	return preview, i.appendEvidence(nil, entityRecord("invoice_preview", preview))
+	i.add(entityRecord("invoice_preview", preview))
+	return preview
 }
 
 func subscriptionAmountFinding(subscriptionID string, latestInvoice, preview map[string]any, items []map[string]any) evidenceRecord {

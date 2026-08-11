@@ -10,30 +10,29 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigatePaymentMethodReadiness(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigatePaymentMethodReadiness(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "payment-method-readiness <customer-id|payment-method-id>",
 		Short: "Check whether a customer has usable saved payment details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.paymentMethodReadiness(args[0])
 			})
 		},
 	}
 }
 
-func (i investigator) paymentMethodReadiness(id string) ([]evidenceRecord, error) {
+func (i investigator) paymentMethodReadiness(id string) error {
 	if err := validateAllowedStripeID(id, "customer", "payment_method"); err != nil {
-		return nil, err
+		return err
 	}
-	records := []evidenceRecord{}
 	customerID := ""
 	paymentMethods := []map[string]any{}
 	if strings.HasPrefix(id, "pm_") {
 		pm, err := i.get("/v1/payment_methods/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
 		paymentMethods = append(paymentMethods, pm)
 		customerID = idFromValue(pm["customer"])
@@ -41,26 +40,26 @@ func (i investigator) paymentMethodReadiness(id string) ([]evidenceRecord, error
 		customerID = id
 		customer, err := i.get("/v1/customers/"+url.PathEscape(id), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		records = i.appendEvidence(records, entityRecord("customer", customer))
+		i.add(entityRecord("customer", customer))
 		methods, err := i.list("/v1/payment_methods", valuesWithLimit(10, "customer", id, "type", "card"))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		paymentMethods = methods
 	}
 	for _, pm := range paymentMethods {
-		records = i.appendEvidence(records, entityRecord("payment_method", pm))
-		records = i.appendEvidence(records, paymentMethodReadinessFinding(customerID, pm))
+		i.add(entityRecord("payment_method", pm))
+		i.add(paymentMethodReadinessFinding(customerID, pm))
 		if setupIntents, err := i.list("/v1/setup_intents", valuesWithLimit(3, "payment_method", mapString(pm, "id"))); err == nil {
-			records = i.appendListRecords(records, "setup_intent", setupIntents)
+			i.addList("setup_intent", setupIntents)
 		}
 	}
 	if len(paymentMethods) == 0 {
-		records = i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "warning", Summary: "No visible saved card payment methods found for customer " + customerID + "."})
+		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "No visible saved card payment methods found for customer " + customerID + "."})
 	}
-	return records, nil
+	return nil
 }
 
 func paymentMethodReadinessFinding(customerID string, pm map[string]any) evidenceRecord {

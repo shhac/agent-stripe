@@ -8,14 +8,14 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateEntitlement(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateEntitlement(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var customer, subscription, invoice, checkoutSession, metadata string
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "entitlement",
 		Short: "Find subscription, invoice, or checkout product metadata for entitlement mismatches",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.entitlement(entitlementQuery{
 					customer:        customer,
 					subscription:    subscription,
@@ -45,49 +45,49 @@ type entitlementQuery struct {
 	limit           int
 }
 
-func (i investigator) entitlement(q entitlementQuery) ([]evidenceRecord, error) {
-	records := []evidenceRecord{}
+func (i investigator) entitlement(q entitlementQuery) error {
+	before := i.count()
 	if q.subscription != "" || q.customer != "" || q.metadata != "" {
 		subs, err := i.findSubscriptions(q.subscription, q.customer, q.metadata, q.limit)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, sub := range subs {
-			records = i.appendEvidence(records, entityRecord("subscription", sub))
+			i.add(entityRecord("subscription", sub))
 			if bundle, err := i.subscriptionItemsBundle(mapString(sub, "id")); err == nil {
-				records = i.appendEvidenceAll(records, bundle.records)
+				i.add(bundle.records...)
 			}
 		}
 	}
 	if q.invoice != "" {
 		if err := validateExpectedStripeID(q.invoice, "invoice"); err != nil {
-			return nil, err
+			return err
 		}
 		invoice, err := i.get("/v1/invoices/"+url.PathEscape(q.invoice), url.Values{})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		records = i.appendEvidence(records, entityRecord("invoice", invoice))
-		records = i.appendEvidenceAll(records, i.invoiceLineEntitlements(q.invoice))
+		i.add(entityRecord("invoice", invoice))
+		i.invoiceLineEntitlements(q.invoice)
 	}
 	if q.checkoutSession != "" {
-		sessionRecords, err := i.checkoutSession(q.checkoutSession)
-		if err != nil {
-			return nil, err
+		if err := i.checkoutSession(q.checkoutSession); err != nil {
+			return err
 		}
-		records = i.appendEvidenceAll(records, sessionRecords)
 	}
-	if len(records) == 0 {
-		return i.appendEvidence(nil, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Provide --subscription, --customer, --metadata, --invoice, or --checkout-session to investigate entitlements."}), nil
+	if i.count() == before {
+		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "Provide --subscription, --customer, --metadata, --invoice, or --checkout-session to investigate entitlements."})
+		return nil
 	}
-	records = i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "info", Summary: "Entitlement evidence gathered from subscription items, invoice lines, checkout line items, prices, and products. Prefer product/price metadata for internal product IDs."})
-	return records, nil
+	i.add(evidenceRecord{Type: "finding", Severity: "info", Summary: "Entitlement evidence gathered from subscription items, invoice lines, checkout line items, prices, and products. Prefer product/price metadata for internal product IDs."})
+	return nil
 }
 
-func (i investigator) invoiceLineEntitlements(invoiceID string) []evidenceRecord {
+func (i investigator) invoiceLineEntitlements(invoiceID string) {
 	lines, err := i.list("/v1/invoices/"+url.PathEscape(invoiceID)+"/lines", url.Values{"limit": []string{"100"}})
 	if err != nil {
-		return []evidenceRecord{relatedWarning("invoice lines", err)}
+		i.add(relatedWarning("invoice lines", err))
+		return
 	}
-	return i.appendListRecords(nil, "line_item", lines)
+	i.addList("line_item", lines)
 }

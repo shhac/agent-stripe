@@ -9,14 +9,14 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateTimeline(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateTimeline(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "timeline <customer-id>",
 		Short: "Build a chronological customer activity timeline from recent Stripe objects",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.timeline(args[0], limit)
 			})
 		},
@@ -25,21 +25,21 @@ func newInvestigateTimeline(globals shared.GlobalsFunc, outputOpts *investigatio
 	return cmd
 }
 
-func (i investigator) timeline(customerID string, limit int) ([]evidenceRecord, error) {
+func (i investigator) timeline(customerID string, limit int) error {
 	if err := validateExpectedStripeID(customerID, "customer"); err != nil {
-		return nil, err
+		return err
 	}
-	records, err := i.customerContext(customerID, limit)
-	if err != nil {
-		return nil, err
+	mark := i.count()
+	if err := i.customerContext(customerID, limit); err != nil {
+		return err
 	}
-	events := timelineEvents(records)
+	events := timelineEvents(i.since(mark))
 	sort.SliceStable(events, func(a, b int) bool { return events[a].created < events[b].created })
 	for _, event := range events {
-		records = i.appendEvidence(records, event.record())
+		i.add(event.record())
 	}
-	records = i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "info", Summary: fmt.Sprintf("Timeline gathered %d timestamped customer objects for %s.", len(events), customerID)})
-	return records, nil
+	i.add(evidenceRecord{Type: "finding", Severity: "info", Summary: fmt.Sprintf("Timeline gathered %d timestamped customer objects for %s.", len(events), customerID)})
+	return nil
 }
 
 type timelineEvent struct {

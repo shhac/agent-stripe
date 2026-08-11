@@ -10,7 +10,7 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateAccountEvents(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateAccountEvents(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	var limit int
 	var eventTypes []string
 	cmd := &cobra.Command{
@@ -21,7 +21,7 @@ func newInvestigateAccountEvents(globals shared.GlobalsFunc, outputOpts *investi
 			"Thin events carry no snapshot: the account state emitted alongside is current state.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.accountEvents(args[0], limit, eventTypes)
 			})
 		},
@@ -31,33 +31,33 @@ func newInvestigateAccountEvents(globals shared.GlobalsFunc, outputOpts *investi
 	return cmd
 }
 
-func (i investigator) accountEvents(accountID string, limit int, eventTypes []string) ([]evidenceRecord, error) {
+func (i investigator) accountEvents(accountID string, limit int, eventTypes []string) error {
 	if err := validateExpectedStripeID(accountID, "account"); err != nil {
-		return nil, err
+		return err
 	}
-	var records []evidenceRecord
 	includes, err := v2AccountIncludeParams(nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	account, accountErr := i.get(v2AccountPath(accountID), includes)
 	if accountErr == nil {
-		records = i.appendEvidence(records, entityRecord(objectV2Account, account))
+		i.add(entityRecord(objectV2Account, account))
 	} else if isNotV2AccountError(accountErr) {
-		records = i.appendEvidence(records, v2FallbackFinding(accountID, accountErr))
+		i.add(v2FallbackFinding(accountID, accountErr))
 	} else {
-		return nil, accountErr
+		return accountErr
 	}
 
 	params := v2EventListParams(limit, "", accountID, eventTypes, "", "")
 	events, err := i.listV2("/v2/core/events", params)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, event := range events {
-		records = i.appendEvidence(records, entityRecord(objectV2Event, event))
+		i.add(entityRecord(objectV2Event, event))
 	}
-	return i.appendEvidence(records, accountEventsFinding(accountID, events, account)), nil
+	i.add(accountEventsFinding(accountID, events, account))
+	return nil
 }
 
 func accountEventsFinding(accountID string, events []map[string]any, account map[string]any) evidenceRecord {

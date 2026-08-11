@@ -9,10 +9,13 @@ import (
 	"testing"
 
 	agenterrors "github.com/shhac/agent-stripe/internal/errors"
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 func TestRefundRecoveryRequiresParentTransferForReversal(t *testing.T) {
-	_, err := (investigator{}).refundRecovery("trr_123", "")
+	// The ID check fires before any evidence is recorded, so a bare collector
+	// is enough here.
+	err := investigator{evidence: newEvidenceCollector(string(output.FormatJSON), defaultEvidenceOptions())}.refundRecovery("trr_123", "")
 	var apiErr *agenterrors.APIError
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("refundRecovery() error = %#v, want APIError", err)
@@ -43,10 +46,12 @@ func TestOutgoingPaymentFlagsDisabledConnectedAccount(t *testing.T) {
 	}))
 	defer server.Close()
 
-	records, err := testInvestigator(server).outgoingPayment("acct_disabled")
+	inv := testInvestigator(server)
+	err := inv.outgoingPayment("acct_disabled")
 	if err != nil {
 		t.Fatalf("outgoingPayment() error = %v", err)
 	}
+	records := inv.records()
 	assertRecordObject(t, records, "account", "acct_disabled")
 	if fallback := findFinding(records, "Account acct_disabled is not an Accounts v2 account"); fallback == nil {
 		t.Fatalf("records = %#v, want a namespace fallback finding", records)

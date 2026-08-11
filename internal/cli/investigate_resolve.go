@@ -10,20 +10,20 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateResolve(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateResolve(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "resolve <stripe-id-or-invoice-number>",
 		Short: "Identify a Stripe object and suggest next investigation commands",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.resolve(args[0])
 			})
 		},
 	}
 }
 
-func (i investigator) resolve(value string) ([]evidenceRecord, error) {
+func (i investigator) resolve(value string) error {
 	if strings.HasPrefix(value, "acct_") {
 		return i.resolveAccount(value)
 	}
@@ -33,48 +33,39 @@ func (i investigator) resolve(value string) ([]evidenceRecord, error) {
 	object, path, next := resolvePath(value)
 	if path == "" {
 		if object != "" {
-			return i.appendEvidence(nil, evidenceRecord{
+			i.add(evidenceRecord{
 				Type:     "finding",
 				Severity: "warning",
 				Summary:  "Resolved " + value + " as " + object + ", but it requires a parent object to retrieve directly.",
 				Command:  next + value,
-			}), nil
+			})
+			return nil
 		}
-		found, err := i.list("/v1/invoices/search", url.Values{"query": []string{stripeSearchEquals("number", value)}, "limit": []string{"1"}})
-		if err != nil {
-			return nil, err
-		}
-		if len(found) == 0 {
-			return i.appendEvidence(nil, evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not resolve value as a known Stripe ID prefix or invoice number."}), nil
-		}
-		invoice := found[0]
-		return i.appendEvidence(nil,
-			entityRecord("invoice", invoice),
-			evidenceRecord{Type: "finding", Severity: "info", Summary: "Resolved invoice number to invoice " + mapString(invoice, "id") + ".", Command: "agent-stripe investigate invoice-payment " + mapString(invoice, "id")},
-		), nil
+		return i.resolveInvoiceNumber(value)
 	}
 	item, err := i.get(path+"/"+url.PathEscape(value), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return i.appendEvidence(nil,
+	i.add(
 		entityRecord(object, item),
 		evidenceRecord{Type: "finding", Severity: "info", Summary: "Resolved " + value + " as " + object + ".", Command: next + value},
-	), nil
+	)
+	return nil
 }
 
 // resolveAccount answers the question the acct_ prefix cannot: which account
 // namespace this ID lives in. It reads v2 first because a v2 account ID also
 // answers on v1 endpoints, so a v1-first probe would never reveal the richer
 // object.
-func (i investigator) resolveAccount(accountID string) ([]evidenceRecord, error) {
+func (i investigator) resolveAccount(accountID string) error {
 	includes, err := v2AccountIncludeParams(nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	account, v2Err := i.get(v2AccountPath(accountID), includes)
 	if v2Err == nil {
-		return i.appendEvidence(nil,
+		i.add(
 			entityRecord(objectV2Account, account),
 			evidenceRecord{
 				Type:     "finding",
@@ -84,16 +75,17 @@ func (i investigator) resolveAccount(accountID string) ([]evidenceRecord, error)
 				Command: "agent-stripe investigate account-health " + accountID,
 				Data:    map[string]any{"namespace": namespaceV2},
 			},
-		), nil
+		)
+		return nil
 	}
 	if !isNotV2AccountError(v2Err) {
-		return nil, v2Err
+		return v2Err
 	}
 	v1Account, err := i.get("/v1/accounts/"+url.PathEscape(accountID), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return i.appendEvidence(nil,
+	i.add(
 		entityRecord("account", v1Account),
 		evidenceRecord{
 			Type:     "finding",
@@ -102,16 +94,17 @@ func (i investigator) resolveAccount(accountID string) ([]evidenceRecord, error)
 			Command:  "agent-stripe investigate account-health " + accountID + " --namespace v1",
 			Data:     map[string]any{"namespace": namespaceV1, "v2_error_code": api.ErrorCode(v2Err)},
 		},
-	), nil
+	)
+	return nil
 }
 
-func (i investigator) resolveV2Event(eventID string) ([]evidenceRecord, error) {
+func (i investigator) resolveV2Event(eventID string) error {
 	event, err := i.get(v2EventPath(eventID), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	related := mapAnyMap(event, "related_object")
-	return i.appendEvidence(nil,
+	i.add(
 		entityRecord(objectV2Event, event),
 		evidenceRecord{
 			Type:     "finding",
@@ -121,7 +114,27 @@ func (i investigator) resolveV2Event(eventID string) ([]evidenceRecord, error) {
 			Command: "agent-stripe investigate webhook-event " + eventID,
 			Data:    map[string]any{"namespace": namespaceV2},
 		},
-	), nil
+	)
+	return nil
+}
+
+// resolveInvoiceNumber is the fallback when the value is not a known Stripe ID
+// prefix: customers quote invoice numbers, not IDs.
+func (i investigator) resolveInvoiceNumber(value string) error {
+	found, err := i.list("/v1/invoices/search", url.Values{"query": []string{stripeSearchEquals("number", value)}, "limit": []string{"1"}})
+	if err != nil {
+		return err
+	}
+	if len(found) == 0 {
+		i.add(evidenceRecord{Type: "finding", Severity: "warning", Summary: "Could not resolve value as a known Stripe ID prefix or invoice number."})
+		return nil
+	}
+	invoice := found[0]
+	i.add(
+		entityRecord("invoice", invoice),
+		evidenceRecord{Type: "finding", Severity: "info", Summary: "Resolved invoice number to invoice " + mapString(invoice, "id") + ".", Command: "agent-stripe investigate invoice-payment " + mapString(invoice, "id")},
+	)
+	return nil
 }
 
 func resolvePath(id string) (object, path, commandPrefix string) {

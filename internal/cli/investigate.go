@@ -1,15 +1,13 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
 func registerInvestigate(root *cobra.Command, globals shared.GlobalsFunc) {
-	outputOpts := &investigationOutputOptions{maxString: 800}
+	outputOpts := &evidenceOptions{maxString: defaultMaxString}
 	investigate := &cobra.Command{
 		Use:     "investigate",
 		Aliases: []string{"invest"},
@@ -18,20 +16,14 @@ func registerInvestigate(root *cobra.Command, globals shared.GlobalsFunc) {
 	for _, newCommand := range investigationCommands {
 		investigate.AddCommand(newCommand(globals, outputOpts))
 	}
-	investigate.AddCommand(&cobra.Command{
-		Use:   "usage",
-		Short: "LLM-optimized investigation reference",
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(investigationUsageText)
-		},
-	})
+	investigate.AddCommand(newUsageCommand(investigationUsageText))
 	investigate.PersistentFlags().BoolVar(&outputOpts.full, "full", false, "Do not truncate investigation entity fields")
 	investigate.PersistentFlags().StringArrayVar(&outputOpts.expandFields, "expand-field", nil, "Do not truncate a field path in investigation output; repeatable")
-	investigate.PersistentFlags().IntVar(&outputOpts.maxString, "max-string", 800, "Maximum string length in investigation entity fields before truncation")
+	investigate.PersistentFlags().IntVar(&outputOpts.maxString, "max-string", defaultMaxString, "Maximum string length in investigation entity fields before truncation")
 	root.AddCommand(investigate)
 }
 
-type investigationCommandFactory func(shared.GlobalsFunc, *investigationOutputOptions) *cobra.Command
+type investigationCommandFactory func(shared.GlobalsFunc, *evidenceOptions) *cobra.Command
 
 var investigationCommands = []investigationCommandFactory{
 	newInvestigateResolve,

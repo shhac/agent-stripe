@@ -9,36 +9,36 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateDisputeResponse(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateDisputeResponse(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "dispute-response <dispute-id>",
 		Short: "Summarize dispute response status, evidence due date, and related payment objects",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.disputeResponse(args[0])
 			})
 		},
 	}
 }
 
-func (i investigator) disputeResponse(disputeID string) ([]evidenceRecord, error) {
+func (i investigator) disputeResponse(disputeID string) error {
 	if err := validateExpectedStripeID(disputeID, "dispute"); err != nil {
-		return nil, err
+		return err
 	}
 	dispute, err := i.get("/v1/disputes/"+url.PathEscape(disputeID), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records := i.appendEvidence(nil, entityRecord("dispute", dispute))
+	i.add(entityRecord("dispute", dispute))
 	if chargeID := idFromValue(dispute["charge"]); chargeID != "" {
 		charge, err := i.get("/v1/charges/"+url.PathEscape(chargeID), url.Values{})
 		if err == nil {
-			records = i.appendEvidence(records, entityRecord("charge", charge))
+			i.add(entityRecord("charge", charge))
 			if customerID := idFromValue(charge["customer"]); customerID != "" {
 				customer, err := i.get("/v1/customers/"+url.PathEscape(customerID), url.Values{})
 				if err == nil {
-					records = i.appendEvidence(records, entityRecord("customer", customer))
+					i.add(entityRecord("customer", customer))
 				}
 			}
 		}
@@ -46,11 +46,11 @@ func (i investigator) disputeResponse(disputeID string) ([]evidenceRecord, error
 	if piID := idFromValue(dispute["payment_intent"]); piID != "" {
 		pi, err := i.get("/v1/payment_intents/"+url.PathEscape(piID), url.Values{})
 		if err == nil {
-			records = i.appendEvidence(records, entityRecord("payment_intent", pi))
+			i.add(entityRecord("payment_intent", pi))
 		}
 	}
 	details := mapAnyMap(dispute, "evidence_details")
-	records = i.appendEvidence(records, evidenceRecord{
+	i.add(evidenceRecord{
 		Type:     "finding",
 		Severity: disputeSeverity(mapString(dispute, "status")),
 		Summary: fmt.Sprintf("Dispute %s is %s for reason %s; evidence due_by=%v.",
@@ -61,7 +61,7 @@ func (i investigator) disputeResponse(disputeID string) ([]evidenceRecord, error
 			"evidence_details": details,
 		},
 	})
-	return records, nil
+	return nil
 }
 
 func disputeSeverity(status string) string {

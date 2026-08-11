@@ -1,14 +1,11 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
-
-	"github.com/shhac/agent-stripe/internal/api"
 )
 
 func TestCustomerContextReportsRelatedListErrors(t *testing.T) {
@@ -25,18 +22,13 @@ func TestCustomerContextReportsRelatedListErrors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	inv := investigator{
-		ctx: context.Background(),
-		client: api.NewClient(api.Options{
-			APIKey:  "sk_test_123",
-			BaseURL: server.URL,
-		}),
-	}
+	inv := testInvestigator(server)
 
-	records, err := inv.customerContext("cus_123", 5)
+	err := inv.customerContext("cus_123", 5)
 	if err != nil {
 		t.Fatalf("customerContext returned error: %v", err)
 	}
+	records := inv.records()
 
 	warning := findFinding(records, "Could not gather payment_method context")
 	if warning == nil {
@@ -51,7 +43,7 @@ func TestCustomerContextReportsRelatedListErrors(t *testing.T) {
 	}
 }
 
-func TestAppendRelatedListReturnsItemsOnSuccess(t *testing.T) {
+func TestAddRelatedListReturnsItemsOnSuccess(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/charges" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
@@ -63,18 +55,13 @@ func TestAppendRelatedListReturnsItemsOnSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	inv := investigator{
-		ctx: context.Background(),
-		client: api.NewClient(api.Options{
-			APIKey:  "sk_test_123",
-			BaseURL: server.URL,
-		}),
-	}
+	inv := testInvestigator(server)
 
-	records, items := inv.appendRelatedList(nil, "charge", "/v1/charges", url.Values{"customer": []string{"cus_123"}})
+	items := inv.addRelatedList("charge", "/v1/charges", url.Values{"customer": []string{"cus_123"}})
 	if len(items) != 1 || mapString(items[0], "id") != "ch_123" {
 		t.Fatalf("items = %#v, want ch_123", items)
 	}
+	records := inv.records()
 	if len(records) != 1 || records[0].Object != "charge" || records[0].ID != "ch_123" {
 		t.Fatalf("records = %#v, want charge entity", records)
 	}

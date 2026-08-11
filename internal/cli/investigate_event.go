@@ -10,22 +10,22 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateWebhookEvent(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+func newInvestigateWebhookEvent(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "webhook-event <event-id>",
 		Short: "Explain a Stripe event and emit the underlying object",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
 				return inv.webhookEvent(args[0])
 			})
 		},
 	}
 }
 
-func (i investigator) webhookEvent(eventID string) ([]evidenceRecord, error) {
+func (i investigator) webhookEvent(eventID string) error {
 	if err := validateExpectedStripeID(eventID, "event"); err != nil {
-		return nil, err
+		return err
 	}
 	if isV2EventID(eventID) {
 		return i.webhookEventV2(eventID)
@@ -33,28 +33,27 @@ func (i investigator) webhookEvent(eventID string) ([]evidenceRecord, error) {
 	event, err := i.get("/v1/events/"+url.PathEscape(eventID), url.Values{})
 	if err != nil {
 		if api.ErrorStatus(err) != 404 {
-			return nil, err
+			return err
 		}
 		// v1 and v2 events share the evt_ prefix. A miss in v1 is worth one
 		// look in the v2 stream before reporting the event as unknown.
-		records, v2Err := i.webhookEventV2(eventID)
-		if v2Err == nil {
-			return records, nil
+		if v2Err := i.webhookEventV2(eventID); v2Err == nil {
+			return nil
 		}
-		return nil, err
+		return err
 	}
-	records := i.appendEvidence(nil, entityRecord("event", event))
+	i.add(entityRecord("event", event))
 	data := mapAnyMap(event, "data")
 	if underlying, ok := data["object"].(map[string]any); ok {
-		records = i.appendEvidence(records, evidenceRecord{
+		i.add(evidenceRecord{
 			Type:     "finding",
 			Severity: eventSeverity(mapString(event, "type")),
 			Summary:  "Event " + eventID + " is " + mapString(event, "type") + " for " + mapString(underlying, "object") + " " + mapString(underlying, "id") + ".",
 		})
-		return records, nil
+		return nil
 	}
-	records = i.appendEvidence(records, evidenceRecord{Type: "finding", Severity: eventSeverity(mapString(event, "type")), Summary: "Event " + eventID + " is " + mapString(event, "type") + "."})
-	return records, nil
+	i.add(evidenceRecord{Type: "finding", Severity: eventSeverity(mapString(event, "type")), Summary: "Event " + eventID + " is " + mapString(event, "type") + "."})
+	return nil
 }
 
 // isV2EventID matches Stripe's sandbox v2 event IDs. Live-mode v2 IDs are not
@@ -66,12 +65,12 @@ func isV2EventID(eventID string) bool {
 
 // webhookEventV2 handles thin events: there is no snapshot in the payload, so
 // the related object is fetched and labelled as current state.
-func (i investigator) webhookEventV2(eventID string) ([]evidenceRecord, error) {
+func (i investigator) webhookEventV2(eventID string) error {
 	event, err := i.get(v2EventPath(eventID), url.Values{})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	records := i.appendEvidence(nil, entityRecord(objectV2Event, event))
+	i.add(entityRecord(objectV2Event, event))
 	eventType := mapString(event, "type")
 	related := mapAnyMap(event, "related_object")
 	relatedID := mapString(related, "id")
@@ -84,9 +83,9 @@ func (i investigator) webhookEventV2(eventID string) ([]evidenceRecord, error) {
 	summary += " v2 events are thin: they carry no snapshot, so any object shown here is current state, not state at event time."
 
 	if object, ok := i.v2EventRelatedObject(event); ok {
-		records = i.appendEvidence(records, entityRecord(mapString(object, "object"), object))
+		i.add(entityRecord(mapString(object, "object"), object))
 	}
-	return i.appendEvidence(records, evidenceRecord{
+	i.add(evidenceRecord{
 		Type:     "finding",
 		Severity: eventSeverity(eventType),
 		Summary:  summary,
@@ -97,7 +96,8 @@ func (i investigator) webhookEventV2(eventID string) ([]evidenceRecord, error) {
 			"related_id":   relatedID,
 			"related_type": relatedType,
 		},
-	}), nil
+	})
+	return nil
 }
 
 // v2EventRelatedObject follows a thin event's related_object.url so the caller

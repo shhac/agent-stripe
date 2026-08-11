@@ -11,72 +11,83 @@ import (
 	"github.com/shhac/agent-stripe/internal/cli/shared"
 )
 
-func newInvestigateCollectionRisk(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
+// subscriptionRiskSpec is the only thing that differs between the two risk
+// scans: which predicate decides a subscription is risky, and what to say when
+// none are.
+type subscriptionRiskSpec struct {
+	use      string
+	short    string
+	daysHelp string
+	empty    string
+	risk     func(investigator, map[string]any) (string, error)
+}
+
+func newInvestigateCollectionRisk(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
+	return newSubscriptionRiskCommand(globals, outputOpts, subscriptionRiskSpec{
+		use:      "collection-risk",
+		short:    "Find customers likely to need payment-method outreach before upcoming collection",
+		daysHelp: "Upcoming renewal window in days",
+		empty:    "No collection-risk subscriptions found in the inspected window.",
+		risk:     investigator.collectionRisk,
+	})
+}
+
+func newInvestigateSubscriptionCancelRisk(globals shared.GlobalsFunc, outputOpts *evidenceOptions) *cobra.Command {
+	return newSubscriptionRiskCommand(globals, outputOpts, subscriptionRiskSpec{
+		use:      "subscription-cancel-risk",
+		short:    "Find subscriptions likely to cancel, end trial, or stop billing soon",
+		daysHelp: "Upcoming window in days",
+		empty:    "No subscription cancellation risks found in the inspected window.",
+		risk: func(_ investigator, sub map[string]any) (string, error) {
+			return subscriptionCancelRisk(sub), nil
+		},
+	})
+}
+
+func newSubscriptionRiskCommand(globals shared.GlobalsFunc, outputOpts *evidenceOptions, spec subscriptionRiskSpec) *cobra.Command {
 	var days int
 	var limit int
 	cmd := &cobra.Command{
-		Use:   "collection-risk",
-		Short: "Find customers likely to need payment-method outreach before upcoming collection",
+		Use:   spec.use,
+		Short: spec.short,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
-				params := upcomingSubscriptionParams(days, limit)
-				subs, err := inv.list("/v1/subscriptions", params)
-				if err != nil {
-					return nil, err
-				}
-				records := []evidenceRecord{}
-				for _, sub := range subs {
-					risk := inv.collectionRisk(sub)
-					if risk == "" {
-						continue
-					}
-					records = inv.appendEvidence(records, entityRecord("subscription", sub))
-					records = inv.appendEvidence(records, subscriptionRiskFinding("warning", risk, sub))
-				}
-				if len(records) == 0 {
-					records = inv.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "info", Summary: "No collection-risk subscriptions found in the inspected window."})
-				}
-				return records, nil
+			return runWithInvestigator(globals(), outputOpts, func(inv investigator) error {
+				return inv.subscriptionRiskScan(days, limit, spec)
 			})
 		},
 	}
-	cmd.Flags().IntVar(&days, "days", 30, "Upcoming renewal window in days")
+	cmd.Flags().IntVar(&days, "days", 30, spec.daysHelp)
 	cmd.Flags().IntVar(&limit, "limit", 25, "Maximum subscriptions to inspect")
 	return cmd
 }
 
-func newInvestigateSubscriptionCancelRisk(globals shared.GlobalsFunc, outputOpts *investigationOutputOptions) *cobra.Command {
-	var days int
-	var limit int
-	cmd := &cobra.Command{
-		Use:   "subscription-cancel-risk",
-		Short: "Find subscriptions likely to cancel, end trial, or stop billing soon",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runWithInvestigator(globals(), outputOpts, func(inv investigator) ([]evidenceRecord, error) {
-				params := upcomingSubscriptionParams(days, limit)
-				subs, err := inv.list("/v1/subscriptions", params)
-				if err != nil {
-					return nil, err
-				}
-				records := []evidenceRecord{}
-				for _, sub := range subs {
-					risk := subscriptionCancelRisk(sub)
-					if risk == "" {
-						continue
-					}
-					records = inv.appendEvidence(records, entityRecord("subscription", sub))
-					records = inv.appendEvidence(records, subscriptionRiskFinding("warning", risk, sub))
-				}
-				if len(records) == 0 {
-					records = inv.appendEvidence(records, evidenceRecord{Type: "finding", Severity: "info", Summary: "No subscription cancellation risks found in the inspected window."})
-				}
-				return records, nil
-			})
-		},
+func (i investigator) subscriptionRiskScan(days, limit int, spec subscriptionRiskSpec) error {
+	subs, err := i.list("/v1/subscriptions", upcomingSubscriptionParams(days, limit))
+	if err != nil {
+		return err
 	}
-	cmd.Flags().IntVar(&days, "days", 30, "Upcoming window in days")
-	cmd.Flags().IntVar(&limit, "limit", 25, "Maximum subscriptions to inspect")
-	return cmd
+	risky := 0
+	for _, sub := range subs {
+		risk, err := spec.risk(i, sub)
+		if err != nil {
+			// Saying "no payment method visible" because a lookup failed would
+			// invent a risk; saying nothing would hide a real one.
+			i.add(subscriptionRiskFinding("warning", fmt.Sprintf(
+				"Could not assess subscription %s for customer %s: %s. Re-run before treating this subscription as healthy.",
+				mapString(sub, "id"), mapString(sub, "customer"), err), sub))
+			risky++
+			continue
+		}
+		if risk == "" {
+			continue
+		}
+		risky++
+		i.add(entityRecord("subscription", sub), subscriptionRiskFinding("warning", risk, sub))
+	}
+	if risky == 0 {
+		i.add(evidenceRecord{Type: "finding", Severity: "info", Summary: spec.empty})
+	}
+	return nil
 }
 
 func upcomingSubscriptionParams(days, limit int) url.Values {
@@ -100,65 +111,81 @@ func subscriptionRiskFinding(severity, summary string, sub map[string]any) evide
 	}
 }
 
-func (i investigator) collectionRisk(sub map[string]any) string {
+func (i investigator) collectionRisk(sub map[string]any) (string, error) {
 	return i.collectionRiskAt(sub, time.Now())
 }
 
-func (i investigator) collectionRiskAt(sub map[string]any, now time.Time) string {
+// collectionRiskAt reports a lookup failure rather than absorbing it. Treating
+// a failed customer fetch as "no payment method" fabricated a risk, and
+// treating a failed invoice fetch as "no risk" hid a real one.
+func (i investigator) collectionRiskAt(sub map[string]any, now time.Time) (string, error) {
 	ctx := newCollectionRiskContext(sub)
 	if risk := statusCollectionRisk(sub, ctx); risk != "" {
-		return risk
+		return risk, nil
 	}
-	pmID := i.subscriptionDefaultPaymentMethodID(sub, ctx.customerID)
+	pmID, err := i.subscriptionDefaultPaymentMethodID(sub, ctx.customerID)
+	if err != nil {
+		return "", err
+	}
 	if pmID == "" {
-		return missingPaymentMethodRisk(ctx)
+		return missingPaymentMethodRisk(ctx), nil
 	}
-	if i.paymentMethodExpiresSoon(pmID, now) {
-		return expiringPaymentMethodRisk(ctx, pmID)
+	expiring, err := i.paymentMethodExpiresSoon(pmID, now)
+	if err != nil {
+		return "", err
 	}
-	if risk := i.latestInvoiceCollectionRisk(sub, ctx); risk != "" {
-		return risk
+	if expiring {
+		return expiringPaymentMethodRisk(ctx, pmID), nil
 	}
-	return ""
+	return i.latestInvoiceCollectionRisk(sub, ctx)
 }
 
-func (i investigator) subscriptionDefaultPaymentMethodID(sub map[string]any, customerID string) string {
+func (i investigator) subscriptionDefaultPaymentMethodID(sub map[string]any, customerID string) (string, error) {
 	if pmID := idFromValue(sub["default_payment_method"]); pmID != "" {
-		return pmID
+		return pmID, nil
+	}
+	if customerID == "" {
+		return "", nil
 	}
 	customer, err := i.get("/v1/customers/"+url.PathEscape(customerID), url.Values{})
 	if err != nil {
-		return ""
+		return "", err
 	}
 	settings := mapAnyMap(customer, "invoice_settings")
-	return idFromValue(settings["default_payment_method"])
+	return idFromValue(settings["default_payment_method"]), nil
 }
 
-func (i investigator) paymentMethodExpiresSoon(paymentMethodID string, now time.Time) bool {
+func (i investigator) paymentMethodExpiresSoon(paymentMethodID string, now time.Time) (bool, error) {
 	pm, err := i.get("/v1/payment_methods/"+url.PathEscape(paymentMethodID), url.Values{})
-	return err == nil && cardExpiresSoon(pm, now)
+	if err != nil {
+		return false, err
+	}
+	return cardExpiresSoon(pm, now), nil
 }
 
-func (i investigator) latestInvoiceCollectionRisk(sub map[string]any, ctx collectionRiskContext) string {
+func (i investigator) latestInvoiceCollectionRisk(sub map[string]any, ctx collectionRiskContext) (string, error) {
 	invoiceID := idFromValue(sub["latest_invoice"])
 	if invoiceID == "" {
-		return ""
+		return "", nil
 	}
 	invoice, err := i.get("/v1/invoices/"+url.PathEscape(invoiceID), url.Values{})
 	if err != nil {
-		return ""
+		return "", err
 	}
 	if !mapBool(invoice, "paid") && mapString(invoice, "status") == "open" {
-		return openInvoiceRisk(ctx, invoiceID)
+		return openInvoiceRisk(ctx, invoiceID), nil
 	}
 	if idFromValue(invoice["payment_intent"]) == "" {
-		return ""
+		return "", nil
 	}
 	pi, err := i.paymentIntentForInvoice(invoice)
-	if err == nil && mapString(pi, "status") == "requires_action" {
-		return latestInvoiceActionRisk(ctx)
+	if err != nil {
+		return "", err
 	}
-	return ""
+	if mapString(pi, "status") == "requires_action" {
+		return latestInvoiceActionRisk(ctx), nil
+	}
+	return "", nil
 }
 
 type collectionRiskContext struct {
