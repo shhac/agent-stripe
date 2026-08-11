@@ -5,6 +5,7 @@ This repository contains a Go CLI for LLM-driven Stripe incident triage.
 ## Development
 
 - Use `make test` for the full test suite.
+- Use `make apicheck` to validate the requests the CLI emits against Stripe's published OpenAPI spec (paths and query parameter names). Add every new command to the table in `internal/apicheck` or its requests go unchecked. Stripe does not publish the `/v2` namespace in that spec, so v2 requests are listed rather than validated.
 - Use `make build` to build `agent-stripe`.
 - Use `make build-mock` to build the local mock Stripe server.
 - Use `make mock` to start `mockstripe` on `127.0.0.1:12111`.

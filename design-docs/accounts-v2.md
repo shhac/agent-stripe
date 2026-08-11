@@ -242,6 +242,26 @@ Still deliberately absent: everything that writes. Account creation,
 configuration updates, account links and onboarding flows, capability requests,
 and outbound payment creation are all POSTs.
 
+## How much of this is verified
+
+The `/v1` surface is checked against Stripe's published OpenAPI spec by `make
+apicheck`: every path exists and every query parameter is one the endpoint
+declares.
+
+Stripe does not publish the `/v2` namespace in those spec files, so nothing
+mechanical validates the v2 requests. Their paths, parameter names, and the
+default version train come from the API reference and are listed by `apicheck`
+for review rather than checked. In particular these remain doc-derived until a
+live call confirms them:
+
+- `Authorization: Bearer` on `/v2` (the docs use it consistently; `/v1` Basic
+  is unchanged and verified)
+- the `2026-07-29.dahlia` default — a stale-but-valid version would pass any
+  schema check anyway
+- `created[gte]` / `created[lte]` on `/v2/core/events`
+- `/v2/money_management/payout_methods` being addressed by `Stripe-Context`,
+  and its preview-only status
+
 ## Out of scope
 
 Writes. Creating accounts, updating configurations, creating account links, and
