@@ -37,7 +37,7 @@ func ToAnySlice[T any](s []T) []any {
 func WritePaginatedList(items []any, pagination *output.Pagination, format string) {
 	f := output.ResolveFormat(format, output.FormatNDJSON)
 	if f == output.FormatNDJSON {
-		WriteNDJSONItems(items, pagination)
+		writeNDJSONItems(items, pagination)
 		return
 	}
 	result := map[string]any{"data": items}
@@ -47,7 +47,7 @@ func WritePaginatedList(items []any, pagination *output.Pagination, format strin
 	output.Print(result, f, true)
 }
 
-func WriteNDJSONItems(items []any, pagination *output.Pagination) {
+func writeNDJSONItems(items []any, pagination *output.Pagination) {
 	w := output.NewNDJSONWriter(output.Stdout())
 	for _, item := range items {
 		_ = w.WriteItem(item)

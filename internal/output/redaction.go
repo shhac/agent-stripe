@@ -19,25 +19,6 @@ const RedactedString = out.RedactedPlaceholder
 // RedactionNote re-exports the shared note shape (the @redacted list entry).
 type RedactionNote = out.RedactionNote
 
-// ParseExpose splits comma-joined --expose entries into normalized tokens. Kept
-// for callers/tests; the shared out.Redact does the same normalization
-// internally, so the raw Expose slice can also be passed straight through.
-func ParseExpose(values []string) []string {
-	var result []string
-	seen := map[string]bool{}
-	for _, value := range values {
-		for _, part := range strings.Split(value, ",") {
-			normalized := normalizeExpose(part)
-			if normalized == "" || seen[normalized] {
-				continue
-			}
-			seen[normalized] = true
-			result = append(result, normalized)
-		}
-	}
-	return result
-}
-
 // Redact masks agent-stripe's sensitive fields using the shared redaction
 // MECHANISM (the walk, the [REDACTED] placeholder, the @redacted notes, and
 // --expose matching all live in lib-agent-output). What stays here is the
@@ -142,8 +123,4 @@ func isAccountLikeObject(object string) bool {
 		return true
 	}
 	return false
-}
-
-func normalizeExpose(value string) string {
-	return strings.Trim(strings.ToLower(strings.TrimSpace(value)), ".")
 }
