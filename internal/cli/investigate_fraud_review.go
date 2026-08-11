@@ -33,7 +33,7 @@ func (i investigator) fraudReview(id string) error {
 			return err
 		}
 		i.add(entityRecord("payment_intent", pi))
-		if charge, err := i.latestChargeForPaymentIntent(pi); err == nil && charge != nil {
+		if charge := i.addLatestCharge(pi); charge != nil {
 			i.fraudReviewForCharge(charge)
 		}
 	} else if strings.HasPrefix(paymentID, "ch_") {

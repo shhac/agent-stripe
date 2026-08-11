@@ -49,7 +49,7 @@ func (i investigator) relatedCheckoutObjects(session map[string]any) {
 	}
 	if pi := i.followRef(session, "payment_intent"); pi != nil {
 		i.add(entityRecord("payment_intent", pi))
-		if charge, err := i.latestChargeForPaymentIntent(pi); err == nil && charge != nil {
+		if charge := i.addLatestCharge(pi); charge != nil {
 			i.add(entityRecord("charge", charge))
 		}
 	}

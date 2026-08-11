@@ -52,6 +52,28 @@ func (i investigator) addRelatedList(object, path string, params url.Values) []m
 	return items
 }
 
+// addLatestCharge and addInvoicePaymentIntent are the reporting forms of the
+// two chain helpers. Their (object, error) signature invited callers to write
+// `err == nil && x != nil`, which drops the failure — five of eight call sites
+// did exactly that. These report it and return nil, like fetchRelated.
+func (i investigator) addLatestCharge(pi map[string]any) map[string]any {
+	charge, err := i.latestChargeForPaymentIntent(pi)
+	if err != nil {
+		i.add(relatedWarning("latest charge for "+mapString(pi, "id"), err))
+		return nil
+	}
+	return charge
+}
+
+func (i investigator) addInvoicePaymentIntent(invoice map[string]any) map[string]any {
+	pi, err := i.paymentIntentForInvoice(invoice)
+	if err != nil {
+		i.add(relatedWarning("PaymentIntent for "+mapString(invoice, "id"), err))
+		return nil
+	}
+	return pi
+}
+
 // stripeAPIPathForID resolves an ID prefix to its collection path. stripeIDKinds
 // already carries this mapping for every object investigations fetch, so the
 // path is derived rather than written out again.

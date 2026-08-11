@@ -44,7 +44,7 @@ func (i investigator) ledgerFromPaymentIntent(id string) error {
 		return err
 	}
 	i.add(entityRecord("payment_intent", pi))
-	if charge, err := i.latestChargeForPaymentIntent(pi); err == nil && charge != nil {
+	if charge := i.addLatestCharge(pi); charge != nil {
 		i.ledgerFromCharge(charge)
 	}
 	i.add(ledgerFinding("payment_intent", pi))
