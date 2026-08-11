@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 func newUsageCommand(text string) *cobra.Command {
@@ -11,7 +13,9 @@ func newUsageCommand(text string) *cobra.Command {
 		Use:   "usage",
 		Short: "LLM-optimized reference card",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Print(text)
+			// Through the output writer, not os.Stdout, so usage text is
+			// redirectable like every other command's output.
+			_, _ = fmt.Fprint(output.Stdout(), text)
 		},
 	}
 }

@@ -1,14 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os/exec"
 	"strings"
 	"testing"
 
+	"github.com/shhac/agent-stripe/internal/cli"
 	"github.com/shhac/agent-stripe/internal/mockstripe"
+	"github.com/shhac/agent-stripe/internal/output"
 )
 
 type mockCLIRunner struct {
@@ -41,16 +43,25 @@ func (r *mockCLIRunner) ArmFault(spec string) {
 
 func (r *mockCLIRunner) Run(args ...string) string {
 	r.t.Helper()
-	allArgs := []string{"run", "./cmd/agent-stripe", "--api-key", "sk_test_mock", "--base-url", r.server.URL}
-	allArgs = append(allArgs, args...)
-	cmd := exec.Command("go", allArgs...)
-	cmd.Dir = "../.."
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		r.t.Fatalf("agent-stripe %v failed: %v\n%s", args, err, out)
+	out, code := r.run(args...)
+	if code != 0 {
+		r.t.Fatalf("agent-stripe %v failed with exit %d\n%s", args, code, out)
 	}
-	return string(out)
+	return out
+}
+
+// run executes the CLI in-process so the assertions count toward coverage and
+// run under -race. TestBinaryExitCodeContract covers the process boundary the
+// subprocess runner used to prove.
+func (r *mockCLIRunner) run(args ...string) (string, int) {
+	r.t.Helper()
+	var combined bytes.Buffer
+	restore := output.SetWritersForTest(&combined, &combined)
+	defer restore()
+
+	full := append([]string{"--api-key", "sk_test_mock", "--base-url", r.server.URL}, args...)
+	code := cli.RunForTest("test", full)
+	return combined.String(), code
 }
 
 // RunExpectingError runs the CLI for a case that must fail — a structured
@@ -58,16 +69,11 @@ func (r *mockCLIRunner) Run(args ...string) string {
 // the combined output and fatals only if the command unexpectedly succeeded.
 func (r *mockCLIRunner) RunExpectingError(args ...string) string {
 	r.t.Helper()
-	allArgs := []string{"run", "./cmd/agent-stripe", "--api-key", "sk_test_mock", "--base-url", r.server.URL}
-	allArgs = append(allArgs, args...)
-	cmd := exec.Command("go", allArgs...)
-	cmd.Dir = "../.."
-
-	out, err := cmd.CombinedOutput()
-	if err == nil {
+	out, code := r.run(args...)
+	if code == 0 {
 		r.t.Fatalf("agent-stripe %v unexpectedly succeeded; expected a non-zero exit\n%s", args, out)
 	}
-	return string(out)
+	return out
 }
 
 func runMockCLIErr(t *testing.T, args ...string) string {

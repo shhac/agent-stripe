@@ -137,6 +137,23 @@ func Execute(version string) {
 	libcli.Run(newRootCmd(version))
 }
 
+// RunForTest executes one command in-process and returns the exit code the
+// binary would have used. The e2e suite drove the CLI with `go run`, which put
+// every assertion in a subprocess: none of it counted toward coverage, -race
+// never applied, and each case paid a recompile. Output goes through
+// output.SetWritersForTest, so callers capture stdout and stderr as usual.
+func RunForTest(version string, args []string) int {
+	root := newRootCmd(version)
+	root.SetArgs(args)
+	root.SetOut(output.Stdout())
+	root.SetErr(output.Stderr())
+	if err := root.Execute(); err != nil {
+		output.WriteError(output.Stderr(), err)
+		return 1
+	}
+	return 0
+}
+
 // exposeGroups opts the named top-level commands into the MCP tool surface.
 // A name with no matching command is skipped silently — the list is a curation
 // of agent-facing groups, not a registration check.
