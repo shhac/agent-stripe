@@ -1,14 +1,15 @@
 ---
 name: agent-stripe
 description: |
-  Triage and investigate Stripe payments, invoices, and subscriptions. Covers incidents, disputes, refunds, balances, connected accounts, transfers, payouts, checkout, catalog/pricing, payment links, Radar warnings, and organization-account context. Use when:
-  - Explaining failed or successful customer payments
-  - Finding invoice payment details, card last4, or PaymentIntent metadata
-  - Investigating subscriptions, renewal timing, collection risk, or past-due invoices
-  - Investigating Connect transfers, payouts, refund recovery, or connected-account requirements
-  - Working with Accounts v2 (UA2): account configurations, capabilities, requirement entries, persons, and v2 core events
-  - Looking up Stripe events, customers, payment methods, charges, refunds, balance transactions, accounts, or application fees
-  Triggers: "stripe", "payment intent", "payment_intent", "charge failed", "invoice paid", "subscription", "card last4", "refund", "transfer", "payout", "connected account", "stripe connect", "stripe metadata", "collection risk", "checkout session", "payment link", "dispute", "early fraud warning", "accounts v2", "ua2", "v2.core.account", "account configuration", "capability restricted", "account requirements", "onboarding blocked"
+  Triage and investigate Stripe payments, invoices, subscriptions, disputes,
+  refunds, balances, connected accounts, transfers, payouts, checkout,
+  catalog and pricing, payment links, Radar warnings, and organization-
+  account context. Use when explaining a failed or successful charge,
+  finding invoice payment details, card last4, or PaymentIntent metadata,
+  investigating renewal timing, collection risk, or past-due invoices,
+  tracing Connect transfers, payouts, or connected-account requirements, or
+  working with Accounts v2 (UA2) configurations, capabilities, and persons.
+  Triggers: early fraud warning, v2.core.account, onboarding blocked.
 allowed-tools: Bash(agent-stripe *) Bash(mockstripe *) Read Grep Glob
 ---
 
